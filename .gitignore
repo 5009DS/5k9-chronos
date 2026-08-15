@@ -1,0 +1,11 @@
+node_modules/
+.DS_Store
+Thumbs.db
+*.log
+
+# PDFs de cliente ficam FORA do repositório.
+# O sistema não guarda esses arquivos em lugar nenhum — lê o texto no
+# navegador e descarta — e o repositório precisa seguir a mesma regra. Um
+# cronograma de conteúdo de cliente num repositório GitHub é o tipo de coisa
+# que ninguém percebe até estar indexada.
+*.pdf

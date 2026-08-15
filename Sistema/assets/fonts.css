@@ -1,0 +1,29 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Instrument Sans variável — servida localmente.
+
+   Substitui o Google Fonts, que entrega apenas instâncias estáticas de peso:
+   o eixo de LARGURA (wdth) não vem, e sem ele font-stretch: 75% não tem
+   efeito nenhum — a voz Condensed do display simplesmente não existia.
+   Medido antes da troca: o mesmo texto dava 806px com e sem font-stretch.
+
+   Arquivos de uploads/Brand/Instrument_Sans/, licença OFL em assets/fonts/.
+   Baseado em ds/fonts.css, com os caminhos corrigidos para este projeto.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@font-face {
+    font-family: "Instrument Sans";
+    src: url("fonts/InstrumentSans-Variable.ttf") format("truetype-variations");
+    font-weight: 400 700;
+    font-stretch: 75% 100%;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Instrument Sans";
+    src: url("fonts/InstrumentSans-Italic-Variable.ttf") format("truetype-variations");
+    font-weight: 400 700;
+    font-stretch: 75% 100%;
+    font-style: italic;
+    font-display: swap;
+}

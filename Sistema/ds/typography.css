@@ -1,0 +1,40 @@
+:root {
+  --font-sans: "Instrument Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-display: "Instrument Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: "SFMono-Regular", "Berkeley Mono", ui-monospace, "Menlo", "Consolas", monospace;
+
+  /* Weights available in the variable file */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* Width axis (wdth) — condensed is the display voice */
+  --width-condensed: 75%;
+  --width-semicondensed: 87.5%;
+  --width-normal: 100%;
+
+  /* Type scale — 1.25 major third, 16px base */
+  --text-2xs: 0.6875rem;  /* 11px  overline / micro label */
+  --text-xs: 0.75rem;     /* 12px  meta, captions */
+  --text-sm: 0.875rem;    /* 14px  UI default, dense body */
+  --text-md: 1rem;        /* 16px  body */
+  --text-lg: 1.25rem;     /* 20px  lead paragraph */
+  --text-xl: 1.5rem;      /* 24px  h4 */
+  --text-2xl: 2rem;       /* 32px  h3 */
+  --text-3xl: 2.75rem;    /* 44px  h2 */
+  --text-4xl: 4rem;       /* 64px  h1 */
+  --text-5xl: 5.5rem;     /* 88px  display */
+  --text-6xl: 8rem;       /* 128px hero / poster */
+
+  --leading-tight: 0.94;
+  --leading-snug: 1.1;
+  --leading-normal: 1.35;
+  --leading-relaxed: 1.6;
+
+  --tracking-display: -0.03em;
+  --tracking-heading: -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.06em;
+  --tracking-overline: 0.14em;
+}

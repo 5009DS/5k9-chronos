@@ -1,0 +1,80 @@
+{
+  "sistema": "Funil Invertido de Conteúdo",
+  "regra_volume": "3 postagens semanais, uma por fase",
+  "fases": [
+    {
+      "id": "fundo",
+      "nome": "Fundo de Funil - Decisão e Ação",
+      "ordem_semana": 1,
+      "posicao_cronograma": "início da semana (segunda/terça)",
+      "nivel_consciencia_publico": "alto - já conhece a marca, precisa de empurrão final",
+      "objetivo_principal": "conversão, agendamento, inscrição, urgência",
+      "tom": ["direto", "assertivo", "orientado a resultado"],
+      "sinais_classificacao": [
+        "pede ação imediata e mensurável",
+        "contém prova social explícita (depoimento, antes/depois)",
+        "menciona vagas limitadas, prazos ou urgência",
+        "cita evento, campanha institucional ou lançamento de protocolo"
+      ],
+      "palavras_chave": [
+        "agende", "vagas limitadas", "garanta seu lugar", "inscreva-se",
+        "antes e depois", "resultado real", "depoimento", "lançamento",
+        "últimas vagas", "não perca"
+      ],
+      "formatos": ["prova social/depoimento", "campanha institucional", "lançamento de protocolo/evento"],
+      "cta_exemplos": ["Agende sua consulta", "Garanta sua vaga", "Inscreva-se agora"],
+      "compliance_flag": "conteúdo com depoimento/resultado exige revisão jurídica (CFM 2.336/2023)"
+    },
+    {
+      "id": "meio",
+      "nome": "Meio de Funil - Autoridade e Consideração",
+      "ordem_semana": 2,
+      "posicao_cronograma": "meio da semana (quarta/quinta)",
+      "nivel_consciencia_publico": "médio - já identificou o problema, avalia soluções",
+      "objetivo_principal": "posicionar autoridade técnica, gerar desejo pela solução",
+      "tom": ["técnico traduzido em linguagem acessível", "educativo", "explicativo"],
+      "sinais_classificacao": [
+        "explica causa, sintoma ou 'como funciona' de um tratamento",
+        "mostra bastidores ou processo técnico",
+        "quebra objeções sem pedir conversão direta",
+        "não pede ação imediata, mas convida a saber mais"
+      ],
+      "palavras_chave": [
+        "entenda como", "por que acontece", "causas", "sintomas",
+        "bastidores", "diagnóstico", "planejamento", "protocolo explicado",
+        "você sabia que"
+      ],
+      "formatos": ["explicação de patologia", "bastidores de protocolo", "diagnóstico e planejamento médico"],
+      "cta_exemplos": ["Saiba mais", "Entenda como funciona", "Comenta aqui sua dúvida"],
+      "compliance_flag": "evitar promessa de resultado ou comparação superlativa (CFM 2.336/2023)"
+    },
+    {
+      "id": "topo",
+      "nome": "Topo de Funil - Atração e Consciência",
+      "ordem_semana": 3,
+      "posicao_cronograma": "final da semana (sexta/sábado/domingo)",
+      "nivel_consciencia_publico": "baixo - público geral, pode não conhecer a marca",
+      "objetivo_principal": "alcance, salvamentos, compartilhamentos",
+      "tom": ["leve", "dinâmico", "relacionável", "fácil consumo"],
+      "sinais_classificacao": [
+        "dica genérica de saúde/bem-estar/rotina",
+        "não cita tratamento ou protocolo específico da clínica",
+        "formato de fácil viralização (mitos e verdades, dica rápida)",
+        "objetivo é alcance, não conversão nem autoridade"
+      ],
+      "palavras_chave": [
+        "mito ou verdade", "dica rápida", "no dia a dia", "salve esse post",
+        "marque alguém", "você sabia", "hidratação", "rotina saudável"
+      ],
+      "formatos": ["mitos e verdades", "dicas de rotina", "conteúdo relacionável"],
+      "cta_exemplos": ["Salve para depois", "Marque alguém que precisa ver isso", "Compartilhe"],
+      "compliance_flag": null
+    }
+  ],
+  "regras_desempate": [
+    "Se o roteiro atender critérios de mais de uma fase, classificar pelo objetivo dominante (a ação pedida no final do conteúdo), não pela primeira característica identificada.",
+    "Prova social/depoimento sempre puxa para Fundo, mesmo que o tom pareça leve.",
+    "Explicação técnica sem CTA de conversão é Meio, mesmo que mencione um protocolo específico.",
+    "Ausência de menção a tratamento específico e ausência de pedido de ação é forte sinal de Topo."
+  ]
+}

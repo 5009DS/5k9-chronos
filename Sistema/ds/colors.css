@@ -1,0 +1,147 @@
+:root {
+  /* ---- Brand core ---- */
+  --ink: #0d0d0d;
+  --paper: #ffffff;
+
+  /* ---- Brand accents (as delivered) ---- */
+  --violet: #7f00e1;
+  --magenta: #c02b7e;
+  --orange: #ff551f;
+  --green: #0cf25d;
+
+  /* Accent ramps, OKLCH-derived on one perceptual lightness scale.
+     100 = lightest (text on tinted fills), 500 = the delivered brand value,
+     900 = darkest (tinted grounds on the dark base). */
+  --violet-100: oklch(0.90 0.075 305);
+  --violet-200: oklch(0.80 0.130 305);
+  --violet-300: oklch(0.70 0.185 305);
+  --violet-400: oklch(0.60 0.240 305);
+  --violet-500: #7f00e1;
+  --violet-600: oklch(0.44 0.245 305);
+  --violet-700: oklch(0.35 0.200 305);
+  --violet-800: oklch(0.26 0.140 305);
+  --violet-900: oklch(0.20 0.095 305);
+
+  --magenta-100: oklch(0.90 0.055 355);
+  --magenta-200: oklch(0.80 0.095 355);
+  --magenta-300: oklch(0.70 0.135 355);
+  --magenta-400: oklch(0.60 0.165 355);
+  --magenta-500: #c02b7e;
+  --magenta-600: oklch(0.44 0.150 355);
+  --magenta-700: oklch(0.35 0.120 355);
+  --magenta-800: oklch(0.26 0.085 355);
+  --magenta-900: oklch(0.20 0.060 355);
+
+  --orange-100: oklch(0.90 0.060 40);
+  --orange-200: oklch(0.82 0.110 40);
+  --orange-300: oklch(0.74 0.160 40);
+  --orange-400: oklch(0.68 0.195 40);
+  --orange-500: #ff551f;
+  --orange-600: oklch(0.53 0.185 40);
+  --orange-700: oklch(0.42 0.150 40);
+  --orange-800: oklch(0.30 0.105 40);
+  --orange-900: oklch(0.22 0.070 40);
+
+  --green-100: oklch(0.95 0.055 152);
+  --green-200: oklch(0.92 0.110 152);
+  --green-300: oklch(0.89 0.170 152);
+  --green-400: oklch(0.87 0.215 152);
+  --green-500: #0cf25d;
+  --green-600: oklch(0.72 0.215 152);
+  --green-700: oklch(0.55 0.165 152);
+  --green-800: oklch(0.36 0.110 152);
+  --green-900: oklch(0.25 0.075 152);
+
+  /* ---- Neutral ramp: warm-free, pulled off the brand ink ---- */
+  --neutral-000: #000000;
+  --neutral-050: #0d0d0d;
+  --neutral-100: #141414;
+  --neutral-200: #1c1c1c;
+  --neutral-300: #262626;
+  --neutral-400: #383838;
+  --neutral-500: #565656;
+  --neutral-600: #7a7a7a;
+  --neutral-700: #a3a3a3;
+  --neutral-800: #cfcfcf;
+  --neutral-900: #ebebeb;
+  --neutral-1000: #ffffff;
+
+  /* ---- Semantic: dark is the default theme ---- */
+  --bg: var(--ink);
+  --bg-sunken: var(--neutral-000);
+  --surface: var(--neutral-100);
+  --surface-raised: var(--neutral-200);
+  --surface-hover: var(--neutral-300);
+
+  --text: var(--paper);
+  --text-muted: var(--neutral-700);
+  --text-subtle: var(--neutral-600);
+  --text-inverse: var(--ink);
+  --text-on-accent: var(--paper);
+
+  --border: var(--neutral-300);
+  --border-strong: var(--neutral-400);
+  --border-accent: var(--violet-400);
+
+  --accent: var(--violet-500);
+  --accent-text: var(--violet-200);
+  --accent-hover: var(--violet-400);
+  --accent-press: var(--violet-600);
+  --accent-tint: var(--violet-900);
+
+  --focus-ring: var(--green-500);
+
+  /* ---- Status ---- */
+  --success: var(--green-500);
+  --success-text: var(--green-300);
+  --success-tint: var(--green-900);
+  --warning: var(--orange-500);
+  --warning-text: var(--orange-300);
+  --warning-tint: var(--orange-900);
+  --danger: var(--magenta-500);
+  --danger-text: var(--magenta-200);
+  --danger-tint: var(--magenta-900);
+  --info: var(--violet-500);
+  --info-text: var(--violet-200);
+  --info-tint: var(--violet-900);
+
+  /* ---- Signature gradient (from the delivered swatch) ---- */
+  --gradient-signature: linear-gradient(120deg, var(--magenta) 0%, var(--violet) 100%);
+  --gradient-spectrum: linear-gradient(120deg, var(--orange) 0%, var(--magenta) 50%, var(--violet) 100%);
+  --gradient-fade-ink: linear-gradient(180deg, rgba(13, 13, 13, 0) 0%, var(--ink) 100%);
+}
+
+/* ---- Light theme: same brand, inverted ground. Opt in with [data-theme="light"] ---- */
+[data-theme="light"] {
+  --bg: var(--paper);
+  --bg-sunken: var(--neutral-900);
+  --surface: var(--paper);
+  --surface-raised: var(--paper);
+  --surface-hover: var(--neutral-900);
+
+  --text: var(--ink);
+  --text-muted: var(--neutral-500);
+  --text-subtle: var(--neutral-600);
+  --text-inverse: var(--paper);
+
+  --border: var(--neutral-800);
+  --border-strong: var(--neutral-700);
+  --border-accent: var(--violet-500);
+
+  --accent: var(--violet-500);
+  --accent-text: var(--violet-600);
+  --accent-hover: var(--violet-400);
+  --accent-press: var(--violet-600);
+  --accent-tint: oklch(0.96 0.02 305);
+
+  --focus-ring: var(--violet-500);
+
+  --success-text: var(--green-800);
+  --success-tint: oklch(0.96 0.03 152);
+  --warning-text: var(--orange-700);
+  --warning-tint: oklch(0.96 0.03 40);
+  --danger-text: var(--magenta-600);
+  --danger-tint: oklch(0.96 0.02 355);
+  --info-text: var(--violet-600);
+  --info-tint: oklch(0.96 0.02 305);
+}

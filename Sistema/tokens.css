@@ -1,0 +1,776 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   5K9 FORMS — DESIGN TOKENS
+   Camada base do design system. Dark-first: o tema escuro é o padrão e o
+   claro é derivado dele. Nenhum componente novo deve usar cor hardcoded —
+   sempre var(--…). Assim, quando a identidade da marca fechar, muda-se
+   apenas este arquivo.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root,
+html[data-theme="dark"] {
+
+    /* Faz os controles nativos (select, input[type=date], scrollbar do SO)
+       renderizarem na variante escura em vez de branco estourado. */
+    color-scheme: dark;
+
+    /* ── Superfícies ────────────────────────────────────────────────────────
+       Escala de profundidade: quanto mais "alto" na tela, mais claro.
+       Base tem um leve viés azul-violeta (não preto puro) para casar com o
+       roxo da marca sem esverdear os cinzas.                                */
+    --surface-base:      #0A0A0D;   /* fundo da aplicação                    */
+    --surface-1:         #111116;   /* painel / coluna                       */
+    --surface-2:         #17171E;   /* card                                  */
+    --surface-3:         #1F1F28;   /* card dentro de card, input            */
+    --surface-4:         #292933;   /* hover / estado elevado                */
+    --surface-inverse:   #F2F2F5;   /* botão primário, item ativo            */
+
+    /* ── Vidro ──────────────────────────────────────────────────────────────
+       Receita completa: fundo semitransparente + desfoque + saturação. A
+       saturação é o que impede o conteúdo atrás de virar cinza morto. O
+       scrim é propositalmente fraco: se escurecer demais o fundo, não sobra
+       nada para o vidro refratar e o efeito some.                          */
+    --glass-bg:          rgba(24, 24, 31, 0.62);
+    --glass-blur:        blur(28px) saturate(165%);
+    --glass-border:      rgba(255, 255, 255, 0.14);
+    --glass-sheen:       linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0) 42%);
+    --surface-glass:     rgba(23, 23, 30, 0.72);
+    --surface-scrim:     rgba(5, 5, 8, 0.32);
+
+    /* ── Texto ──────────────────────────────────────────────────────────── */
+    --text-primary:      #F2F2F5;
+    --text-secondary:    rgba(242, 242, 245, 0.64);
+    /* 0.50 é o piso: abaixo disso o texto de 11–13px cai de AA sobre --surface-2 */
+    --text-tertiary:     rgba(242, 242, 245, 0.50);
+    --text-disabled:     rgba(242, 242, 245, 0.28);
+    --text-inverse:      #0A0A0D;   /* sobre --surface-inverse               */
+
+    /* ── Bordas ─────────────────────────────────────────────────────────── */
+    --border-subtle:     rgba(255, 255, 255, 0.06);
+    --border-default:    rgba(255, 255, 255, 0.10);
+    --border-strong:     rgba(255, 255, 255, 0.18);
+    --border-focus:      var(--accent);
+
+    /* ── Acentos ────────────────────────────────────────────────────────────
+       O roxo #7F00E1 da marca é escuro demais para texto sobre fundo preto
+       (contraste ~2.3:1). Em dark usamos a versão elevada como cor de UI e
+       guardamos a original como --brand-raw para logo/artes.               */
+    --brand-raw:         #7F00E1;
+    --accent:            #A855FF;   /* roxo de UI — contraste AA sobre base  */
+    --accent-hover:      #B975FF;
+    --accent-muted:      rgba(168, 85, 255, 0.16);
+    --accent-border:     rgba(168, 85, 255, 0.34);
+    --accent-contrast:   #FFFFFF;   /* texto sobre --accent sólido           */
+
+    --accent-warm:       #FF7A45;   /* laranja — 2ª categoria                */
+    --accent-gold:       #FFC96B;   /* âmbar  — destaque pontual (ref. img 1)*/
+    --accent-cyan:       #4FD1FF;   /* ciano  — 4ª categoria / links de dado */
+
+    /* ── Gradientes ─────────────────────────────────────────────────────────
+       Todos interpolam em oklab: em sRGB o caminho entre roxo e laranja passa
+       por um marrom acinzentado, e é isso que faz a virada parecer dura. */
+    --gradient-brand:    linear-gradient(135deg in oklab, #7F00E1 0%, #B14DFF 48%, #FF7A45 100%);
+    --gradient-violet:   linear-gradient(135deg in oklab, #6A00C4 0%, #8E28F0 45%, #A855FF 100%);
+    --gradient-ember:    linear-gradient(135deg in oklab, #A855FF 0%, #D45AC0 50%, #FF7A45 100%);
+    --gradient-gold:     linear-gradient(135deg in oklab, #FFC96B 0%, #FFB055 50%, #FF9A45 100%);
+
+    /* ── Gradientes de FLUXO — os que são animados ──────────────────────────
+       Diferem dos de cima em duas coisas, e as duas importam:
+
+       1. Ângulo travado no eixo do elemento. A barra de progresso mede 395x6:
+          num retângulo 66:1 um gradiente de 120deg corre quase na vertical e
+          comprime a rampa inteira em ~10px, virando uma borda dura. Por isso
+          existe uma versão horizontal e uma vertical.
+       2. Paleta em palíndromo (A-B-C-B-A). Como a animação desliza o fundo e
+          volta, começar e terminar na mesma cor faz o ciclo não ter emenda. */
+    --gradient-flow-x:   linear-gradient(90deg in oklab,
+                             #A855FF 0%, #D45AC0 28%, #FF7A45 50%,
+                             #D45AC0 72%, #A855FF 100%);
+    --gradient-flow-y:   linear-gradient(180deg in oklab,
+                             #A855FF 0%, #D45AC0 28%, #FF7A45 50%,
+                             #D45AC0 72%, #A855FF 100%);
+    /* Brilho ambiente atrás de cards em destaque */
+    --gradient-glow:     radial-gradient(120% 120% at 0% 0%, rgba(168,85,255,0.22) 0%, rgba(168,85,255,0) 62%);
+    /* Fio de luz na borda superior de cards (hairline) */
+    --gradient-hairline: linear-gradient(90deg, transparent 0%, rgba(168,85,255,0.55) 35%, rgba(255,122,69,0.45) 65%, transparent 100%);
+
+    /* ── Semânticos ─────────────────────────────────────────────────────── */
+    --success:           #3DDC97;
+    --success-muted:     rgba(61, 220, 151, 0.14);
+    --warning:           #FFC96B;
+    --warning-muted:     rgba(255, 201, 107, 0.14);
+    --danger:            #FF5C7A;
+    --danger-muted:      rgba(255, 92, 122, 0.14);
+    /* Vermelho do contador de notificações. Não usa --danger porque aquele
+       é um rosa claro pensado para TEXTO de erro sobre fundo escuro; como
+       preenchimento atrás de texto branco ele dá 2,97:1, abaixo do mínimo
+       legível. Este dá 4,83:1 e ainda lê como alerta. */
+    --notify-dot:        #DC2626;
+    --info:              #4FD1FF;
+    --info-muted:        rgba(79, 209, 255, 0.14);
+
+    /* ── Sequência de dados (gráficos) ──────────────────────────────────── */
+    --data-1: #A855FF;
+    --data-2: #FF7A45;
+    --data-3: #4FD1FF;
+    --data-4: #FFC96B;
+    --data-5: #3DDC97;
+    --data-neutral: rgba(242, 242, 245, 0.14);
+
+    /* ── Tipografia ─────────────────────────────────────────────────────── */
+    --font-sans: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: ui-monospace, 'SF Mono', 'Roboto Mono', monospace;
+
+    --text-display:  clamp(38px, 4.4vw, 56px);  /* título de página (ref. img 1) */
+    --text-h1:       32px;
+    --text-h2:       24px;
+    --text-h3:       18px;
+    --text-body:     15px;
+    --text-sm:       13px;
+    --text-xs:       11px;
+    --text-metric:   34px;   /* números grandes de card */
+    --text-metric-lg:44px;   /* número herói dentro do bento */
+
+    --tracking-display: -0.035em;
+    --tracking-tight:   -0.02em;
+    --tracking-wide:     0.08em;  /* labels em caixa alta */
+
+    --leading-tight: 1.05;
+    --leading-snug:  1.25;
+    --leading-body:  1.55;
+
+    /* ── Raios ──────────────────────────────────────────────────────────── */
+    --radius-xs:   8px;
+    --radius-sm:   10px;
+    --radius-md:   14px;
+    --radius-lg:   20px;
+    --radius-xl:   26px;
+    --radius-pill: 999px;
+
+    /* ── Espaçamento (grade de 4) ───────────────────────────────────────── */
+    --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
+    --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
+    --space-12: 48px; --space-16: 64px;
+
+    /* ── Elevação ───────────────────────────────────────────────────────────
+       Em dark, sombra sozinha quase não aparece: cada nível combina sombra
+       + um inset hairline claro no topo, que é o que dá o relevo.          */
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.04);
+    --shadow-md: 0 8px 24px -8px rgba(0,0,0,0.62), inset 0 1px 0 rgba(255,255,255,0.05);
+    --shadow-lg: 0 24px 56px -16px rgba(0,0,0,0.72), inset 0 1px 0 rgba(255,255,255,0.06);
+    --shadow-accent: 0 12px 32px -10px rgba(168, 85, 255, 0.45);
+
+    /* ── Movimento ──────────────────────────────────────────────────────── */
+    --ease-out:   cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-inout: cubic-bezier(0.4, 0, 0.2, 1);
+    --dur-fast:   0.15s;
+    --dur-base:   0.24s;
+    --dur-slow:   0.4s;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TEMA CLARO — derivado. Mantido para quem preferir, mas o dark é o padrão.
+   ═══════════════════════════════════════════════════════════════════════════ */
+html[data-theme="light"] {
+    color-scheme: light;
+    --surface-base:      #F0F0F2;
+    --surface-1:         #F6F6F8;
+    --surface-2:         #FFFFFF;
+    --surface-3:         #F0F0F2;
+    --surface-4:         #E4E4E8;
+    --surface-inverse:   #0A0A0D;
+    --glass-bg:          rgba(255, 255, 255, 0.62);
+    --glass-border:      rgba(10, 10, 13, 0.10);
+    --glass-sheen:       linear-gradient(180deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 42%);
+    --surface-glass:     rgba(255, 255, 255, 0.78);
+    --surface-scrim:     rgba(10, 10, 13, 0.22);
+
+    --text-primary:      #0A0A0D;
+    --text-secondary:    rgba(10, 10, 13, 0.62);
+    --text-tertiary:     rgba(10, 10, 13, 0.52);
+    --text-disabled:     rgba(10, 10, 13, 0.30);
+    --text-inverse:      #F2F2F5;
+
+    --border-subtle:     rgba(10, 10, 13, 0.06);
+    --border-default:    rgba(10, 10, 13, 0.11);
+    --border-strong:     rgba(10, 10, 13, 0.20);
+
+    --accent:            #7F00E1;
+    --accent-hover:      #6A00C4;
+    --accent-muted:      rgba(127, 0, 225, 0.10);
+    --accent-border:     rgba(127, 0, 225, 0.28);
+
+    --data-neutral:      rgba(10, 10, 13, 0.10);
+
+    /* Semânticos: os valores do escuro são claros de propósito, para brilhar
+       sobre fundo preto. Sobre branco eles somem — o verde #3DDC97 dava
+       1.6:1. Aqui descem para versões escuras; os tints continuam claros,
+       porque são fundo e não texto. */
+    --success:       #10744A;
+    --success-muted: rgba(16, 116, 74, 0.10);
+    --warning:       #8A5200;
+    --warning-muted: rgba(138, 82, 0, 0.10);
+    --danger:        #B3143C;
+    --danger-muted:  rgba(179, 20, 60, 0.09);
+    --info:          #0B6C93;
+    --info-muted:    rgba(11, 108, 147, 0.10);
+    /* No claro o contador fica um tom mais fundo: o anel branco ao redor
+       some contra a topnav clara, então a própria cor faz a separação. */
+    --notify-dot:    #C81E1E;
+
+    --shadow-sm: 0 1px 2px rgba(10,10,13,0.06);
+    --shadow-md: 0 8px 24px -10px rgba(10,10,13,0.14);
+    --shadow-lg: 0 24px 56px -18px rgba(10,10,13,0.20);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PRIMITIVAS — classes reutilizáveis do design system.
+   Prefixo .ds- para não colidir com o CSS legado.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Superfície de card ─────────────────────────────────────────────────── */
+.ds-card {
+    background-color: var(--surface-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Card com fio de luz gradiente no topo — usar em no máximo 1–2 por tela */
+.ds-card--lit::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: var(--gradient-hairline);
+    pointer-events: none;
+}
+
+/* Card em destaque: brilho ambiente roxo no canto superior esquerdo */
+.ds-card--glow::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--gradient-glow);
+    pointer-events: none;
+}
+
+.ds-card--interactive {
+    cursor: pointer;
+    transition: border-color var(--dur-fast) var(--ease-out),
+                transform   var(--dur-fast) var(--ease-out),
+                box-shadow  var(--dur-fast) var(--ease-out),
+                background-color var(--dur-fast) var(--ease-out);
+}
+.ds-card--interactive:hover {
+    transform: translateY(-2px);
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-md);
+}
+
+/* ── Tipografia compartilhada ───────────────────────────────────────────────
+   Estas classes viviam no <style> injetado pela Home. Como esse bloco é
+   destruído a cada troca de rota, fora da Home elas não existiam e o
+   h1..h6 do styles.css legado assumia — pintando o título de #010101 sobre
+   fundo escuro. Aqui elas são globais e não dependem de página nenhuma.   */
+.ds-display {
+    font-size: var(--text-display);
+    font-weight: 600;
+    letter-spacing: var(--tracking-display);
+    line-height: var(--leading-tight);
+    color: var(--text-primary);
+    margin: 0;
+}
+.ds-card-title {
+    font-size: var(--text-h3);
+    font-weight: 600;
+    letter-spacing: var(--tracking-tight);
+    line-height: var(--leading-snug);
+    color: var(--text-primary);
+    margin: 0;
+}
+.ds-card-sub { font-size: var(--text-sm); color: var(--text-tertiary); }
+
+/* Trava de segurança: nenhum título dentro do escopo do DS pode herdar cor
+   do CSS legado. Foi exatamente assim que o preto no preto entrou. */
+html.ds h1, html.ds h2, html.ds h3,
+html.ds h4, html.ds h5, html.ds h6 { color: var(--text-primary); }
+
+/* ── Labels e textos utilitários ────────────────────────────────────────── */
+.ds-eyebrow {
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+}
+.ds-label   { font-size: var(--text-sm); color: var(--text-secondary); }
+.ds-metric  {
+    font-size: var(--text-metric);
+    font-weight: 600;
+    letter-spacing: var(--tracking-tight);
+    line-height: 1;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+.ds-metric--lg { font-size: var(--text-metric-lg); }
+
+/* Texto com preenchimento gradiente — só para números/títulos grandes */
+.ds-gradient-text {
+    background: var(--gradient-ember);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+/* ── Botões ─────────────────────────────────────────────────────────────── */
+.ds-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    height: 44px;
+    padding: 0 var(--space-6);
+    border: 1px solid transparent;
+    border-radius: var(--radius-pill);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    text-decoration: none;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all var(--dur-fast) var(--ease-out);
+}
+.ds-btn:hover { transform: translateY(-1px); }
+.ds-btn:active { transform: translateY(0); }
+
+.ds-btn--primary {
+    background: var(--gradient-violet);
+    color: var(--accent-contrast);
+    box-shadow: var(--shadow-accent);
+}
+.ds-btn--primary:hover { box-shadow: 0 16px 40px -10px rgba(168, 85, 255, 0.6); }
+
+.ds-btn--solid {
+    background: var(--surface-inverse);
+    color: var(--text-inverse);
+}
+.ds-btn--ghost {
+    background: transparent;
+    border-color: var(--border-default);
+    color: var(--text-primary);
+}
+.ds-btn--ghost:hover { background: var(--surface-3); border-color: var(--border-strong); }
+
+.ds-btn--sm { height: 34px; padding: 0 var(--space-4); font-size: var(--text-sm); }
+
+/* Botão de ícone circular — o "→" no canto dos cards da referência */
+.ds-icon-btn {
+    width: 34px; height: 34px;
+    flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--dur-fast) var(--ease-out);
+}
+.ds-icon-btn:hover {
+    background: var(--surface-4);
+    border-color: var(--border-strong);
+    color: var(--text-primary);
+}
+.ds-icon-btn i, .ds-icon-btn svg { width: 15px; height: 15px; }
+
+/* ── Chips / tags ───────────────────────────────────────────────────────── */
+/* O chip neutro precisa contrastar com a superfície que o hospeda. Ele vive
+   dentro de linhas que usam --surface-3, então o fundo dele é o nível ABAIXO
+   (--surface-1), não o mesmo. Antes eram os dois --surface-3 e o chip só
+   aparecia no hover, quando a linha subia para --surface-4.
+
+   As variantes trocam custom properties em vez das propriedades finais.
+   Assim o estado de hover mexe só no que o modificador não definiu, sem
+   disputa de especificidade. */
+.ds-chip {
+    --chip-bg:     var(--surface-1);
+    --chip-border: var(--border-default);
+    --chip-fg:     var(--text-secondary);
+
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 26px; padding: 0 10px;
+    border-radius: var(--radius-pill);
+    background: var(--chip-bg);
+    border: 1px solid var(--chip-border);
+    color: var(--chip-fg);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    white-space: nowrap;
+    transition: background-color var(--dur-fast) var(--ease-out),
+                border-color var(--dur-fast) var(--ease-out),
+                color var(--dur-fast) var(--ease-out);
+}
+
+/* Hover da linha: o chip neutro acompanha. Envolvido em :where() para ter
+   especificidade zero, de modo que os modificadores abaixo sempre vençam. */
+:where(.qs-row, .fm-row, .hm-recent-row, .hm-top-card):where(:hover) .ds-chip {
+    --chip-bg:     var(--surface-2);
+    --chip-border: var(--border-strong);
+    --chip-fg:     var(--text-primary);
+}
+
+.ds-chip--accent  { --chip-bg: var(--accent-muted);  --chip-border: var(--accent-border); --chip-fg: var(--accent); }
+.ds-chip--success { --chip-bg: var(--success-muted); --chip-border: transparent;          --chip-fg: var(--success); }
+.ds-chip--warning { --chip-bg: var(--warning-muted); --chip-border: transparent;          --chip-fg: var(--warning); }
+.ds-chip--danger  { --chip-bg: var(--danger-muted);  --chip-border: transparent;          --chip-fg: var(--danger); }
+
+/* Ponto de status */
+.ds-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); flex-shrink: 0; }
+
+/* ── Campos ─────────────────────────────────────────────────────────────── */
+.ds-input {
+    width: 100%;
+    height: 44px;
+    padding: 0 var(--space-4);
+    background: var(--surface-3);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    outline: none;
+    transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
+}
+.ds-input::placeholder { color: var(--text-tertiary); }
+.ds-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-muted);
+}
+
+/* A lista aberta de um <select> é desenhada pelo sistema, não pelo CSS da
+   página. Ela herdava a COR do texto do .ds-input (clara) mas não o fundo,
+   então no tema escuro saía texto claro sobre fundo claro: as opções só
+   apareciam quando o cursor passava por cima e o realce as revelava.
+   `color-scheme` sozinho não resolveu — é preciso pintar option na mão. */
+select.ds-input option,
+select.ds-input optgroup {
+    background-color: var(--surface-2);
+    color: var(--text-primary);
+}
+select.ds-input optgroup { font-weight: 700; }
+
+/* ── Campo de busca ─────────────────────────────────────────────────────── */
+.ds-search {
+    display: flex; align-items: center; gap: var(--space-2);
+    height: 42px; padding: 0 var(--space-4);
+    background: var(--surface-3);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    transition: border-color var(--dur-fast);
+}
+.ds-search:focus-within { border-color: var(--accent-border); }
+.ds-search i, .ds-search svg { width: 16px; height: 16px; color: var(--text-tertiary); flex-shrink: 0; }
+.ds-search input {
+    flex: 1; min-width: 0; background: none; border: none; outline: none;
+    font-family: var(--font-sans); font-size: var(--text-sm); color: var(--text-primary);
+}
+.ds-search input::placeholder { color: var(--text-tertiary); }
+
+/* ── Menu suspenso ──────────────────────────────────────────────────────────
+   Vive no <body> (ver components/menu.js), por isso position:fixed e um
+   z-index acima de tudo que não seja modal. */
+.ds-menu {
+    position: fixed; z-index: 450;
+    min-width: 208px;
+    display: flex; flex-direction: column; gap: 2px;
+    padding: var(--space-2);
+    background: var(--surface-2);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    font-family: var(--font-sans);
+    opacity: 0; transform: translateY(-4px);
+    transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+.ds-menu.is-aberto { opacity: 1; transform: translateY(0); }
+.ds-menu__item {
+    display: flex; align-items: center; gap: var(--space-3);
+    width: 100%; height: 36px; padding: 0 var(--space-3);
+    border: none; border-radius: var(--radius-xs);
+    background: none; color: var(--text-secondary);
+    font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 500;
+    text-align: left; text-decoration: none; cursor: pointer; white-space: nowrap;
+    transition: background-color var(--dur-fast), color var(--dur-fast);
+}
+.ds-menu__item i, .ds-menu__item svg { width: 15px; height: 15px; flex-shrink: 0; }
+.ds-menu__item:hover { background: var(--surface-3); color: var(--text-primary); }
+.ds-menu__item--accent { color: var(--accent); }
+.ds-menu__item--accent:hover { background: var(--accent-muted); color: var(--accent); }
+.ds-menu__item--danger:hover { background: var(--danger-muted); color: var(--danger); }
+.ds-menu__sep { margin: var(--space-1) 0; }
+
+@media (prefers-reduced-motion: reduce) { .ds-menu { transition: none; } }
+
+/* ── Dica em bloco ──────────────────────────────────────────────────────────
+   Vive aqui, e não no componente de painel lateral, porque também é usada em
+   páginas comuns (Configurações). Enquanto morava no injectStyles do drawer,
+   ficava sem estilo em qualquer tela onde o painel nunca fosse aberto. */
+.ds-hint {
+    display: flex; align-items: flex-start; gap: var(--space-2);
+    margin: 0; padding: var(--space-3) var(--space-4);
+    background: var(--surface-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+    line-height: var(--leading-body);
+}
+.ds-hint i, .ds-hint svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 2px; }
+
+/* Variante de aviso: quando a dica alerta sobre algo com consequência (dados
+   reais de cliente, ação sem volta), o tom tertiary é discreto demais para o
+   peso da mensagem. */
+.ds-hint--aviso {
+    background: var(--warning-muted);
+    border-color: transparent;
+    color: var(--text-secondary);
+}
+.ds-hint--aviso i, .ds-hint--aviso svg { color: var(--warning); }
+
+/* ── Estado vazio ───────────────────────────────────────────────────────── */
+.ds-empty {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: var(--space-4); padding: var(--space-12) var(--space-4);
+    text-align: center;
+}
+.ds-empty__icon {
+    width: 52px; height: 52px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: var(--radius-md);
+    background: var(--surface-3); color: var(--text-tertiary);
+}
+.ds-empty__icon i, .ds-empty__icon svg { width: 22px; height: 22px; }
+.ds-empty__text { margin: 0; font-size: var(--text-sm); color: var(--text-tertiary); }
+.ds-empty__text strong { color: var(--text-secondary); font-weight: 600; }
+
+/* ── Divisor ────────────────────────────────────────────────────────────── */
+.ds-divider { height: 1px; background: var(--border-subtle); border: 0; }
+
+/* ── Barra de rolagem dentro do escopo do DS ────────────────────────────── */
+html.ds ::-webkit-scrollbar { width: 8px; height: 8px; }
+html.ds ::-webkit-scrollbar-track { background: transparent; }
+html.ds ::-webkit-scrollbar-thumb {
+    background: var(--border-default);
+    border-radius: var(--radius-pill);
+}
+html.ds ::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
+
+/* ── Base da página no escopo do DS ─────────────────────────────────────── */
+html.ds body {
+    background-color: var(--surface-base);
+    color: var(--text-primary);
+}
+html.ds ::selection { background: var(--accent-muted); color: var(--text-primary); }
+
+/* ── Acessibilidade ─────────────────────────────────────────────────────── */
+html.ds :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: var(--radius-xs);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   GRADIENTES ANIMADOS
+   Cada movimento é escolhido pelo que a superfície representa, não por
+   enfeite. Todos usam background-position (composto pela GPU); nenhum anima
+   layout. A técnica é sempre: esticar o gradiente além da caixa com
+   background-size e deslizá-lo.
+
+   O tempo é sempre ease-in-out, nunca linear. Uma animação que vai e volta
+   com tempo linear inverte a direção de repente no ponto de retorno — a
+   velocidade salta de +v para -v num quadro, e é isso que se lê como "duro".
+   Com ease-in-out a velocidade chega a zero antes de inverter.
+
+   Durações longas de propósito: movimento de ambiente não deve competir com
+   o conteúdo pela atenção.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Deriva horizontal — superfícies em repouso: cards de atalho, avatar. */
+@keyframes ds-drift {
+    0%   { background-position:   0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position:   0% 50%; }
+}
+
+/* Sobe e assenta — para o que representa crescimento: a barra do mês
+   corrente. Vai e volta, então não há corte no fim do ciclo. */
+@keyframes ds-rise {
+    0%   { background-position: 50% 100%; }
+    50%  { background-position: 50%   0%; }
+    100% { background-position: 50% 100%; }
+}
+
+/* Fluxo horizontal — linhas finas e progresso. Com o gradiente em palíndromo,
+   as duas pontas do ciclo têm a mesma cor e o laço não tem emenda. */
+@keyframes ds-flow {
+    0%   { background-position:   0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position:   0% 50%; }
+}
+
+/* Brilho passando — só no hover do botão primário. Unidirecional: o corte
+   no fim do ciclo só é imperceptível se o gradiente for palíndromo, o que
+   o do botão passou a ser de fato (abaixo). */
+@keyframes ds-sheen {
+    0%   { background-position:   0% 50%; }
+    100% { background-position: 200% 50%; }
+}
+
+/* Botão primário: respira devagar em repouso, acelera no hover.
+   ─────────────────────────────────────────────────────────────────────────
+   O gradiente aqui é PALÍNDROMO — magenta nas duas pontas — e isso não é
+   escolha estética, é o que torna a animação possível.
+
+   O fundo tem 220% do tamanho do botão e a posição é animada; com o padrão
+   `repeat`, a emenda entre duas repetições atravessava o botão como uma
+   linha dura, partindo-o em dois blocos de cor. Com as pontas iguais, a
+   emenda cai entre cores idênticas e some.
+
+   Já tentei `no-repeat` para resolver isso: é pior. No hover, ds-sheen leva
+   a posição a 200% e o tile sai inteiro da caixa — o botão fica OCO. No
+   celular isso não passa, porque o toque prende o :hover.
+
+   As cores são as da marca (magenta → violeta), lidas dos tokens do DS. */
+.ds-btn--primary {
+    background-image: linear-gradient(120deg in oklab,
+        var(--magenta, #C02B7E) 0%,
+        var(--violet,  #7F00E1) 50%,
+        var(--magenta, #C02B7E) 100%);
+    background-size: 220% 220%;
+    animation: ds-drift 11s var(--ease-inout) infinite;
+}
+.ds-btn--primary:hover { animation: ds-sheen 2.2s linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+    .ds-btn, .ds-card--interactive, .ds-icon-btn { transition: none !important; }
+    .ds-btn:hover, .ds-card--interactive:hover { transform: none !important; }
+
+    /* Nenhum gradiente se move. A cor permanece; só o movimento sai. */
+    .ds-btn--primary,
+    .ds-btn--primary:hover,
+    [class*="ds-anim-"] { animation: none !important; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CENTRAL DE NOTIFICAÇÕES
+   Ancorada no sino e renderizada no <body> (ver components/notificacoes.js),
+   por isso os estilos moram aqui e não dentro da topnav.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.nt-painel {
+    position: fixed; z-index: 460;
+    width: min(360px, calc(100vw - 16px));
+    display: flex; flex-direction: column;
+    background: var(--surface-2);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg, 0 18px 40px rgba(0,0,0,.45));
+    overflow: hidden;
+    opacity: 0; transform: translateY(-6px) scale(0.98);
+    transform-origin: top right;
+    transition: opacity var(--dur-fast) var(--ease-out),
+                transform var(--dur-fast) var(--ease-out);
+}
+.nt-painel.is-aberto { opacity: 1; transform: translateY(0) scale(1); }
+
+.nt-cabeca {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-4) var(--space-4) var(--space-3);
+    border-bottom: 1px solid var(--border-subtle);
+}
+.nt-cabeca__titulo { font-size: var(--text-body); font-weight: 600; color: var(--text-primary); }
+
+/* Altura limitada: a lista guarda até 40 itens e não pode empurrar o painel
+   para fora da tela. */
+.nt-lista { max-height: min(60vh, 420px); overflow-y: auto; padding: var(--space-2); }
+
+.nt-item {
+    position: relative;
+    display: flex; align-items: flex-start; gap: var(--space-3);
+    width: 100%; padding: var(--space-3);
+    background: none; border: none; border-radius: var(--radius-md);
+    font-family: var(--font-sans); text-align: left; cursor: pointer;
+    transition: background-color var(--dur-fast) var(--ease-out);
+}
+.nt-item:hover { background: var(--surface-3); }
+.nt-item.is-nova { background: var(--accent-muted); }
+.nt-item.is-nova:hover { background: color-mix(in oklab, var(--accent-muted) 70%, var(--surface-3)); }
+
+.nt-item__icone {
+    width: 32px; height: 32px; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: var(--radius-sm);
+    background: var(--surface-1); color: var(--text-secondary);
+}
+.nt-item__icone i, .nt-item__icone svg { width: 15px; height: 15px; }
+.nt-item__icone--atualizacao { background: var(--accent-muted); color: var(--accent); }
+
+.nt-item__texto { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.nt-item__titulo {
+    font-size: var(--text-sm); font-weight: 600; color: var(--text-primary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.nt-item__sub {
+    font-size: var(--text-xs); color: var(--text-tertiary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.nt-item__quando {
+    font-size: 10px; color: var(--text-tertiary); flex-shrink: 0;
+    padding-top: 2px; white-space: nowrap;
+}
+/* O ponto sobrevive à leitura: o contador zera, mas continua dando para ver
+   o que chegou desde a última visita. */
+.nt-item__ponto {
+    position: absolute; left: 3px; top: 50%; transform: translateY(-50%);
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--accent);
+}
+.nt-vazio { padding: var(--space-8) var(--space-4); }
+
+/* ── Relatório da atualização (dentro do drawer) ────────────────────────── */
+.nt-rel { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-4); }
+.nt-rel__item { display: flex; flex-direction: column; gap: var(--space-2); }
+.nt-rel__tag {
+    display: inline-flex; align-items: center; gap: 5px; align-self: flex-start;
+    height: 20px; padding: 0 var(--space-2);
+    border-radius: var(--radius-xs);
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+}
+.nt-rel__tag i, .nt-rel__tag svg { width: 11px; height: 11px; }
+.nt-rel__tag--novo     { background: var(--accent-muted); color: var(--accent); }
+.nt-rel__tag--correcao { background: var(--warning-muted); color: var(--warning); }
+.nt-rel__tag--melhoria { background: var(--surface-3); color: var(--text-secondary); }
+.nt-rel__texto {
+    font-size: var(--text-sm); color: var(--text-secondary);
+    line-height: var(--leading-body);
+}
+
+/* Amortecimento da troca de filtro (ver lib/ui.js). Só a lista respira —
+   o resto da página não é tocado, que era a causa do "pulo". */
+.is-trocando { opacity: 0.35; transform: translateY(2px); }
+#rs-list, #qs-list, #fm-results, #ar-corpo {
+    transition: opacity 110ms var(--ease-out), transform 110ms var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+    #rs-list, #qs-list, #fm-results, #ar-corpo { transition: none; }
+}
+
+/* Cabeçalho da central: contagem e o X lado a lado. O X existe porque o
+   painel é uma janela flutuante — clicar fora funciona, mas não é óbvio,
+   e no celular a área de "fora" é pequena. */
+.nt-cabeca__lado { display: flex; align-items: center; gap: var(--space-2); }
+.nt-fechar { width: 28px; height: 28px; flex-shrink: 0; }
+.nt-fechar i, .nt-fechar svg { width: 14px; height: 14px; }

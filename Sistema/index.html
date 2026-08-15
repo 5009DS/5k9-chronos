@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="ds">
+<head>
+    <meta charset="UTF-8">
+    <!-- viewport-fit=cover + as safe-area no CSS: a barra de ação da tela do
+         cliente fica colada no rodapé, e sem isso ela some atrás da barra de
+         gestos do iPhone — justamente onde ficam "Aprovar" e "Pedir ajuste". -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>5K9 Conteúdo</title>
+    <meta name="description" content="Cronograma e roteiros de conteúdo — 5K9 Studio.">
+    <meta name="theme-color" content="#7F00E1">
+    <!-- noindex vale inclusive para a tela do cliente: o link é secreto por
+         token, e um cronograma indexado deixa de ser secreto. -->
+    <meta name="robots" content="noindex, nofollow">
+
+    <!-- Instrument Sans variável, local. NÃO troque pelo Google Fonts: de lá
+         o eixo de largura (wdth) não vem e a voz Condensed do display morre. -->
+    <link rel="preload" href="/assets/fonts/InstrumentSans-Variable.ttf" as="font" type="font/ttf" crossorigin>
+    <link rel="stylesheet" href="/assets/fonts.css">
+
+    <!-- Lucide: cópia local, não CDN. O unpkg já falhou em teste no Forms, e
+         aqui o prejuízo é maior — a tela sem ícone que gente de fora vê. -->
+    <script src="/lucide.min.js"></script>
+
+    <!-- Design tokens (base do design system) -->
+    <link rel="stylesheet" href="/tokens.css">
+    <!-- Tokens da marca 5K9 (ver ds/README-gerado.txt) -->
+    <link rel="stylesheet" href="/ds/ds-tokens.scoped.css">
+    <!-- Ponte: traduz os nomes semânticos para os tokens da marca -->
+    <link rel="stylesheet" href="/tokens-bridge.css">
+    <!-- Vocabulário compartilhado das páginas -->
+    <link rel="stylesheet" href="/pages/visualizador.css">
+
+    <!-- Aplica o tema salvo antes do render, para não haver flash de branco. -->
+    <script>
+        (function () {
+            try {
+                document.documentElement.setAttribute('data-theme',
+                    localStorage.getItem('5k9_theme') || 'dark');
+            } catch (e) {}
+        })();
+    </script>
+
+    <style>
+        /* Só o mínimo: o resto vem dos tokens. */
+        * { box-sizing: border-box; }
+        body { margin: 0; display: flex; min-height: 100vh; background: var(--surface-base); }
+        #app { display: flex; flex: 1; min-width: 0; }
+
+        .app-aviso {
+            flex: 1; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; gap: var(--space-4);
+            padding: var(--space-8); text-align: center;
+            font-family: var(--font-sans); color: var(--text-primary);
+        }
+        .app-aviso h2 { margin: 0; font-size: var(--text-h2); letter-spacing: var(--tracking-tight); }
+        .app-aviso p  { margin: 0; font-size: var(--text-sm); color: var(--text-tertiary); max-width: 44ch; }
+    </style>
+</head>
+<body>
+    <div id="app"></div>
+    <script type="module" src="/app.js"></script>
+</body>
+</html>

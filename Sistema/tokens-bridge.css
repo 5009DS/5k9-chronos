@@ -1,0 +1,292 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   PONTE — nossos tokens semânticos expressos nos tokens do DS 5K9.
+
+   A marca foi aprovada em 08/08/2026 e o escopo [data-ds-brand] saiu: estes
+   valores são o padrão do sistema. A ponte continua existindo porque os dois
+   conjuntos de nomes ainda convivem — ver abaixo.
+
+   POR QUE UMA PONTE, E NÃO IMPORTAR O DS DIRETO
+   Os dois conjuntos usam os MESMOS nomes com valores diferentes:
+     --space-6   24px aqui · 32px no DS
+     --space-8   32px aqui · 64px no DS
+     --space-12  48px aqui · NÃO EXISTE no DS (a regra inteira seria descartada)
+     --radius-lg 20px aqui · 14px no DS
+     --accent    #A855FF (legível) aqui · #7F00E1 (não legível) no DS
+   Importar por cima não daria erro — degradaria em silêncio. A ponte torna
+   cada equivalência explícita e revisável.
+
+   REGRA DESTE ARQUIVO: nunca escreva --x: var(--x). Como os dois conjuntos
+   caem no MESMO elemento (<html>), auto-referência é ciclo e a variável vira
+   inválida. Onde o nome já é idêntico ao do DS, não há nada a fazer: o valor
+   do DS vence por ordem de carga. Por isso a lista abaixo tem buracos
+   propositais — eles estão anotados.
+
+   Como o mapeamento usa os nomes SEMÂNTICOS do DS (--surface, --text-muted)
+   e não hex, o tema claro do DS passa a funcionar de graça.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+html:root {
+
+    /* ── Superfícies ────────────────────────────────────────────────────────
+       Precisamos de 5 degraus; o DS nomeia 3 e a rampa neutra fornece o resto. */
+    --surface-base:    var(--bg);              /* #0d0d0d */
+    --surface-1:       var(--surface);         /* #141414 */
+    --surface-2:       var(--surface-raised);  /* #1c1c1c */
+    --surface-3:       var(--neutral-300);     /* #262626 */
+    --surface-4:       var(--neutral-400);     /* #383838 */
+    --surface-inverse: var(--paper);
+
+    /* ── Texto ──────────────────────────────────────────────────────────────
+       --text-subtle (#7a7a7a) do DS fica em ~4.3:1 sobre --surface: reprova
+       AA para 11–14px, que é exatamente o nosso tamanho de label. Por isso
+       ele só aparece em 'disabled'; a hierarquia de apoio usa neutral-800 e
+       --text-muted, ambos com folga. */
+    --text-primary:    var(--text);
+    --text-secondary:  var(--neutral-800);     /* #cfcfcf */
+    --text-tertiary:   var(--text-muted);      /* #a3a3a3 */
+    --text-disabled:   var(--text-subtle);     /* #7a7a7a — só decorativo */
+    --text-inverse:    var(--ink);
+
+    /* ── Bordas — o DS tem 2 níveis; achatamos os nossos 3 ───────────────── */
+    --border-subtle:   var(--border);          /* #262626 */
+    --border-default:  var(--border);
+    --border-focus:    var(--focus-ring);
+    /* --border-strong: nome idêntico ao do DS (#383838). Já vale. */
+
+    /* ── Acento ─────────────────────────────────────────────────────────────
+       A troca mais importante: o nosso --accent é usado quase sempre em
+       PRIMEIRO PLANO (ícone, link, asterisco, chip). O equivalente do DS
+       nesse papel é --accent-text (violet-200), não --accent (violet-500),
+       que só serve para preenchimento sólido. */
+    --brand-raw:       var(--violet-500);
+    --accent:          var(--accent-text);     /* violet-200 — legível */
+    --accent-solid:    var(--violet-500);      /* só preenchimento sólido */
+    --accent-muted:    var(--accent-tint);     /* violet-900 */
+    --accent-border:   var(--border-accent);
+    --accent-contrast: var(--text-on-accent);
+    /* --accent-hover: nome idêntico ao do DS (violet-400). Já vale. */
+
+    --accent-warm:     var(--orange-500);
+    /* O âmbar não existe na marca. O card "Forms AI" passa a laranja. */
+    --accent-gold:     var(--orange-400);
+    --accent-cyan:     var(--magenta-300);
+
+    /* ── Gradientes ─────────────────────────────────────────────────────── */
+    --gradient-brand:    var(--gradient-spectrum);
+    --gradient-violet:   var(--gradient-signature);
+    --gradient-ember:    var(--gradient-spectrum);
+    --gradient-gold:     linear-gradient(120deg in oklab, var(--orange-400) 0%, var(--orange-500) 100%);
+
+    /* Fluxo animado nas cores da marca. Ângulo travado no eixo do elemento e
+       paleta em palíndromo — ver a explicação em tokens.css. O DS não define
+       gradientes com esse papel; estes são derivados dos acentos dele. */
+    --gradient-flow-x:   linear-gradient(90deg in oklab,
+                             var(--violet) 0%, var(--magenta) 28%, var(--orange) 50%,
+                             var(--magenta) 72%, var(--violet) 100%);
+    --gradient-flow-y:   linear-gradient(180deg in oklab,
+                             var(--violet) 0%, var(--magenta) 28%, var(--orange) 50%,
+                             var(--magenta) 72%, var(--violet) 100%);
+    --gradient-glow:     radial-gradient(120% 120% at 0% 0%,
+                             color-mix(in oklch, var(--violet-500) 24%, transparent) 0%,
+                             transparent 62%);
+    --gradient-hairline: linear-gradient(90deg, transparent 0%,
+                             color-mix(in oklch, var(--violet-400) 60%, transparent) 35%,
+                             color-mix(in oklch, var(--orange-500) 50%, transparent) 65%,
+                             transparent 100%);
+
+    /* ── Semânticos ─────────────────────────────────────────────────────────
+       Usamos os degraus *-text: o verde puro (green-500) fica reservado ao
+       anel de foco, que é a regra do DS. Assim sucesso e foco convivem sem
+       disputar o mesmo tom. */
+    --success:       var(--success-text);
+    --success-muted: var(--success-tint);
+    --warning:       var(--warning-text);
+    --warning-muted: var(--warning-tint);
+    --danger:        var(--danger-text);
+    --danger-muted:  var(--danger-tint);
+    --info:          var(--info-text);
+    --info-muted:    var(--info-tint);
+
+    /* ── Sequência de dados ─────────────────────────────────────────────────
+       DERIVADA — o DS não define cores categóricas para gráfico. Quatro
+       matizes da marca em luminosidade próxima, mais um neutro. */
+    --data-1: var(--violet-300);
+    --data-2: var(--orange-400);
+    --data-3: var(--magenta-300);
+    --data-4: var(--green-600);
+    --data-5: var(--neutral-700);
+    --data-neutral: var(--neutral-300);
+
+    /* ── Tipografia ─────────────────────────────────────────────────────────
+       13px e 15px não existem na escala do DS: sobem para 14 e 16.
+       --text-sm já é 14px pelo nome idêntico; só --text-xs precisa descer
+       de 12 para 11, que no DS chama --text-2xs. */
+    --text-xs:        var(--text-2xs);   /* 11 */
+    --text-display:   clamp(2.75rem, 5vw, 4rem);  /* 44 → 64 */
+    --text-h1:        var(--text-2xl);   /* 32 */
+    --text-h2:        var(--text-xl);    /* 24 */
+    --text-h3:        var(--text-lg);    /* 20 (era 18) */
+    --text-body:      var(--text-md);    /* 16 (era 15) */
+    --text-metric:    var(--text-2xl);   /* 32 (era 34) */
+    --text-metric-lg: var(--text-3xl);   /* 44 */
+
+    --tracking-tight: var(--tracking-heading);
+    --tracking-wide:  var(--tracking-overline);
+    --leading-body:   var(--leading-relaxed);   /* 1.6 */
+    /* --font-sans, --tracking-display, --leading-tight e --leading-snug têm
+       nome idêntico ao do DS. Já valem: 0.94 e 1.1 respectivamente. */
+
+    /* ── Raios ──────────────────────────────────────────────────────────────
+       Nomes idênticos (md, lg, xl, pill) já assumem o valor do DS:
+       md 8 · lg 14 · xl 24. Só os dois menores precisam ser remapeados,
+       porque no DS eles são bem menores que os nossos.
+
+       ATENÇÃO: o README do DS diz "8px é o padrão (botão, input, card)",
+       mas spacing.css define --radius-lg: 14px. Os dois não podem valer
+       para card. Aqui vale o TOKEN (14px). Para ver a leitura literal do
+       README, troque a linha de --radius-lg abaixo por var(--radius-md). */
+    --radius-xs: 4px;                /* = DS --radius-sm; literal porque
+                                        remapeamos --radius-sm logo abaixo */
+    --radius-sm: var(--radius-md);   /* 10 → 8 */
+
+    /* ── Espaçamento ────────────────────────────────────────────────────────
+       1 a 4 têm nome idêntico e mesmo valor (4/8/12/16) — nada a fazer.
+       A grade do DS não tem 20 nem 40: --space-5 vira 24 pelo próprio DS e
+       --space-10 é quantizado para 32.
+
+       ARMADILHA — remapeamento em cadeia. Como --space-6 é redefinido aqui,
+       escrever --space-8: var(--space-6) leria o valor NOVO (24), não o do
+       DS (32). Os apelidos do DS não salvam: --page-pad-x é literalmente
+       var(--space-6), então cai na mesma cadeia.
+
+       Por isso a escala numérica usa VALORES LITERAIS, com o token de
+       origem no comentário. É o único jeito robusto quando os dois lados
+       disputam os mesmos nomes. Se a grade do DS mudar, esta lista é o
+       único ponto a revisar. */
+    --space-6:  1.5rem;   /* 24 — DS --space-5 */
+    --space-8:  2rem;     /* 32 — DS --space-6 (= --page-pad-x) */
+    --space-10: 2rem;     /* 40 → 32, quantizado para a grade */
+    --space-12: 3rem;     /* 48 — DS --space-7 */
+    --space-16: 4rem;     /* 64 — DS --space-8 */
+
+    /* ── Elevação ───────────────────────────────────────────────────────────
+       --shadow-sm/md/lg têm nome idêntico: assumem os do DS, que NÃO têm o
+       hairline interno que dava relevo no escuro. É proposital — lá a
+       elevação é borda + escuridão ambiente. */
+    --shadow-accent: var(--shadow-glow-violet);
+
+    /* ── Movimento ──────────────────────────────────────────────────────────
+       --ease-out e --dur-fast/base/slow têm nome idêntico e valores quase
+       iguais aos nossos (160/240/420ms). Só o in-out muda de nome. */
+    --ease-inout: var(--ease-in-out);
+
+    /* ── Vidro ──────────────────────────────────────────────────────────────
+       EXTENSÃO NOSSA: o DS não tem superfície translúcida. Derivada dos
+       neutros dele para não destoar.
+       Nota: --scrim do DS é rgba(13,13,13,0.72). Escuro demais para vidro —
+       não sobra nada atrás para refratar. Mantemos o nosso, mais fraco. */
+    --glass-bg:      color-mix(in srgb, var(--surface-raised) 62%, transparent);
+    --glass-border:  var(--border-strong);
+    --surface-scrim: color-mix(in srgb, var(--ink) 32%, transparent);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TEMA CLARO DA MARCA
+
+   O bloco acima aponta --surface-3 e --surface-4 para --neutral-300/-400.
+   A rampa neutra do DS é FIXA: 300 é #262626 em qualquer tema. No claro isso
+   produzia campo cinza-escuro com texto escuro em cima. Mesma coisa em
+   --text-secondary, que caía em #cfcfcf sobre branco.
+
+   O claro do DS também colapsa bg, surface e surface-raised em #ffffff —
+   três níveis, uma cor só, sem profundidade nenhuma. Aqui a base vira cinza
+   claro e os cards ficam brancos, o que devolve a hierarquia.
+
+   Degraus derivados da própria rampa via color-mix, para continuarem presos
+   ao DS caso ele mude.
+
+   ACENTOS: idênticos ao escuro, como pedido. Os gradientes referenciam
+   --violet/--magenta/--orange crus, que não mudam de tema — então
+   "Criar formulário", botões e barras saem exatamente iguais. A única
+   exceção é o acento em PRIMEIRO PLANO (ícone, link, chip): violet-200
+   sobre branco dá ~1.5:1. Aí vale o violet-600, que é o que o próprio DS
+   define para o claro.
+   ═══════════════════════════════════════════════════════════════════════════ */
+html[data-theme="light"] {
+
+    /* Base cinza, cards brancos. Em tema claro "elevado" significa mais
+       branco, então a escala não é monotônica — e não deve ser. */
+    --surface-base: var(--neutral-900);                                        /* #ebebeb */
+    --surface-1:    color-mix(in srgb, var(--neutral-900) 42%, var(--paper));  /* ~#f5f5f5 */
+    --surface-2:    var(--paper);                                              /* #ffffff  */
+    --surface-3:    color-mix(in srgb, var(--neutral-900) 62%, var(--paper));  /* ~#f1f1f1 */
+    --surface-4:    color-mix(in srgb, var(--neutral-800) 42%, var(--paper));  /* ~#e6e6e6 */
+    --surface-inverse: var(--ink);
+
+    --text-primary:   var(--ink);
+    --text-secondary: var(--neutral-400);   /* #383838 */
+    --text-tertiary:  var(--neutral-500);   /* #565656 — ~7:1 sobre branco */
+    --text-disabled:  var(--neutral-600);   /* #7a7a7a */
+    --text-inverse:   var(--paper);
+
+    --border-subtle:  color-mix(in srgb, var(--neutral-800) 45%, var(--paper));
+    --border-default: var(--neutral-800);   /* #cfcfcf */
+    /* --border-strong já vem do DS claro como neutral-700 (#a3a3a3). */
+
+    /* Cores de dados: os degraus 300/400 são claros demais para barra sobre
+       branco. Sobem para os valores de marca, que têm corpo. */
+    --data-1: var(--violet-500);
+    --data-2: var(--orange-500);
+    --data-3: var(--magenta-500);
+    --data-4: var(--green-700);
+    --data-5: var(--neutral-600);
+    --data-neutral: var(--neutral-800);
+
+    /* As sombras do DS são preto puro a 0.55–0.65 de alfa: calibradas para
+       fundo escuro. Sobre branco viram borrão. Aqui vão bem mais leves. */
+    --shadow-sm: 0 1px 2px rgba(13, 13, 13, 0.06);
+    --shadow-md: 0 8px 24px -10px rgba(13, 13, 13, 0.16);
+    --shadow-lg: 0 24px 56px -18px rgba(13, 13, 13, 0.22);
+
+    --glass-bg:      color-mix(in srgb, var(--paper) 68%, transparent);
+    --glass-border:  var(--border-default);
+    --glass-sheen:   linear-gradient(180deg, rgba(255,255,255,0.65) 0%, rgba(255,255,255,0) 42%);
+    --surface-scrim: color-mix(in srgb, var(--ink) 22%, transparent);
+}
+
+/* Véus internos do painel lateral são brancos translúcidos — invisíveis
+   sobre vidro claro. No tema claro eles precisam escurecer. */
+html[data-theme="light"] .dw__footer { background: rgba(13, 13, 13, 0.03); }
+html[data-theme="light"] .dw__panel .ds-input,
+html[data-theme="light"] .dw__panel .nf-mode,
+html[data-theme="light"] .dw__panel .ds-hint {
+    background: rgba(13, 13, 13, 0.04);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   VOZ DISPLAY — não é token, é regra. O DS define o título grande como
+   Instrument Sans Condensed (eixo wdth em 75%), bold, caixa alta.
+
+   Em 07/08/2026 o Condensed foi removido por engano — lido como fonte à
+   parte, quando na verdade é o MESMO arquivo variável da Instrument Sans no
+   eixo de largura. Corrigido no mesmo dia a pedido do estúdio: mantém o
+   Condensed, é a leitura literal do DS.
+   ═══════════════════════════════════════════════════════════════════════════ */
+html .ds-display {
+    font-stretch: var(--width-condensed);
+    font-variation-settings: 'wdth' 75;
+    font-weight: var(--weight-bold);
+    text-transform: uppercase;
+}
+
+/* Caixa de frase: Title Case não existe no sistema. Feito por CSS aqui só
+   para a comparação.
+
+   PROVA DE QUE ISTO NÃO SERVE PARA PRODUÇÃO: aplicado a .hm-shortcut__title,
+   "Forms AI" virava "Forms ai" — lowercase não sabe o que é sigla. Por isso
+   o atalho ficou de fora. Na adoção definitiva a caixa muda no TEXTO, não
+   no CSS. */
+html .ds-card-title,
+html .dw__title { text-transform: lowercase; }
+html .ds-card-title::first-letter,
+html .dw__title::first-letter { text-transform: uppercase; }
