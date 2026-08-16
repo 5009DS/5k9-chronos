@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 5K9 CLIENT VISUALIZER — schema do banco.
+-- 5K9 CHRONOS — schema do banco.
 --
 -- Rode UMA VEZ no SQL Editor do projeto Supabase que JÁ HOSPEDA O 5K9 FORMS.
 --

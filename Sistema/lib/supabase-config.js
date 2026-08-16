@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    CONEXÃO COM O BANCO
 
-   O Visualizador NÃO tem projeto Supabase próprio: ele mora dentro do projeto
+   O Chronos NÃO tem projeto Supabase próprio: ele mora dentro do projeto
    do 5K9 Forms, com as tabelas em prefixo `vz_`. O plano gratuito limita
    quantos projetos a organização pode ter, e a cota já está com o Forms e o
    Gestor — um banco a mais custaria assinatura para guardar algumas centenas
@@ -46,7 +46,7 @@
 /* São as MESMAS chaves do 5K9 Forms, copiadas de
    `5K9 Forms/Sistema/lib/supabase-config.js`. Não é descuido: este sistema mora
    dentro do projeto dele, nas tabelas com prefixo `vz_`. Se um dia o
-   Visualizador ganhar projeto próprio, é aqui e no mapa de tabelas em
+   Chronos ganhar projeto próprio, é aqui e no mapa de tabelas em
    `db/remoto.js` que a troca acontece. */
 export const SUPABASE_URL  = 'https://dppgtlclpgdvxhnnulgf.supabase.co';
 export const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRwcGd0bGNscGdkdnhobm51bGdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYyMzcyNjUsImV4cCI6MjEwMTgxMzI2NX0.31Z-UOk4RUYBz4WtqNYmktiocgBIryTe6bChj9DHZiA';

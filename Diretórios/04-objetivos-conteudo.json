@@ -5,7 +5,7 @@
 
   "por_que_existe": "A fase do funil responde PARA QUEM o conteúdo fala. O objetivo responde O QUE ele precisa provocar. As duas coisas são independentes: dois roteiros de meio de funil podem ter objetivos opostos — um constrói autoridade técnica, outro quebra uma objeção de preço. Sem essa segunda camada, 'meio de funil' vira um rótulo grande demais para orientar quem escreve. Com ela, o sistema consegue dizer em uma frase o que aquele roteiro precisa entregar.",
 
-  "como_o_sistema_usa": "Cada conteúdo carrega uma fase e um objetivo. O visualizador cruza os dois e mostra automaticamente: a explicação do objetivo, a leitura do par (se a combinação é natural, se exige cuidado ou se está em conflito) e o que medir depois de publicar. Nada é gerado por modelo de linguagem — tudo sai deste arquivo, e por isso pode ser conferido e corrigido à mão.",
+  "como_o_sistema_usa": "Cada conteúdo carrega uma fase e um objetivo. O Chronos cruza os dois e mostra automaticamente: a explicação do objetivo, a leitura do par (se a combinação é natural, se exige cuidado ou se está em conflito) e o que medir depois de publicar. Nada é gerado por modelo de linguagem — tudo sai deste arquivo, e por isso pode ser conferido e corrigido à mão.",
 
   "objetivos": [
     {

@@ -51,4 +51,4 @@ http.createServer((req, res) => {
         if (err && !path.extname(file)) return entregar(path.join(ROOT, 'index.html'));
         entregar(file);
     });
-}).listen(PORT, () => console.log(`5K9 Client Visualizer em http://localhost:${PORT}`));
+}).listen(PORT, () => console.log(`5K9 Chronos em http://localhost:${PORT}`));

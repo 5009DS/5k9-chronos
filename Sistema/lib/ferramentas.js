@@ -2,7 +2,7 @@
    FERRAMENTAS DO ESTÚDIO — a lista que alimenta o trocador da topnav.
 
    Este arquivo é IDÊNTICO nos três sistemas (5K9 Forms, 5K9 Gestor e 5K9
-   Client Visualizer). A única linha que muda entre eles é a constante ATUAL,
+   Chronos). A única linha que muda entre eles é a constante ATUAL,
    no fim. Ao criar uma ferramenta nova, acrescente uma entrada aqui e copie o
    arquivo para os outros repositórios — é a lista que faz cada sistema saber
    que os outros existem.
@@ -33,11 +33,11 @@ export const FERRAMENTAS = [
         porta: 5174,
     },
     {
-        id: 'visualizador',
-        nome: 'Visualizador',
+        id: 'chronos',
+        nome: 'Chronos',
         descricao: 'Cronograma e roteiros do cliente',
         icone: 'calendar-range',
-        host: 'conteudo.5k9.studio',
+        host: 'chronos.5k9.studio',
         porta: 5175,
     },
 ];
@@ -58,7 +58,7 @@ export const urlDe = (ferramenta) => {
     /* Em produção, monta o host trocando o primeiro rótulo do domínio atual
        em vez de usar `ferramenta.host` cru. É o que mantém o trocador
        funcionando em ambiente de pré-visualização e se o domínio do estúdio
-       mudar: conteudo.5k9.studio → painel.5k9.studio, sem este arquivo
+       mudar: chronos.5k9.studio → painel.5k9.studio, sem este arquivo
        precisar saber qual é o domínio-pai. O host fixo é a reserva para
        quando não há de onde derivar (deploy .vercel.app, por exemplo). */
     const partes = hostname.split('.');
@@ -71,4 +71,4 @@ export const urlDe = (ferramenta) => {
 };
 
 /** Qual ferramenta é ESTA. Única linha que difere entre os repositórios. */
-export const ATUAL = 'visualizador';
+export const ATUAL = 'chronos';

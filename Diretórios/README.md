@@ -1,7 +1,7 @@
 # Como usar este pacote
 
-Este diretório é a **fonte do conhecimento estratégico** do 5K9 Client
-Visualizer. Não é documentação de apoio: é o que o sistema lê para explicar
+Este diretório é a **fonte do conhecimento estratégico** do 5K9
+Chronos. Não é documentação de apoio: é o que o sistema lê para explicar
 cada conteúdo ao cliente, avisar quando uma combinação está em conflito e
 sugerir a fase de um tema.
 

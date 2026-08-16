@@ -12,7 +12,7 @@ import { renderCliente } from './pages/cliente.js';
 import { renderImportar } from './pages/importar.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   5K9 CLIENT VISUALIZER — roteador.
+   5K9 CHRONOS — roteador.
 
    Mesma estrutura do Forms e do Gestor: SPA sobre a History API, sem build,
    módulos ES servidos direto. Duas diferenças que valem nota:
@@ -118,7 +118,7 @@ const erroHTML = (e) => `
 const naoEncontrado = () => `
     <div class="app-aviso">
         <h2>Página não encontrada</h2>
-        <p>O endereço não corresponde a nenhuma tela do Visualizador.</p>
+        <p>O endereço não corresponde a nenhuma tela do Chronos.</p>
         <a href="/" class="ds-btn ds-btn--ghost ds-btn--sm">Ir para o início</a>
     </div>`;
 

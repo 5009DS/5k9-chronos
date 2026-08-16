@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 5K9 CLIENT VISUALIZER — quem é o responsável por cada conteúdo.
+-- 5K9 CHRONOS — quem é o responsável por cada conteúdo.
 --
 -- Rode no SQL Editor do projeto Supabase do 5K9 Forms (o mesmo do schema.sql).
 -- Em banco novo não é preciso: o schema.sql já cria a coluna.

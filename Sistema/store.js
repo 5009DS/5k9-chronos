@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   STORE — camada de dados do 5K9 Client Visualizer.
+   STORE — camada de dados do 5K9 Chronos.
 
    Escolhe o adaptador (Supabase ou localStorage) uma vez, no boot, e expõe a
    mesma API para as quatro coleções. As páginas nunca importam adaptador

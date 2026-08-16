@@ -270,7 +270,7 @@ export const renderConfiguracoes = async (container) => {
 
     // ── Exportar / importar ─────────────────────────────────────────────
     document.getElementById('cf-exportar').addEventListener('click', async () => {
-        baixarJSON(await store.exportar(), `5k9-visualizador-${hoje()}.json`);
+        baixarJSON(await store.exportar(), `5k9-chronos-${hoje()}.json`);
         toast('Arquivo exportado.');
     });
 
@@ -282,7 +282,7 @@ export const renderConfiguracoes = async (container) => {
         try {
             const pacote = JSON.parse(await f.text());
             if (!pacote || typeof pacote !== 'object' || !('conteudos' in pacote)) {
-                throw new Error('Este arquivo não parece uma exportação do 5K9 Visualizador.');
+                throw new Error('Este arquivo não parece uma exportação do 5K9 Chronos.');
             }
             await store.importar(pacote);
             toast('Dados importados.');

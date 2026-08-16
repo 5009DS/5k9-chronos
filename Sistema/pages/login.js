@@ -19,8 +19,8 @@ export const renderLogin = async (container) => {
                      alt="5K9 Studio" width="500" height="500">
 
                 <div class="lg__texto">
-                    <h1 class="ds-card-title">Visualizador de Conteúdo</h1>
-                    <p class="ds-card-sub">Entre com a conta do estúdio.</p>
+                    <h1 class="ds-card-title">Chronos</h1>
+                    <p class="ds-card-sub">Cronograma e roteiros. Entre com a conta do estúdio.</p>
                 </div>
 
                 <label class="lg__campo">

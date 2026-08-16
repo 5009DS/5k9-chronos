@@ -1,4 +1,4 @@
-# 5K9 Client Visualizer
+# 5K9 Chronos
 
 O cronograma de conteúdo do cliente, com o roteiro de cada peça e a estratégia
 por trás dela — num link que abre no celular, sem senha.
@@ -338,6 +338,15 @@ sistema por trás para explorar — porque não existe, para ele.
 em painel lateral, e está certo para formulários de campos independentes.
 Escrever roteiro é ler o bloco anterior enquanto se escreve o próximo, e um
 painel que cobre metade da tela esconde exatamente o que precisa ser lido.
+
+**O nome interno continua "visualizador", e é de propósito.** A ferramenta se
+chamava 5K9 Client Visualizer e virou **Chronos** em 15/08/2026. Trocamos tudo
+que uma pessoa lê — produto, aba, login, domínio, documentação. Ficaram como
+estavam: o prefixo `vz_` das tabelas, as chaves `5k9_visualizador_*` do
+localStorage, o prefixo `.vz-` do CSS e o arquivo `pages/visualizador.css`.
+Renomear qualquer um deles custa migração de banco ou um diff que atravessa o
+sistema inteiro, e nenhum aparece para quem usa. Um nome interno herdado é mais
+barato que uma migração feita por estética.
 
 **O leitor de PDF é nosso, e cabe em 250 linhas.** O pdf.js resolve o caso
 geral e pesa um megabyte que viria de CDN — e a regra da casa sobre CDN já

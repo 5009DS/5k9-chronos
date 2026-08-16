@@ -36,7 +36,7 @@ export const renderTopnav = (container, caminhoAtual) => {
     container.innerHTML = `
         <header class="tn">
             <div class="tn__brand">
-                <a href="/" class="tn__marca" aria-label="5K9 Visualizador — início">
+                <a href="/" class="tn__marca" aria-label="5K9 Chronos — início">
                     <img class="tn__logo" src="/assets/logo/5k9-lockup-horizontal-white.png"
                          alt="5K9 Studio" width="816" height="185">
                 </a>
