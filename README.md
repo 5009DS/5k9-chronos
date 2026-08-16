@@ -164,6 +164,12 @@ isso sozinho: pela ficha é remanejamento deliberado, arrastando é troca.
 **O cliente não vê nada disso.** Ele enxerga a data e a fase, como sempre.
 Rotatividade de produção não é assunto de quem recebe.
 
+A legenda da tela dele deixou de citar dias por causa disto. Ela dizia "Fundo:
+segunda e terça", o que era verdade enquanto o cronograma era fixo e virou uma
+promessa desmentida pela própria tela assim que a equipe passou a remanejar. Hoje
+ela descreve o PAPEL de cada fase; a data verdadeira já está no cartão de cada
+conteúdo.
+
 ## Importar do PDF
 
 A social mídia escreve os temas do mês num documento. Em **Cliente → Importar**

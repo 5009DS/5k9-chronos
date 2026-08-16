@@ -250,8 +250,13 @@ const desenharConteudo = (container, token, visao, conteudoId) => {
                             <div class="vz-saiba__corpo">
                                 <p class="vz-nota">${esc(f.nome)} fala com quem tem consciência ${esc(f.nivel_consciencia_publico)}.
                                    O objetivo da fase é ${esc(f.objetivo_principal)}.</p>
-                                <p class="vz-nota"><strong>Posição na semana:</strong> ${esc(f.posicao_cronograma)} —
-                                   é o Funil Invertido: a semana começa pedindo ação e termina atraindo público novo.</p>
+                                <!-- "costuma ficar" e não "fica": esta é uma regra geral da
+                                     fase, e o conteúdo específico pode ter sido remanejado
+                                     para outro dia. Afirmar o dia aqui contradiria a data
+                                     que está impressa três linhas acima. -->
+                                <p class="vz-nota"><strong>Na semana,</strong> essa fase costuma ficar no
+                                   ${esc(f.posicao_cronograma)} — é o Funil Invertido: a semana começa
+                                   pedindo ação e termina atraindo público novo.</p>
                                 <p class="vz-nota"><strong>Tom:</strong> ${esc((f.tom || []).join(', '))}.</p>
                             </div>
                         </details>` : ''}
@@ -440,19 +445,29 @@ const cabecalho = (cliente) => `
         ${cliente.proposito ? `<p class="cl-proposito">${esc(cliente.proposito)}</p>` : ''}
     </header>`;
 
+/* A legenda descreve PAPÉIS, não dias.
+
+   Ela citava o dia de cada fase ("Fundo: segunda e terça"), o que estava certo
+   enquanto o cronograma era fixo. Desde que a equipe passou a remanejar
+   conteúdo — trocar um de sexta com um de segunda quando a gravação atrasa —
+   essa frase virou uma promessa que a própria tela desmente logo acima: o
+   cliente lê "fundo é segunda" e vê um fundo marcado na sexta.
+
+   A data verdadeira de cada conteúdo já está no cartão dele. A legenda existe
+   para explicar por que os três papéis existem, e isso não muda de lugar. */
 const legenda = () => `
     <section class="cl-legenda">
         <h2 class="cl-secao-titulo">Como ler o cronograma</h2>
         <p class="cl-legenda__intro">
-            A semana segue o <strong>Funil Invertido</strong>: começa pedindo ação, no dia em que
-            as pessoas estão mais dispostas a resolver pendências, e termina atraindo público novo,
-            quando o consumo é mais leve.
+            Cada conteúdo tem um papel. O <strong>Funil Invertido</strong> organiza a semana
+            por esses papéis: ela começa falando com quem já está pronto para decidir e termina
+            abrindo a porta para quem ainda não conhece você. A data de cada um está no cartão.
         </p>
         <div class="cl-legenda__linhas">
             ${[
-                ['fundo', 'Fundo', 'Segunda e terça · para quem já conhece você e está a um passo de decidir.'],
-                ['meio',  'Meio',  'Quarta e quinta · a aula. Para quem sabe do problema e avalia soluções.'],
-                ['topo',  'Topo',  'Sexta a domingo · a porta aberta. Para quem ainda não conhece você.'],
+                ['fundo', 'Fundo', 'Para quem já conhece você e está a um passo de decidir. Pede uma ação — agendar, responder, garantir a vaga.'],
+                ['meio',  'Meio',  'A aula. Para quem já sabe que tem um problema e está avaliando quem resolve.'],
+                ['topo',  'Topo',  'A porta aberta. Para quem ainda não conhece você — útil a ponto de valer o compartilhamento.'],
             ].map(([id, nome, texto]) => `
                 <div class="cl-legenda__linha">
                     <span class="vz-ponto vz-ponto--${id}"></span>
