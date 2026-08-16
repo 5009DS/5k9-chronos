@@ -66,7 +66,65 @@ export const renderShell = (container, { path, title, subtitle = '', actions = '
     `;
 
     renderTopnav(document.getElementById('topnav-container'), path);
+    lembrarRolagem(container.querySelector('.sh-scroll'));
     return { content: document.getElementById('sh-content') };
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ROLAGEM — voltar para onde a pessoa estava.
+
+   Quem desce até a terceira semana do cronograma, abre um roteiro e volta,
+   voltava para o topo e tinha que procurar o lugar de novo. Numa tela que é
+   uma lista longa e cujo uso é justamente entrar e sair de conteúdos, isso
+   custa uma busca visual a cada ida e volta.
+
+   ── POR QUE NÃO SERVE O `scrollRestoration` DO NAVEGADOR ──────────────────
+   O navegador restaura a rolagem da JANELA. Aqui quem rola é o `.sh-scroll`,
+   um elemento com `overflow-y: auto` e altura de viewport — a janela nunca
+   sai do zero, e não há nada para o navegador restaurar.
+
+   ── POR QUE EM MEMÓRIA, E NÃO EM sessionStorage ───────────────────────────
+   Recarregar a página deve começar do topo: é o gesto de quem quer recomeçar.
+   Guardar em memória dá isso de graça.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const POSICOES = new Map();
+
+/**
+ * Guarda onde a página estava. O roteador chama isto ANTES de apagar a tela,
+ * com o caminho que está saindo (ver app.js).
+ *
+ * A primeira versão escutava o evento `scroll` e ia gravando enquanto a pessoa
+ * rolava. Funciona, mas depende de um evento que nem sempre chega — e uma
+ * leitura só, no instante exato da saída, é mais barata e mais precisa: é o
+ * único momento em que a posição realmente importa.
+ */
+export const guardarRolagem = (caminho) => {
+    const scroll = document.querySelector('.sh-scroll');
+    if (scroll && caminho) POSICOES.set(caminho, scroll.scrollTop);
+};
+
+const lembrarRolagem = (scroll) => {
+    if (!scroll) return;
+    const alvo = POSICOES.get(window.location.pathname) || 0;
+    if (!alvo) return;
+
+    /* O conteúdo é preenchido DEPOIS desta função — às vezes de forma
+       assíncrona, depois de uma consulta ao banco. Restaurar agora não teria
+       efeito: a página ainda não tem altura para rolar. Então tenta até caber,
+       com teto para não insistir numa tela que encolheu de verdade (um filtro
+       que escondeu tudo, um mês sem conteúdo).
+
+       setTimeout e NÃO requestAnimationFrame: o rAF fica suspenso enquanto a
+       aba está em segundo plano. Quem clica no link, troca de aba e volta
+       encontraria a página no topo — e é exatamente nesse uso que voltar ao
+       lugar mais importa. */
+    let tentativas = 0;
+    const tentar = () => {
+        if (scroll.scrollHeight - scroll.clientHeight >= alvo) { scroll.scrollTop = alvo; return; }
+        if (++tentativas < 40) setTimeout(tentar, 16);
+    };
+    setTimeout(tentar, 0);
 };
 
 // ─────────────────────────────────────────────────────────────────────────

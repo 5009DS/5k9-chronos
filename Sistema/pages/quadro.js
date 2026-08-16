@@ -6,12 +6,11 @@ import { ativarArraste } from '../lib/arrastar.js';
 import { nomeFase, noDiaCerto } from '../lib/diretorio.js';
 import { chipFase, chipStatus, seloDeslocado, vazioHTML } from '../lib/pecas.js';
 import {
-    porData, leituraDeslocamento, deslocado, moverPara, fixarPosicao,
-    mesesComConteudo, DIAS_DA_FASE,
+    porData, leituraDeslocamento, deslocado, moverPara, fixarPosicao, DIAS_DA_FASE,
 } from '../lib/cronograma.js';
 import {
     esc, mesExtenso, somarMeses, chaveMes, semanaCurta, semanaAtual,
-    semanasDoMes, somarDias, diaCurto, nomeDiaCurto, indiceDia, hoje,
+    semanasDoMes, somarDias, diaCurto, nomeDiaCurto, indiceDia, mesAtual,
 } from '../lib/formato.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -51,7 +50,13 @@ const VAGAS = ['fundo', 'meio', 'topo'].map(fase => ({
 
 const vagaDoDia = (iso) => VAGAS.find(v => v.dias.includes(indiceDia(iso))) || VAGAS[0];
 
-export const renderQuadro = async (container, clienteId) => {
+/**
+ * @param {string} [mesInicial] mês a abrir. Existe para o redesenho depois de
+ *   uma troca voltar para o mês que estava na tela — sem ele, arrastar um
+ *   conteúdo em outubro devolvia a pessoa para o mês corrente a cada
+ *   movimento, e ela perdia o lugar no meio do trabalho.
+ */
+export const renderQuadro = async (container, clienteId, mesInicial = null) => {
     const { cliente, conteudos } = await store.doCliente(clienteId);
 
     if (!cliente) {
@@ -64,7 +69,11 @@ export const renderQuadro = async (container, clienteId) => {
         return;
     }
 
-    let mes = chaveMes(mesesComConteudo(conteudos)[0] || hoje());
+    /* O MÊS CORRENTE, sempre — e não o mês do último conteúdo cadastrado.
+       `mesesComConteudo` devolve do mais recente para o mais antigo, então
+       pegar o primeiro abria o quadro em março de 2027 quando havia pauta
+       importada até lá. Quem abre o quadro quer ver a semana em que está. */
+    let mes = mesInicial || mesAtual();
     let selecionado = null;     // id do primeiro conteúdo de uma troca por seleção
     let soltarArraste = null;
 
@@ -83,7 +92,9 @@ export const renderQuadro = async (container, clienteId) => {
 
     container.insertAdjacentHTML('beforeend', ESTILOS);
 
-    const recarregar = () => renderQuadro(container, clienteId);
+    // Leva o mês junto: o redesenho depois de uma troca precisa voltar para
+    // onde a pessoa estava, não para o mês corrente.
+    const recarregar = () => renderQuadro(container, clienteId, mes);
 
     // ── Movimento ────────────────────────────────────────────────────────
     /**

@@ -1,6 +1,7 @@
 import { store } from './store.js';
 import { theme } from './theme.js';
 import { navegar, caminhoAtual, interceptarLinks } from './lib/rotas.js';
+import { guardarRolagem } from './components/pageshell.js';
 
 import { renderPainel } from './pages/painel.js';
 import { renderCronograma } from './pages/cronograma.js';
@@ -92,6 +93,11 @@ const roteador = async () => {
     }
 
     if (caminho === caminhoCorrente) return;
+
+    /* Guarda a rolagem da tela que está SAINDO, antes de o DOM sumir. É o
+       único instante em que dá para lê-la, e é o que permite voltar de um
+       roteiro para o mesmo ponto do cronograma em vez de para o topo. */
+    guardarRolagem(caminhoCorrente);
 
     app.innerHTML = '';
     const render = resolver(caminho);

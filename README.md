@@ -136,6 +136,17 @@ a saída para quem usa leitor de tela.
 
 Toda movimentação sai com **desfazer** no aviso.
 
+**O quadro abre no mês corrente**, não no mês do último conteúdo cadastrado —
+com pauta importada até 2027, abrir no fim do cronograma é abrir no lugar
+errado. E o mês visitado sobrevive a cada troca: mover um conteúdo em outubro
+não devolve ninguém para agosto.
+
+**A rolagem também volta para onde estava.** Descer até a terceira semana,
+abrir um roteiro e voltar devolvia a pessoa ao topo. A posição é lida no
+instante da saída e reposta quando a tela tem altura para isso. Fica em
+memória: recarregar a página começa do topo, que é o gesto de quem quer
+recomeçar.
+
 ### Quem saiu do lugar, e quem ocupou o lugar dele
 
 Cada conteúdo guarda `data_original` — onde ele nasceu. Ela não muda ao

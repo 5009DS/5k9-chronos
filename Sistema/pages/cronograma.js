@@ -42,7 +42,7 @@ const FILTROS = [
     { id: 'ajuste',     rotulo: 'Com ajuste' },
 ];
 
-export const renderCronograma = async (container, clienteId) => {
+export const renderCronograma = async (container, clienteId, mesInicial = null) => {
     const { cliente, conteudos } = await store.doCliente(clienteId);
 
     if (!cliente) {
@@ -55,7 +55,10 @@ export const renderCronograma = async (container, clienteId) => {
         return;
     }
 
-    let mes = chaveMes(proximo(conteudos)?.data || hoje());
+    // `mesInicial` preserva o mês entre redesenhos: arrastar, liberar o mês ou
+    // salvar a ficha redesenham a tela, e sem ele a pessoa era devolvida ao mês
+    // corrente a cada ação.
+    let mes = mesInicial || chaveMes(proximo(conteudos)?.data || hoje());
     let filtro = 'tudo';
     let soltarArraste = null;
 
@@ -84,7 +87,7 @@ export const renderCronograma = async (container, clienteId) => {
 
     container.insertAdjacentHTML('beforeend', ESTILOS);
 
-    const recarregar = () => renderCronograma(container, clienteId);
+    const recarregar = () => renderCronograma(container, clienteId, mes);
 
     const desenhar = () => {
         const semanas = mesEmSemanas(conteudos, mes);
