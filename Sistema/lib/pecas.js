@@ -1,4 +1,4 @@
-import { esc, escLinhas } from './formato.js';
+import { esc, escLinhas, diaCurto } from './formato.js';
 import { fase, objetivo, leitura, nomeFase, rotuloFase, avisosConformidade } from './diretorio.js';
 import { tipo as tipoBloco, agruparPorSecao } from './roteiro.js';
 
@@ -165,6 +165,36 @@ export const roteiroHTML = (blocos, opcoes = {}) => {
         ${g.secao ? blocoHTML(g.secao, opcoes.acoesDe ? { acoes: opcoes.acoesDe(g.secao) } : {}) : ''}
         ${g.blocos.map(b => blocoHTML(b, opcoes.acoesDe ? { acoes: opcoes.acoesDe(b) } : {})).join('')}
     `).join('')}</div>`;
+};
+
+/**
+ * O selo de conteúdo fora da posição de origem.
+ *
+ * Só aparece nas telas internas. O cliente não vê remanejamento — é
+ * rotatividade de produção, não informação de quem recebe, e mostrar
+ * "substituído" para ele só produziria uma pergunta que ninguém quer responder.
+ *
+ * O texto muda conforme o caso, porque os três significam coisas diferentes:
+ *   troca mútua  os dois se moveram, um para o lugar do outro;
+ *   substituído  eu saí e alguém ocupou meu lugar;
+ *   movido       eu saí e meu lugar ficou vazio.
+ */
+export const seloDeslocado = (leitura) => {
+    if (!leitura) return '';
+
+    const { ocupante, trocaMutua, de, foraDeFase } = leitura;
+    const texto = trocaMutua
+        ? `trocado com "${ocupante.titulo}"`
+        : ocupante
+            ? `saiu de ${diaCurto(de)} — no lugar dele: "${ocupante.titulo}"`
+            : `movido de ${diaCurto(de)}`;
+
+    return `
+        <span class="vz-deslocado ${foraDeFase ? 'vz-deslocado--fase' : ''}"
+              title="${esc(texto)}">
+            <i data-lucide="${trocaMutua ? 'arrow-left-right' : 'move-right'}"></i>
+            ${esc(texto)}
+        </span>`;
 };
 
 /** Estado vazio padrão. */

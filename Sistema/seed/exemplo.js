@@ -149,7 +149,7 @@ export const semearExemplo = async () => {
     for (const [id, titulo, tema, fase, objetivo, formato, sem, dia, status, intencao] of CONTEUDOS) {
         await store.conteudos.salvar({
             id, cliente_id: CLIENTE.id, titulo, tema, fase, objetivo, formato,
-            data: data(sem, dia), status, intencao,
+            data: data(sem, dia), data_original: data(sem, dia), status, intencao,
             canal: 'Instagram',
             // Só o que já foi publicado aparece como revisado: um exemplo em
             // que tudo está revisado esconderia o aviso de conformidade.

@@ -1,5 +1,6 @@
 import { segundaDa, semanasDoMes, chaveMes, indiceDia, hoje } from './formato.js';
 import { listarFases, nomeFase, noDiaCerto, DIAS_DA_FASE } from './diretorio.js';
+export { DIAS_DA_FASE };
 
 /* ═══════════════════════════════════════════════════════════════════════════
    CRONOGRAMA — as contas que transformam uma lista de conteúdos em semanas.
@@ -143,6 +144,76 @@ export const proximo = (conteudos) => {
     const h = hoje();
     return porData(conteudos).find(c => c.data >= h) || null;
 };
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DESLOCAMENTO — quem saiu do lugar, e quem ocupou o lugar dele.
+
+   Tudo aqui é DERIVADO de `data_original`. Não existe campo dizendo "fulano me
+   substituiu": troca é simétrica, e um par de ponteiros passa a mentir na
+   segunda troca. Perguntar "quem está hoje na minha data de origem" responde
+   certo sempre, inclusive quando três conteúdos giram entre si.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/** O conteúdo saiu da posição em que nasceu? */
+export const deslocado = (c) => !!c?.data_original && c.data_original !== c.data;
+
+/**
+ * A leitura completa do deslocamento de um conteúdo.
+ *
+ * @returns {null | {
+ *   de: string, para: string,
+ *   ocupante: object|null,   quem está na data de origem agora
+ *   trocaMutua: boolean,     os dois trocaram entre si
+ *   faseDoDia: string|null,  a fase que o guia espera no dia atual
+ *   foraDeFase: boolean      a posição atual pede outra fase
+ * }}
+ */
+export const leituraDeslocamento = (c, todos) => {
+    if (!deslocado(c)) return null;
+
+    const ocupante = (todos || []).find(x => x.id !== c.id && x.data === c.data_original) || null;
+    const i = indiceDia(c.data);
+    const faseDoDia = Object.entries(DIAS_DA_FASE).find(([, dias]) => dias.includes(i))?.[0] || null;
+
+    return {
+        de: c.data_original,
+        para: c.data,
+        ocupante,
+        // Troca mútua: o outro nasceu exatamente onde eu estou agora. É o caso
+        // do "inverter sexta com segunda", e merece texto próprio — dizer
+        // "substituído por" quando os dois se moveram conta metade da história.
+        trocaMutua: !!ocupante && ocupante.data_original === c.data,
+        faseDoDia,
+        foraDeFase: !!c.fase && !noDiaCerto(c.fase, i),
+    };
+};
+
+/**
+ * Troca dois conteúdos de data, ou move um para uma data livre.
+ *
+ * Devolve os registros JÁ alterados, sem gravar — quem chama decide quando
+ * persistir e como desfazer. `data_original` nunca é tocada aqui: é ela que
+ * guarda de onde cada um veio.
+ *
+ * @returns {{alterados: object[], desfazer: object[]}}
+ */
+export const moverPara = (conteudo, novaData, todos) => {
+    if (conteudo.data === novaData) return { alterados: [], desfazer: [] };
+
+    const alvo = (todos || []).find(x => x.id !== conteudo.id && x.data === novaData) || null;
+
+    const desfazer = [{ ...conteudo }];
+    const alterados = [{ ...conteudo, data: novaData }];
+
+    if (alvo) {
+        desfazer.push({ ...alvo });
+        alterados.push({ ...alvo, data: conteudo.data });
+    }
+    return { alterados, desfazer };
+};
+
+/** Marca a posição atual como a certa, apagando o rastro do deslocamento. */
+export const fixarPosicao = (c) => ({ ...c, data_original: c.data });
 
 /** Retornos de um conteúdo, do mais recente para o mais antigo. */
 export const retornosDe = (retornos, conteudoId) =>

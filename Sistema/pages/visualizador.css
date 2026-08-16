@@ -307,6 +307,23 @@
 .vz-mes__rotulo::first-letter { text-transform: uppercase; }
 .vz-mes button[disabled] { opacity: 0.35; cursor: default; }
 
+/* ── Selo de deslocamento ─────────────────────────────────────────────────
+   Aparece quando um conteúdo não está na data em que nasceu. Âmbar e não
+   vermelho: remanejar é trabalho normal de produção, não defeito. Vira
+   vermelho só quando a posição nova contraria a fase — aí é estratégia sendo
+   quebrada, não agenda sendo ajustada. */
+.vz-deslocado {
+    display: inline-flex; align-items: center; gap: 5px;
+    max-width: 100%; min-width: 0;
+    padding: 2px var(--space-3);
+    border-radius: var(--radius-pill);
+    background: var(--warning-muted); color: var(--warning);
+    font-size: var(--text-xs); font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.vz-deslocado i, .vz-deslocado svg { width: 12px; height: 12px; flex-shrink: 0; }
+.vz-deslocado--fase { background: var(--danger-muted); color: var(--danger); }
+
 /* ── Cartões de indicador ─────────────────────────────────────────────────
    Grade que se acomoda sozinha: com três indicadores eles ocupam a largura;
    com cinco, quebram em duas linhas sem virar tiras finas. */

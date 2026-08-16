@@ -31,6 +31,7 @@ erros que ele detecta.
 | `/` | Quem são os clientes e, antes disso, o que eles devolveram sem resposta. |
 | `/cliente/:id` | O mês daquele cliente, semana a semana. Onde o cronograma é montado e liberado. |
 | `/conteudo/:id` | O roteiro em blocos, com a leitura estratégica e o que o cliente respondeu. |
+| `/quadro/:id` | O mês como grade: semanas × vagas do funil. Arrastar, trocar e ver quem saiu do lugar. |
 | `/importar/:id` | Sobe o PDF de temas ou de roteiros, mostra o que entendeu e grava depois da conferência. |
 | `/diretorio` | O funil, os objetivos, a matriz de cruzamento e o testador do classificador. |
 | `/configuracoes` | Conexão, diretório, cópia de segurança, tema, dados de exemplo. |
@@ -114,6 +115,54 @@ consegue editar (`lib/roteiro.js`).
 O sistema estima a duração de fala enquanto se digita (150 palavras/minuto, e a
 tela diz que é estimativa) e avisa quando há dois CTAs, quando falta gancho ou
 quando um bloco passa de 45 segundos.
+
+## Mover conteúdo de lugar
+
+Em **Cliente → Quadro do mês** o mês aparece como grade: linhas são semanas,
+colunas são as três vagas do Funil Invertido. Arraste um conteúdo para outra
+vaga e ele se move; se a vaga já estiver ocupada, os dois **trocam de lugar**.
+Na lista semanal o mesmo gesto vale, arrastando um cartão sobre outro.
+
+**As colunas são POSIÇÃO, não fase.** Um conteúdo de fundo marcado na sexta
+aparece na coluna do fim de semana, com o chip laranja no meio dos magenta.
+Agrupar por fase deixaria a tela mais arrumada e esconderia exatamente o que
+ela existe para mostrar.
+
+**No toque, segure antes de arrastar.** Arrastar e rolar a página são o mesmo
+gesto com o dedo; o arraste só começa depois de ~320ms parado. Antes disso a
+página rola normalmente. Quem preferir não arrastar tem o botão de troca em
+cada cartão: seleciona um, seleciona outro, e os dois invertem — que é também
+a saída para quem usa leitor de tela.
+
+Toda movimentação sai com **desfazer** no aviso.
+
+### Quem saiu do lugar, e quem ocupou o lugar dele
+
+Cada conteúdo guarda `data_original` — onde ele nasceu. Ela não muda ao
+arrastar, e é a diferença entre ela e a data atual que revela o deslocamento.
+Tudo o mais é **derivado**: *"quem me substituiu"* é simplesmente quem está
+hoje na minha data de origem.
+
+Gravar um campo `trocado_com` seria o caminho óbvio e mentiria na segunda
+troca — se A troca com B e depois com C, o ponteiro de B fica apontando para
+quem não está mais lá. A derivação acerta inclusive em rodízio de três, que
+nenhum par de ponteiros descreve.
+
+O selo diz uma coisa diferente em cada caso, porque os três significam coisas
+diferentes: *trocado com X* (os dois se moveram, um para o lugar do outro),
+*saiu de tal dia — no lugar dele: X* (eu saí e alguém ocupou), *movido de tal
+dia* (eu saí e a vaga ficou livre).
+
+Quando a posição nova contraria a fase, o aviso passa de âmbar para vermelho:
+remanejar agenda é trabalho normal, quebrar a estratégia do dia não é.
+
+**"Fixar aqui"** encerra o assunto — passa a considerar a posição atual como a
+de origem e apaga o aviso. Sem isso, um remanejamento deliberado ficaria
+marcado como exceção para sempre. Editar a data pela ficha do conteúdo já faz
+isso sozinho: pela ficha é remanejamento deliberado, arrastando é troca.
+
+**O cliente não vê nada disso.** Ele enxerga a data e a fase, como sempre.
+Rotatividade de produção não é assunto de quem recebe.
 
 ## Importar do PDF
 
@@ -386,6 +435,7 @@ Sistema/
     diretorio.js        fases, objetivos, leitura do par, classificador
     roteiro.js          o modelo de blocos e as contas dele
     cronograma.js       semanas, cobertura, alertas de estratégia
+    arrastar.js         arrastar e soltar com pointer events (mouse e toque)
     pdf.js              PDF → texto, por fonte, sem dependência externa
     gestor.js           ponte de leitura com o 5K9 Gestor (cartela)
     importar.js         os dois parsers: temas e roteiros
@@ -396,7 +446,7 @@ Sistema/
     topnav.js  pageshell.js  drawer.js  campos.js  menu.js  toast.js  trocador.js
   pages/
     visualizador.css  vocabulário .vz- compartilhado
-    painel.js  cronograma.js  roteiro.js  importar.js
+    painel.js  cronograma.js  quadro.js  roteiro.js  importar.js
     diretorio.js  configuracoes.js  login.js
     cliente.js        a tela pública — mobile-first, cabeçalho próprio
   ds/                 design system entregue pelo estúdio — não editar

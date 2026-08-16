@@ -4,6 +4,13 @@
    pelo painel lateral da Home).
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/**
+ * @param {string} message
+ * @param {object} [action]  { label, href } para navegar, ou { label, onClick }
+ *                           para executar. O segundo formato existe por causa
+ *                           do "desfazer": a ação não leva a lugar nenhum, ela
+ *                           reverte o que acabou de acontecer.
+ */
 export const toast = (message, action) => {
     injectStyles();
 
@@ -15,7 +22,11 @@ export const toast = (message, action) => {
     el.innerHTML = `
         <span class="ts__dot"></span>
         <span class="ts__msg">${message}</span>
-        ${action ? `<a href="${action.href}" class="ts__action">${action.label}</a>` : ''}
+        ${action
+            ? (action.href
+                ? `<a href="${action.href}" class="ts__action">${action.label}</a>`
+                : `<button class="ts__action" data-ts-acao>${action.label}</button>`)
+            : ''}
         <button class="ts__close" aria-label="Fechar aviso"><i data-lucide="x"></i></button>
     `;
     document.body.appendChild(el);
@@ -26,8 +37,15 @@ export const toast = (message, action) => {
         setTimeout(() => el.remove(), 260);
     };
     el.querySelector('.ts__close').addEventListener('click', dismiss);
+    el.querySelector('[data-ts-acao]')?.addEventListener('click', () => {
+        dismiss();
+        action.onClick();
+    });
+
     requestAnimationFrame(() => el.classList.add('is-open'));
-    setTimeout(dismiss, 6000);
+    /* Um aviso com "desfazer" vive mais: seis segundos é tempo de LER, não de
+       perceber o erro, decidir e alcançar o botão. */
+    setTimeout(dismiss, action?.onClick ? 11000 : 6000);
 };
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -54,8 +72,10 @@ function injectStyles() {
         .ts__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); flex-shrink: 0; }
         .ts__msg { white-space: nowrap; }
         .ts__action {
-            font-weight: 600; color: var(--accent); text-decoration: none;
+            font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 600;
+            color: var(--accent); text-decoration: none;
             padding: 0 var(--space-2); white-space: nowrap;
+            border: none; background: none; cursor: pointer;
         }
         .ts__action:hover { text-decoration: underline; }
         .ts__close {

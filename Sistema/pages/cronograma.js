@@ -8,12 +8,16 @@ import {
     esc, mesExtenso, somarMeses, chaveMes, semanaCurta, semanaAtual,
     nomeDiaCurto, diaCurto, hoje, indiceDia,
 } from '../lib/formato.js';
-import { mesEmSemanas, cobertura, alertasDaSemana, porData, proximo } from '../lib/cronograma.js';
+import {
+    mesEmSemanas, cobertura, alertasDaSemana, porData, proximo,
+    leituraDeslocamento, moverPara,
+} from '../lib/cronograma.js';
 import {
     listarFases, listarObjetivos, objetivosDaFase, objetivo, nomeFase,
     leitura, conferir, noDiaCerto,
 } from '../lib/diretorio.js';
-import { chipFase, chipStatus, vazioHTML, STATUS } from '../lib/pecas.js';
+import { chipFase, chipStatus, seloDeslocado, vazioHTML, STATUS } from '../lib/pecas.js';
+import { ativarArraste } from '../lib/arrastar.js';
 import { timeSalvo } from '../lib/gestor.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -53,6 +57,7 @@ export const renderCronograma = async (container, clienteId) => {
 
     let mes = chaveMes(proximo(conteudos)?.data || hoje());
     let filtro = 'tudo';
+    let soltarArraste = null;
 
     const { content } = renderShell(container, {
         path: '/',
@@ -63,6 +68,9 @@ export const renderCronograma = async (container, clienteId) => {
         title: cliente.nome,
         subtitle: cliente.proposito || 'Cronograma e roteiros deste cliente.',
         actions: `
+            <a class="ds-btn ds-btn--ghost" href="/quadro/${esc(clienteId)}">
+                <i data-lucide="layout-grid"></i> Quadro do mês
+            </a>
             <a class="ds-btn ds-btn--ghost" href="/importar/${esc(clienteId)}">
                 <i data-lucide="file-up"></i> Importar
             </a>
@@ -111,7 +119,7 @@ export const renderCronograma = async (container, clienteId) => {
 
             <div class="cr-semanas">
                 ${doMes.length
-                    ? semanas.map(s => semanaHTML(s, filtro)).join('')
+                    ? semanas.map(s => semanaHTML(s, filtro, conteudos)).join('')
                     : vazioHTML('calendar-plus', 'Nenhum conteúdo neste mês',
                         'Crie o primeiro e a semana começa a se montar sozinha.',
                         `<button class="ds-btn ds-btn--primary" id="cr-novo-vazio">Novo conteúdo</button>`)}
@@ -150,6 +158,35 @@ export const renderCronograma = async (container, clienteId) => {
             recarregar();
         });
 
+        /* Arrastar um cartão sobre outro TROCA os dois de lugar. Na lista, o
+           alvo é sempre outro conteúdo — não existe "vaga vazia" para receber,
+           porque a lista só desenha o que existe. Mover para um dia livre é o
+           que o Quadro do mês faz, e é por isso que ele existe. */
+        soltarArraste?.();
+        soltarArraste = ativarArraste(content, {
+            item: '[data-arrastavel]',
+            alvo: '[data-solta]',
+            podeSoltar: (a, b) => a !== b,
+            aoSoltar: async (idA, idB) => {
+                const a = conteudos.find(x => x.id === idA);
+                const b = conteudos.find(x => x.id === idB);
+                if (!a || !b) return;
+
+                const { alterados, desfazer } = moverPara(a, b.data, conteudos);
+                for (const c of alterados) await store.conteudos.salvar(c);
+
+                toast(`"${a.titulo.slice(0, 30)}…" trocou de lugar com "${b.titulo.slice(0, 30)}…".`, {
+                    label: 'Desfazer',
+                    onClick: async () => {
+                        for (const c of desfazer) await store.conteudos.salvar(c);
+                        toast('Movimento desfeito.');
+                        recarregar();
+                    },
+                });
+                recarregar();
+            },
+        });
+
         if (window.lucide) lucide.createIcons();
     };
 
@@ -161,7 +198,7 @@ export const renderCronograma = async (container, clienteId) => {
 
 // ─────────────────────────────────────────────────────────────────────────
 
-const semanaHTML = ({ segunda, conteudos }, filtro) => {
+const semanaHTML = ({ segunda, conteudos }, filtro, todos) => {
     const atual = segunda === semanaAtual();
     const cob = cobertura(conteudos);
     const alertas = alertasDaSemana({ conteudos });
@@ -196,18 +233,22 @@ const semanaHTML = ({ segunda, conteudos }, filtro) => {
                 </p>`).join('')}
 
             ${visiveis.length
-                ? porData(visiveis).map(cartaoHTML).join('')
+                ? porData(visiveis).map(c => cartaoHTML(c, todos)).join('')
                 : `<p class="cr-vazia">${conteudos.length ? 'Nada nesta semana com o filtro escolhido.' : 'Semana sem conteúdo programado.'}</p>`}
         </section>`;
 };
 
-const cartaoHTML = (c) => {
+const cartaoHTML = (c, todos) => {
     const o = objetivo(c.objetivo);
+    // `l` é a leitura do par fase × objetivo; `desl`, a do deslocamento. Duas
+    // coisas diferentes que o cartão mostra lado a lado.
     const l = leitura(c.fase, c.objetivo);
+    const desl = leituraDeslocamento(c, todos);
     const foraDeLugar = c.fase && !noDiaCerto(c.fase, indiceDia(c.data));
 
     return `
-        <button class="vz-conteudo" data-conteudo="${esc(c.id)}">
+        <button class="vz-conteudo" data-conteudo="${esc(c.id)}"
+                data-arrastavel="${esc(c.id)}" data-solta="${esc(c.id)}">
             <span class="vz-fita vz-fita--${esc(c.fase || '')}"></span>
             <div class="vz-conteudo__corpo">
                 <div class="vz-conteudo__topo">
@@ -226,6 +267,7 @@ const cartaoHTML = (c) => {
                     ${c.responsavel ? `<span>${esc(c.responsavel)}</span>` : ''}
                     ${c.revisado ? '<span>revisado</span>' : ''}
                 </div>
+                ${seloDeslocado(desl)}
             </div>
             <i class="cr-seta" data-lucide="chevron-right"></i>
         </button>`;
@@ -364,7 +406,10 @@ export function formularioConteudo(c, cliente, mesSugerido, aoTerminar) {
             atualizar();
         },
         aoSalvar: async (dados) => {
-            await store.conteudos.salvar({ ...dados, cliente_id: cliente.id });
+            /* Editar a data na ficha é remanejamento DELIBERADO, então a origem
+               acompanha. Arrastar é outra coisa: lá a origem fica parada, e é
+               a diferença entre as duas que revela o deslocamento. */
+            await store.conteudos.salvar({ ...dados, cliente_id: cliente.id, data_original: dados.data });
             toast(c ? 'Conteúdo atualizado.' : 'Conteúdo criado.');
             aoTerminar();
         },

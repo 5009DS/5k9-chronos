@@ -92,6 +92,11 @@ create table if not exists vz_conteudos (
     formato     text,                                  -- reels, carrossel, story…
     canal       text,
     data        date not null default current_date,
+    -- Onde o conteúdo NASCEU. Nasce igual a `data` e não muda ao arrastar: é a
+    -- diferença entre as duas que revela que ele saiu do lugar, e é por ela que
+    -- o sistema descobre quem está ocupando a posição original dele. Ver
+    -- db/migracao-posicao.sql para o raciocínio inteiro.
+    data_original date,
     status      text not null default 'rascunho',      -- rascunho | em_revisao | aprovado | ajuste | publicado
     -- O que a equipe quer que ESTE conteúdo faça, em uma frase. Complementa a
     -- explicação automática do objetivo, não a substitui.
