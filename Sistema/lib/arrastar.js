@@ -158,9 +158,19 @@ export const ativarArraste = (raiz, { item, alvo, aoSoltar, podeSoltar }) => {
         /* Um arraste termina com `click` no elemento de origem, e no cronograma
            esse elemento navega para o roteiro. Sem engolir o clique seguinte, a
            pessoa move um conteúdo e é levada para outra tela — parecendo que o
-           movimento não aconteceu. `capture` para chegar antes de qualquer
-           ouvinte, e `once` para não afetar o próximo clique de verdade. */
+           movimento não aconteceu.
+
+           O DESARME POR TEMPO é obrigatório, e custou um teste para aparecer: o
+           navegador só emite `click` quando o ponteiro sobe SOBRE o mesmo
+           elemento em que desceu, e num arraste de verdade ele quase nunca sobe.
+           Sem o desarme, o ouvinte ficava armado para sempre e comia o próximo
+           clique da tela — a pessoa arrastava um cartão e o botão seguinte
+           parava de responder, sem nenhum sinal do motivo.
+
+           setTimeout(0) basta porque o `click` do navegador, quando existe, é
+           despachado na mesma tarefa do pointerup — antes de qualquer timeout. */
         document.addEventListener('click', engolir, { capture: true, once: true });
+        setTimeout(() => document.removeEventListener('click', engolir, { capture: true }), 0);
 
         if (alvoAtual) aoSoltar(idItem, alvoAtual.dataset.solta, { item: el, alvo: alvoAtual });
     };

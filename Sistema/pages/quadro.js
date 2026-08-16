@@ -3,7 +3,7 @@ import { renderShell } from '../components/pageshell.js';
 import { toast } from '../components/toast.js';
 import { navegar } from '../lib/rotas.js';
 import { ativarArraste } from '../lib/arrastar.js';
-import { nomeFase } from '../lib/diretorio.js';
+import { nomeFase, noDiaCerto } from '../lib/diretorio.js';
 import { chipFase, chipStatus, seloDeslocado, vazioHTML } from '../lib/pecas.js';
 import {
     porData, leituraDeslocamento, deslocado, moverPara, fixarPosicao,
@@ -218,8 +218,17 @@ export const renderQuadro = async (container, clienteId) => {
         const l = leituraDeslocamento(c, todos);
         const escolhido = selecionado === c.id;
 
+        /* A borda vermelha NÃO depende de deslocamento, e essa distinção custou
+           um teste para aparecer. `leituraDeslocamento` devolve null para quem
+           nunca saiu do lugar — então um conteúdo CRIADO direto na coluna errada
+           (um fundo agendado para sábado, que é o caso do exemplo) passava sem
+           marca nenhuma no quadro. A pergunta que esta tela responde é "a fase
+           bate com a coluna?", e ela vale para todo cartão, tenha ele se movido
+           ou não. */
+        const foraDeFase = !!c.fase && !noDiaCerto(c.fase, indiceDia(c.data));
+
         return `
-            <article class="qd-cartao ${escolhido ? 'is-escolhido' : ''} ${l?.foraDeFase ? 'qd-cartao--fora' : ''}"
+            <article class="qd-cartao ${escolhido ? 'is-escolhido' : ''} ${foraDeFase ? 'qd-cartao--fora' : ''}"
                      data-arrastavel="${esc(c.id)}" data-cartao="${esc(c.id)}">
                 <span class="vz-fita vz-fita--${esc(c.fase || '')}"></span>
                 <div class="qd-cartao__corpo">
