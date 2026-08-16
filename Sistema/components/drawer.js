@@ -148,8 +148,15 @@ function injectStyles() {
 
         .dw__body { flex: 1; overflow-y: auto; padding: var(--space-6); display: flex; flex-direction: column; gap: var(--space-5); }
 
+        /* flex-wrap é rede de segurança, não estética: o painel tem 460px e cai
+           para a largura da tela no celular. Três botões com rótulo em
+           português não cabem numa linha só, e sem a quebra o último era
+           cortado pela borda — o botão principal, justamente. Quebrar é feio;
+           sumir é pior. Quem tiver três ações deve pensar duas vezes antes de
+           deixá-las todas aqui. */
         .dw__footer {
-            display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3);
+            display: flex; align-items: center; justify-content: flex-end;
+            gap: var(--space-3); flex-wrap: wrap;
             padding: var(--space-4) var(--space-6);
             border-top: 1px solid var(--glass-border);
             background: rgba(255, 255, 255, 0.04);

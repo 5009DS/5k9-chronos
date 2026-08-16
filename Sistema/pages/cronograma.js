@@ -1,6 +1,10 @@
 import { store } from '../store.js';
 import { renderShell } from '../components/pageshell.js';
 import { abrirFormulario } from '../components/campos.js';
+import { openDrawer, closeDrawer } from '../components/drawer.js';
+import {
+    apelidoSugerido, criticarApelido, temSufixoAleatorio, linkDoCliente,
+} from '../lib/apelido.js';
 import { toast } from '../components/toast.js';
 import { navegar } from '../lib/rotas.js';
 import { marcarAtivo } from '../lib/ui.js';
@@ -77,7 +81,10 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
             <a class="ds-btn ds-btn--ghost" href="/importar/${esc(clienteId)}">
                 <i data-lucide="file-up"></i> Importar
             </a>
-            <a class="ds-btn ds-btn--ghost" href="/c/${esc(cliente.token)}" target="_blank" rel="noopener">
+            <button class="ds-btn ds-btn--ghost" id="cr-link">
+                <i data-lucide="link"></i> Link do cliente
+            </button>
+            <a class="ds-btn ds-btn--ghost" href="/c/${esc(cliente.apelido || cliente.token)}" target="_blank" rel="noopener">
                 <i data-lucide="external-link"></i> Ver como o cliente vê
             </a>
             <button class="ds-btn ds-btn--primary" id="cr-novo">
@@ -193,6 +200,9 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
         if (window.lucide) lucide.createIcons();
     };
 
+    document.getElementById('cr-link').addEventListener('click',
+        () => abrirLinkDoCliente(cliente, recarregar));
+
     document.getElementById('cr-novo').addEventListener('click',
         () => formularioConteudo(null, cliente, mes, recarregar));
 
@@ -279,6 +289,187 @@ const cartaoHTML = (c, todos) => {
 // ═══════════════════════════════════════════════════════════════════════════
 // O FORMULÁRIO — onde a inteligência do diretório aparece enquanto se digita
 // ═══════════════════════════════════════════════════════════════════════════
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   O LINK DO CLIENTE — ver, personalizar e copiar.
+
+   Existe aqui, e não só no painel, porque é daqui que a pessoa manda o link:
+   ela acabou de liberar o mês e quer avisar o cliente. Voltar para a lista de
+   clientes só para copiar um endereço é um desvio sem motivo.
+
+   ── POR QUE O AVISO DE SIGILO É GRANDE ────────────────────────────────────
+   Este link abre o cronograma inteiro. O token aleatório não é adivinhável; um
+   apelido legível é, por construção. Trocar um pelo outro é uma decisão de
+   segurança disfarçada de decisão estética, e a tela precisa dizer isso NA
+   HORA — não num rodapé de documentação que ninguém lê.
+   ═══════════════════════════════════════════════════════════════════════════ */
+export function abrirLinkDoCliente(cliente, aoTerminar) {
+    const painel = openDrawer({
+        title: 'Link do cliente',
+        subtitle: cliente.nome,
+        body: `
+            <div class="cr-link">
+                <div class="cr-link__caixa">
+                    <span class="vz-rotulo">Endereço para mandar</span>
+                    <code class="cr-link__url" id="cr-url">${esc(linkDoCliente(cliente))}</code>
+                    <div class="cr-link__acoes">
+                        <button class="ds-btn ds-btn--primary ds-btn--sm" id="cr-copiar">
+                            <i data-lucide="copy"></i> Copiar link
+                        </button>
+                        <a class="ds-btn ds-btn--ghost ds-btn--sm" id="cr-abrir"
+                           href="/c/${esc(cliente.apelido || cliente.token)}" target="_blank" rel="noopener">
+                            <i data-lucide="external-link"></i> Abrir
+                        </a>
+                    </div>
+                </div>
+
+                <div class="cr-link__campo">
+                    <label class="vz-rotulo" for="cr-apelido">Endereço personalizado</label>
+                    <div class="cr-link__entrada">
+                        <span>/c/</span>
+                        <input class="ds-input" id="cr-apelido" type="text" autocomplete="off"
+                               placeholder="${esc(apelidoSugerido(cliente))}"
+                               value="${esc(cliente.apelido || '')}">
+                    </div>
+                    <p class="cr-link__erro" id="cr-erro" hidden></p>
+                    <p class="cr-link__nota" id="cr-nota"></p>
+                    <div class="cr-link__acoes">
+                        <button class="ds-btn ds-btn--ghost ds-btn--sm" id="cr-sugerir">
+                            <i data-lucide="wand-sparkles"></i> Sugerir
+                        </button>
+                        <button class="ds-btn ds-btn--ghost ds-btn--sm" id="cr-salvar-apelido">Salvar endereço</button>
+                    </div>
+                </div>
+
+                <p class="ds-hint">
+                    <i data-lucide="info"></i>
+                    O endereço secreto <code>${esc(cliente.token)}</code> continua funcionando sempre,
+                    em paralelo. Apagar o personalizado não quebra nada que você já mandou.
+                </p>
+            </div>`,
+        footer: `<span style="flex:1"></span>
+                 <button class="ds-btn ds-btn--ghost" id="cr-fechar">Fechar</button>`,
+        onMount: (p) => {
+            injectEstilosLink();
+            const campo = p.querySelector('#cr-apelido');
+            const erro = p.querySelector('#cr-erro');
+            const nota = p.querySelector('#cr-nota');
+            const salvar = p.querySelector('#cr-salvar-apelido');
+
+            const avaliar = () => {
+                const valor = campo.value.trim();
+                const critica = criticarApelido(valor);
+                erro.textContent = critica || '';
+                erro.hidden = !critica;
+                salvar.disabled = !!critica;
+
+                if (!valor) {
+                    nota.className = 'cr-link__nota';
+                    nota.textContent = 'Sem endereço personalizado, vale só o link secreto — o mais seguro.';
+                } else if (temSufixoAleatorio(valor, cliente)) {
+                    nota.className = 'cr-link__nota cr-link__nota--ok';
+                    nota.textContent = 'Legível e com o sufixo imprevisível no fim. É o equilíbrio recomendado.';
+                } else {
+                    nota.className = 'cr-link__nota cr-link__nota--aviso';
+                    nota.textContent = 'Este endereço não tem a parte aleatória no fim, então quem souber o '
+                                     + 'nome do cliente pode chegar ao cronograma sem ter recebido o link. '
+                                     + 'Use "Sugerir" se quiser mantê-lo imprevisível.';
+                }
+            };
+
+            campo.addEventListener('input', avaliar);
+            avaliar();
+
+            p.querySelector('#cr-sugerir').addEventListener('click', () => {
+                campo.value = apelidoSugerido(cliente);
+                avaliar();
+                campo.focus();
+            });
+
+            p.querySelector('#cr-copiar').addEventListener('click', async () => {
+                const url = p.querySelector('#cr-url').textContent;
+                try {
+                    await navigator.clipboard.writeText(url);
+                    toast('Link copiado.');
+                } catch {
+                    // clipboard exige contexto seguro e permissão. Quando falha,
+                    // selecionar o texto é melhor que um erro sem saída.
+                    const faixa = document.createRange();
+                    faixa.selectNodeContents(p.querySelector('#cr-url'));
+                    getSelection().removeAllRanges();
+                    getSelection().addRange(faixa);
+                    toast('Selecione e copie — o navegador bloqueou a cópia automática.');
+                }
+            });
+
+            salvar.addEventListener('click', async () => {
+                const valor = campo.value.trim() || null;
+                salvar.disabled = true;
+                salvar.textContent = 'Salvando…';
+                try {
+                    await store.clientes.salvar({ ...cliente, apelido: valor });
+                    closeDrawer();
+                    toast(valor ? 'Endereço personalizado salvo.' : 'Endereço personalizado removido.');
+                    aoTerminar();
+                } catch (e) {
+                    console.error('[cronograma] falha ao salvar o apelido:', e);
+                    /* 23505 é violação de índice único no Postgres: outro cliente
+                       já usa este endereço. Vale a mensagem própria — "erro ao
+                       salvar" mandaria a pessoa procurar defeito onde não há. */
+                    const duplicado = String(e?.code) === '23505' || /duplicate|unique/i.test(e?.message || '');
+                    toast(duplicado
+                        ? 'Este endereço já está em uso por outro cliente.'
+                        : 'Não foi possível salvar. Tente de novo.');
+                    salvar.disabled = false;
+                    salvar.textContent = 'Salvar endereço';
+                }
+            });
+
+            p.querySelector('#cr-fechar').addEventListener('click', closeDrawer);
+        },
+    });
+    return painel;
+}
+
+function injectEstilosLink() {
+    if (document.getElementById('cronograma-link-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'cronograma-link-styles';
+    style.textContent = `
+        .cr-link { display: flex; flex-direction: column; gap: var(--space-5); }
+        .cr-link__caixa, .cr-link__campo { display: flex; flex-direction: column; gap: var(--space-2); }
+        .cr-link__url {
+            display: block; padding: var(--space-3) var(--space-4);
+            border-radius: var(--radius-md);
+            background: rgba(255, 255, 255, 0.08); border: 1px solid var(--glass-border);
+            font-family: var(--font-mono); font-size: 12px; color: var(--text-primary);
+            word-break: break-all; line-height: var(--leading-body);
+        }
+        .cr-link__acoes { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+
+        /* O "/c/" fixo à esquerda deixa claro que o campo é só o final da URL —
+           sem ele, alguém colaria o endereço inteiro ali dentro. */
+        .cr-link__entrada { display: flex; align-items: center; gap: var(--space-2); }
+        .cr-link__entrada > span { font-family: var(--font-mono); font-size: 12px; color: var(--text-tertiary); flex-shrink: 0; }
+        .cr-link__entrada .ds-input { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 12px; }
+
+        .cr-link__nota { margin: 0; font-size: var(--text-xs); color: var(--text-tertiary); line-height: var(--leading-body); }
+        .cr-link__nota--aviso { color: var(--warning); }
+        .cr-link__nota--ok { color: var(--success); }
+        .cr-link__erro {
+            margin: 0; padding: var(--space-2) var(--space-3);
+            border-radius: var(--radius-sm); background: var(--danger-muted);
+            font-size: var(--text-xs); color: var(--danger);
+        }
+        .cr-link__erro[hidden] { display: none; }
+        .ds-hint code {
+            font-family: var(--font-mono); font-size: 11px;
+            padding: 1px 5px; border-radius: var(--radius-xs);
+            background: rgba(255, 255, 255, 0.10);
+        }
+    `;
+    document.head.appendChild(style);
+}
 
 /**
  * Formulário de conteúdo.

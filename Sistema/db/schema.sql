@@ -58,6 +58,9 @@ create table if not exists vz_clientes (
     nome       text not null,
     empresa    text,
     token      text not null unique,
+    -- Apelido opcional para o link (ver db/migracao-apelido.sql). Legível e,
+    -- por isso mesmo, adivinhável — o token continua valendo em paralelo.
+    apelido    text,
     contato    text,
     cor        text,
     -- Uma frase da estratégia daquele cliente, mostrada no topo do cronograma
@@ -69,6 +72,9 @@ create table if not exists vz_clientes (
 );
 
 create index if not exists vz_clientes_token_idx on vz_clientes(token);
+-- Único permitindo vários nulos: a maioria dos clientes não terá apelido.
+create unique index if not exists vz_clientes_apelido_idx
+    on vz_clientes(apelido) where apelido is not null;
 
 -- ── Conteúdos ─────────────────────────────────────────────────────────────
 -- Um item do cronograma. `data` é a data de publicação prevista, e é ela que
@@ -216,7 +222,7 @@ stable
 as $$
     with c as (
         select * from vz_clientes
-         where token = p_token and ativo is true
+         where (token = p_token or apelido = p_token) and ativo is true
     ), itens as (
         select co.* from vz_conteudos co
           join c on co.cliente_id = c.id
@@ -274,7 +280,7 @@ begin
       from vz_conteudos co
       join vz_clientes cl on cl.id = co.cliente_id
      where co.id = p_conteudo
-       and cl.token = p_token
+       and (cl.token = p_token or cl.apelido = p_token)
        and cl.ativo is true
        and co.status <> 'rascunho';
 

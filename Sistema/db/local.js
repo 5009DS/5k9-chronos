@@ -71,7 +71,11 @@ export const local = {
      * que o cliente vê, que é o único trabalho desta tela.
      */
     visualizacao: async (token) => {
-        const cliente = ler('clientes').find(c => c.token === token && c.ativo !== false);
+        // Token OU apelido, exatamente como a função vz_visualizacao do banco.
+        // Quando os dois lados divergem, a prévia mente sobre o que o cliente
+        // vê — que é o único trabalho desta função.
+        const cliente = ler('clientes').find(c =>
+            (c.token === token || (c.apelido && c.apelido === token)) && c.ativo !== false);
         if (!cliente) return null;
 
         const conteudos = ler('conteudos')

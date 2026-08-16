@@ -6,6 +6,7 @@ import { toast } from '../components/toast.js';
 import { navegar } from '../lib/rotas.js';
 import { openDrawer, closeDrawer } from '../components/drawer.js';
 import { lerCartela, PONTE_LIGADA } from '../lib/gestor.js';
+import { linkDoCliente } from '../lib/apelido.js';
 import { esc, semAcento, mesAtual, chaveMes, dataBR, quandoRelativo, diaCurto } from '../lib/formato.js';
 import { proximo, contarPorStatus, retornosDe, porData } from '../lib/cronograma.js';
 import { vazioHTML } from '../lib/pecas.js';
@@ -99,7 +100,7 @@ export const renderPainel = async (container) => {
     content.querySelectorAll('[data-copiar]').forEach(botao =>
         botao.addEventListener('click', (e) => {
             e.stopPropagation();
-            copiarLink(botao.dataset.copiar);
+            copiarLink(botao.dataset.copiar, clientes);
         }));
 
     content.querySelectorAll('[data-menu]').forEach(botao =>
@@ -110,9 +111,9 @@ export const renderPainel = async (container) => {
                 { id: 'ver', label: 'Abrir cronograma', icon: 'calendar-days',
                   onClick: () => navegar(`/cliente/${cl.id}`) },
                 { id: 'link', label: 'Copiar link do cliente', icon: 'link',
-                  onClick: () => copiarLink(cl.token) },
+                  onClick: () => copiarLink(cl.id, clientes) },
                 { id: 'previa', label: 'Ver como o cliente vê', icon: 'external-link',
-                  href: `/c/${cl.token}`, externo: true },
+                  href: `/c/${cl.apelido || cl.token}`, externo: true },
                 { id: 'editar', label: 'Editar cadastro', icon: 'pencil', separadorAntes: true,
                   onClick: () => formularioCliente(cl, () => renderPainel(container)) },
                 { id: 'novoToken', label: 'Gerar link novo', icon: 'refresh-cw',
@@ -182,7 +183,7 @@ const clienteHTML = (cl, conteudos) => {
             </div>
 
             <div class="pn-cliente__acoes">
-                <button class="ds-icon-btn" data-copiar="${esc(cl.token)}" title="Copiar o link do cliente">
+                <button class="ds-icon-btn" data-copiar="${esc(cl.id)}" title="Copiar o link do cliente">
                     <i data-lucide="link"></i>
                 </button>
                 <button class="ds-icon-btn" data-menu="${esc(cl.id)}" aria-haspopup="menu" aria-expanded="false" aria-label="Ações">
@@ -203,11 +204,11 @@ const rotuloCurto = (status) => ({
  * um WhatsApp, e lá "/c/abc" não é link. `location.origin` resolve isso tanto
  * em localhost quanto em produção, sem este arquivo saber qual é o domínio.
  */
-async function copiarLink(token) {
-    const url = `${window.location.origin}/c/${token}`;
+async function copiarLink(clienteId, clientes) {
+    const url = linkDoCliente(clientes.find(c => c.id === clienteId));
     try {
         await navigator.clipboard.writeText(url);
-        toast('Link copiado.', { href: `/c/${token}`, label: 'Abrir' });
+        toast('Link copiado.', { href: new URL(url).pathname, label: 'Abrir' });
     } catch {
         /* clipboard exige contexto seguro (https ou localhost) e permissão.
            Quando falha, mostrar o endereço é melhor que um erro: dá para

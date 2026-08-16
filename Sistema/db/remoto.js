@@ -122,28 +122,60 @@ export const remoto = {
     },
 
     // ── Tela pública ────────────────────────────────────────────────────
-    /** Cronograma de um token, já sem rascunhos. `null` se o token não vale. */
-    visualizacao: async (token) => {
-        const s = await cliente();
-        const { data, error } = await s.rpc('vz_visualizacao', { p_token: token });
-        if (error) falhar('visualizacao', error);
-        return data || null;
-    },
+    /** Cronograma de um token ou apelido, sem rascunhos. `null` se não vale. */
+    visualizacao: (token) => chamarRPC('vz_visualizacao', { p_token: token }),
 
-    registrarRetorno: async (token, retorno) => {
-        const s = await cliente();
-        const { data, error } = await s.rpc('vz_registrar_retorno', {
-            p_token:     token,
-            p_conteudo:  retorno.conteudo_id,
-            p_tipo:      retorno.tipo,
-            p_texto:     retorno.texto || null,
-            p_autor:     retorno.autor || null,
-        });
-        /* A função levanta exceção quando o token não bate com o conteúdo. A
-           mensagem dela é escrita para ser lida por gente ("Este link não
-           está mais válido"), então vai direto para a tela em vez de virar
-           um "erro ao salvar" genérico. */
-        if (error) falhar('registrarRetorno', error);
-        return data;
-    },
+    registrarRetorno: (token, retorno) => chamarRPC('vz_registrar_retorno', {
+        p_token:    token,
+        p_conteudo: retorno.conteudo_id,
+        p_tipo:     retorno.tipo,
+        p_texto:    retorno.texto || null,
+        p_autor:    retorno.autor || null,
+    }),
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   AS DUAS CHAMADAS PÚBLICAS NÃO USAM A BIBLIOTECA — usam fetch puro.
+
+   Elas são as únicas que a tela do CLIENTE faz, e ele abre o link no celular,
+   em rede de operadora, quase sempre sem cache. Passar pelo supabase-js
+   custava baixar ~100kB de um CDN de terceiro ANTES de a primeira letra
+   aparecer — para depois fazer um POST de duas linhas.
+
+   O endpoint REST de uma função é um POST com a chave no cabeçalho. Não há o
+   que a biblioteca resolva aqui: não há sessão a renovar, nem query a montar,
+   nem tipo a inferir. Ela continua servindo o painel interno, onde há login,
+   assinatura de mudança de sessão e uma dúzia de consultas — e onde o
+   download acontece uma vez e fica em cache.
+
+   Efeito colateral bom: a tela do cliente deixa de depender do esm.sh estar
+   no ar. Um CDN fora do ar passa a quebrar o painel da equipe, não o link que
+   está na mão do cliente.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const chamarRPC = async (funcao, corpo) => {
+    const resposta = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${funcao}`, {
+        method: 'POST',
+        headers: {
+            apikey: SUPABASE_ANON,
+            Authorization: `Bearer ${SUPABASE_ANON}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(corpo),
+    });
+
+    // Corpo vazio é resposta válida (a função pode devolver null).
+    const texto = await resposta.text();
+    const dados = texto ? JSON.parse(texto) : null;
+
+    if (!resposta.ok) {
+        console.error(`[db] ${funcao}:`, dados || resposta.status);
+        /* A função levanta exceção com mensagem escrita para ser lida por
+           gente ("Este link não está mais válido"). O PostgREST devolve essa
+           frase em `message`, e ela vai direto para a tela — virar um "erro ao
+           salvar" genérico jogaria fora a única explicação útil. */
+        const erro = new Error(dados?.message || `Falha ao falar com o banco (${resposta.status}).`);
+        erro.code = dados?.code;
+        throw erro;
+    }
+    return dados;
 };

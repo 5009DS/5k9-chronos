@@ -147,9 +147,15 @@ interceptarLinks();
    enxerga a tabela — e não precisa: a função `visualizacao()` devolve o
    diretório vigente junto com o cronograma, numa ida só (ver pages/cliente.js).
    Tentar mesmo assim renderia um aviso no console em toda visita de cliente. */
+const abrindoPublica = ehPublica(caminhoAtual());
+
+/* Na rota do cliente NADA disto é esperado, e a diferença é sentida: pedir a
+   sessão obriga a carregar a biblioteca do Supabase de um CDN antes do
+   primeiro desenho, e o cliente não tem sessão nenhuma para verificar. A tela
+   dele agora vai direto ao ar e faz uma única chamada, por fetch puro. */
 Promise.all([
-    store.iniciarSessao(),
-    ehPublica(caminhoAtual()) ? Promise.resolve(false) : store.aplicarDiretorio(),
+    abrindoPublica ? Promise.resolve(null)  : store.iniciarSessao(),
+    abrindoPublica ? Promise.resolve(false) : store.aplicarDiretorio(),
 ]).then(() => {
     roteador();
     // Login/logout em outra aba, ou token expirado: reavalia a rota atual em

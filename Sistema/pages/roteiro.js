@@ -363,28 +363,64 @@ export const renderRoteiro = async (container, conteudoId) => {
                     </p>
                     <textarea class="ds-input rt-colar__campo" id="rt-texto" rows="12"
                               placeholder="*ROTEIRO FLACIDEZ NA FACE*&#10;&#10;- Você emagreceu e percebeu que seu rosto ficou mais caído?&#10;&#10;- Isso é mais comum do que parece.&#10;&#10;- Eu sou a Dra. Laiz e te aguardo pra uma avaliação!"></textarea>
+
+                    ${temRoteiro ? `
+                        <!-- A escolha entre substituir e acrescentar mora AQUI, e
+                             não no rodapé. Ela é sobre o conteúdo — pertence ao
+                             lado do texto que a pessoa acabou de colar. E dois
+                             botões de ação mais o Cancelar não cabem na largura
+                             do painel: o principal era cortado pela borda. -->
+                        <div class="rt-modo">
+                            <span class="vz-rotulo">Este conteúdo já tem ${blocos.length} bloco${blocos.length > 1 ? 's' : ''}</span>
+                            <div class="rt-modo__opcoes" id="rt-modo">
+                                <button type="button" class="rt-modo__op is-active" data-modo="substituir">
+                                    <i data-lucide="replace"></i>
+                                    <span><strong>Substituir</strong>O roteiro atual sai.</span>
+                                </button>
+                                <button type="button" class="rt-modo__op" data-modo="acrescentar">
+                                    <i data-lucide="list-plus"></i>
+                                    <span><strong>Acrescentar</strong>Entra no fim do que já existe.</span>
+                                </button>
+                            </div>
+                        </div>` : ''}
+
                     <div id="rt-previa"></div>
                 </div>`,
             footer: `
                 <span style="flex:1"></span>
                 <button class="ds-btn ds-btn--ghost" id="rt-cancelar">Cancelar</button>
-                ${temRoteiro
-                    ? `<button class="ds-btn ds-btn--ghost" id="rt-acrescentar" disabled>Acrescentar ao fim</button>
-                       <button class="ds-btn ds-btn--primary" id="rt-substituir" disabled>Substituir roteiro</button>`
-                    : `<button class="ds-btn ds-btn--primary" id="rt-substituir" disabled>Criar roteiro</button>`}`,
+                <button class="ds-btn ds-btn--primary" id="rt-gravar" disabled>
+                    ${temRoteiro ? 'Gravar' : 'Criar roteiro'}
+                </button>`,
             onMount: (painel) => {
                 injectEstilosColar();
                 const campo = painel.querySelector('#rt-texto');
                 const previa = painel.querySelector('#rt-previa');
-                const substituir = painel.querySelector('#rt-substituir');
-                const acrescentar = painel.querySelector('#rt-acrescentar');
+                const gravarBtn = painel.querySelector('#rt-gravar');
+                const seletorModo = painel.querySelector('#rt-modo');
+                let modo = 'substituir';
                 let lido = { titulo: null, blocos: [] };
+
+                seletorModo?.addEventListener('click', (e) => {
+                    const b = e.target.closest('[data-modo]');
+                    if (!b) return;
+                    modo = b.dataset.modo;
+                    seletorModo.querySelectorAll('[data-modo]').forEach(x =>
+                        x.classList.toggle('is-active', x === b));
+                    analisar();
+                });
 
                 const analisar = () => {
                     lido = lerRoteiroUnico(campo.value);
                     const vazio = !lido.blocos.length;
-                    substituir.disabled = vazio;
-                    if (acrescentar) acrescentar.disabled = vazio;
+                    gravarBtn.disabled = vazio;
+                    if (!vazio) {
+                        gravarBtn.textContent = temRoteiro
+                            ? (modo === 'substituir'
+                                ? `Substituir por ${lido.blocos.length}`
+                                : `Acrescentar ${lido.blocos.length}`)
+                            : `Criar ${lido.blocos.length} bloco${lido.blocos.length > 1 ? 's' : ''}`;
+                    }
 
                     if (vazio) { previa.innerHTML = ''; return; }
 
@@ -420,10 +456,10 @@ export const renderRoteiro = async (container, conteudoId) => {
                 campo.addEventListener('input', analisar);
                 painel.querySelector('#rt-cancelar').addEventListener('click', closeDrawer);
 
-                const gravar = async (modo) => {
-                    const b = modo === 'substituir' ? substituir : acrescentar;
-                    b.disabled = true;
-                    b.textContent = 'Gravando…';
+                const gravar = async () => {
+                    const rotuloAnterior = gravarBtn.textContent;
+                    gravarBtn.disabled = true;
+                    gravarBtn.textContent = 'Gravando…';
                     try {
                         if (modo === 'substituir') {
                             for (const antigo of blocos) await store.blocos.excluir(antigo.id);
@@ -445,13 +481,12 @@ export const renderRoteiro = async (container, conteudoId) => {
                     } catch (e) {
                         console.error('[roteiro] falha ao colar:', e);
                         toast('Não foi possível gravar. Tente de novo.');
-                        b.disabled = false;
-                        b.textContent = modo === 'substituir' ? 'Substituir roteiro' : 'Acrescentar ao fim';
+                        gravarBtn.disabled = false;
+                        gravarBtn.textContent = rotuloAnterior;
                     }
                 };
 
-                substituir.addEventListener('click', () => gravar('substituir'));
-                acrescentar?.addEventListener('click', () => gravar('acrescentar'));
+                gravarBtn.addEventListener('click', gravar);
                 campo.focus();
             },
         });
@@ -529,6 +564,31 @@ function injectEstilosColar() {
             resize: vertical; line-height: var(--leading-body);
             font-family: var(--font-sans); font-size: var(--text-sm);
         }
+
+        /* ── Substituir ou acrescentar ────────────────────────────────────
+           Duas caixas grandes em vez de dois botões no rodapé. A diferença
+           entre elas é destrutiva de um lado e não do outro, e essa distinção
+           precisa de espaço para uma linha de explicação — que num botão de
+           rodapé não cabe. */
+        .rt-modo { display: flex; flex-direction: column; gap: var(--space-2); }
+        .rt-modo__opcoes { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+        .rt-modo__op {
+            flex: 1 1 180px; min-width: 0;
+            display: flex; align-items: flex-start; gap: var(--space-3);
+            padding: var(--space-3) var(--space-4);
+            border: 1px solid var(--glass-border); border-radius: var(--radius-md);
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text-secondary); text-align: left; cursor: pointer;
+            font-family: var(--font-sans);
+            transition: border-color var(--dur-fast), background-color var(--dur-fast);
+        }
+        .rt-modo__op:hover { border-color: var(--accent-border); }
+        .rt-modo__op.is-active { border-color: var(--accent); background: var(--accent-muted); }
+        .rt-modo__op i, .rt-modo__op svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 2px; }
+        .rt-modo__op.is-active i, .rt-modo__op.is-active svg { color: var(--accent); }
+        .rt-modo__op span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .rt-modo__op strong { font-size: var(--text-sm); font-weight: 600; color: var(--text-primary); }
+        .rt-modo__op span span, .rt-modo__op span { font-size: var(--text-xs); line-height: var(--leading-body); }
 
         /* ── Prévia ───────────────────────────────────────────────────────
            Aparece enquanto se cola e some quando o campo esvazia. É o que

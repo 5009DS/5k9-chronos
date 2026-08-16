@@ -157,6 +157,23 @@ exclui com desfazer. Ele fecha sozinho quando o botão sai da tela — é o mesm
 comportamento dos outros menus do estúdio, e evita um popover flutuando solto
 sem relação com o que o abriu.
 
+## O link do cliente
+
+Em **Cliente → Link do cliente**: ver o endereço, copiar, e personalizar.
+
+Por padrão o link é o token aleatório de dez caracteres — não adivinhável, que
+é o ponto. Um apelido legível é adivinhável por construção, e este link abre o
+cronograma inteiro. Por isso a tela sugere o meio-termo: nome do cliente mais
+um sufixo tirado do próprio token (`dra-fernanda-k7mq`), legível o bastante
+para caber num e-mail e imprevisível o bastante para não ser chutado.
+
+O aviso na tela não tenta MEDIR se um endereço é adivinhável — isso não é
+mensurável a partir do texto. Ele checa uma coisa exata: o endereço termina com
+o sufixo aleatório que geramos? E diz exatamente isso.
+
+**O token continua valendo sempre**, em paralelo. Apagar o apelido não quebra
+nenhum link já enviado.
+
 ## Mover conteúdo de lugar
 
 Em **Cliente → Quadro do mês** o mês aparece como grade: linhas são semanas,
