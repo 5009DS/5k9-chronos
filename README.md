@@ -116,6 +116,47 @@ O sistema estima a duração de fala enquanto se digita (150 palavras/minuto, e 
 tela diz que é estimativa) e avisa quando há dois CTAs, quando falta gancho ou
 quando um bloco passa de 45 segundos.
 
+### Colar o roteiro inteiro
+
+Montar bloco a bloco é bom para ESCREVER e péssimo para RECEBER. A roteirista
+manda o roteiro pronto num bloco de texto, e transformar isso em nove blocos à
+mão é digitação que o sistema faz sozinho.
+
+**Colar roteiro**, no topo da seção, aceita o texto como ele chega:
+
+```
+ROTEIRO FLACIDEZ NA FACE
+
+* Você emagreceu e percebeu que seu rosto ficou mais caído?
+* Isso é mais comum do que parece.
+* Eu sou a Dra. Laiz e te aguardo pra uma avaliação!
+```
+
+Os dois formatos que a roteirista usa funcionam igual: marcador `-` com linha em
+branco entre os itens, ou `*` coladinho. Cada marcador — ou cada parágrafo, se
+não houver marcador — vira um bloco.
+
+A tipagem sai de três regras, e só três:
+
+| Vira | Quando |
+|---|---|
+| **gancho** | é a primeira fala |
+| **chamada para ação** | é a última fala *e* pede algo (`agende`, `te aguardo`, `chama no direct`…) |
+| **frase curta** | está no meio, tem até 58 caracteres, não tem vírgula e termina em pontuação |
+
+O resto fica como **fala**. Os três limites da frase curta é que tornam a regra
+segura: "Isso é mais comum do que parece." entra, "Por isso, a avaliação
+individualizada é fundamental para definir o melhor plano" não. Se o documento
+trouxer rótulos explícitos (`Gancho:`, `CTA:`, `[câmera]`), eles têm prioridade.
+
+A prévia mostra o que foi entendido, bloco a bloco, **antes** de gravar. Com
+roteiro já existente aparecem duas saídas: substituir ou acrescentar ao fim.
+
+O menu de cada bloco (`⋯`) troca o tipo, duplica logo abaixo do original e
+exclui com desfazer. Ele fecha sozinho quando o botão sai da tela — é o mesmo
+comportamento dos outros menus do estúdio, e evita um popover flutuando solto
+sem relação com o que o abriu.
+
 ## Mover conteúdo de lugar
 
 Em **Cliente → Quadro do mês** o mês aparece como grade: linhas são semanas,

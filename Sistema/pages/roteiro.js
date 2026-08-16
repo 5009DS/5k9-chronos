@@ -1,12 +1,14 @@
 import { store } from '../store.js';
 import { renderShell } from '../components/pageshell.js';
 import { abrirMenu } from '../components/menu.js';
+import { openDrawer, closeDrawer } from '../components/drawer.js';
+import { lerRoteiroUnico } from '../lib/importar.js';
 import { toast } from '../components/toast.js';
 import { esc, dataBR, quandoRelativo, nomeDia, duracao, segundosDeFala } from '../lib/formato.js';
 import { objetivo } from '../lib/diretorio.js';
 import { retornosDe } from '../lib/cronograma.js';
 import {
-    TIPOS, tipo as tipoBloco, ordenar, mover, renumerar, blocoNovo,
+    TIPOS, tipo as tipoBloco, ordenar, mover, renumerar, blocoNovo, proximaOrdem,
     duracaoTotal, contarPalavras, avisosDeEstrutura, paraTexto,
 } from '../lib/roteiro.js';
 import {
@@ -148,6 +150,9 @@ export const renderRoteiro = async (container, conteudoId) => {
                         <span class="ds-card-sub" id="rt-medida">${esc(medida(blocos))}</span>
                     </div>
                     <div class="rt-acoes-topo">
+                        <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-colar">
+                            <i data-lucide="clipboard-paste"></i> Colar roteiro
+                        </button>
                         <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-copiar">
                             <i data-lucide="copy"></i> Copiar texto
                         </button>
@@ -162,8 +167,12 @@ export const renderRoteiro = async (container, conteudoId) => {
                 <div class="rt-blocos" id="rt-blocos">
                     ${blocos.length
                         ? blocos.map((b, i) => blocoEditavel(b, i, blocos.length)).join('')
-                        : vazioHTML('file-plus', 'Roteiro em branco',
-                            'Escolha por onde começar. Você pode misturar os recortes: seções, falas, frases curtas e blocos livres convivem no mesmo roteiro.')}
+                        : vazioHTML('clipboard-paste', 'Roteiro em branco',
+                            'Cole o roteiro inteiro de uma vez — o sistema separa em blocos e marca o gancho, '
+                          + 'as falas e a chamada para ação. Ou monte à mão, bloco a bloco, abaixo.',
+                            `<button class="ds-btn ds-btn--primary" id="rt-colar-vazio">
+                                <i data-lucide="clipboard-paste"></i> Colar roteiro
+                             </button>`)}
                 </div>
 
                 <div class="rt-adicionar">
@@ -184,7 +193,16 @@ export const renderRoteiro = async (container, conteudoId) => {
 
     // ─────────────────────────────────────────────────────────────────────
     function ligarEventos() {
+        content.querySelector('#rt-colar').addEventListener('click', abrirColar);
+        content.querySelector('#rt-colar-vazio')?.addEventListener('click', abrirColar);
+
         content.querySelector('#rt-status').addEventListener('click', (e) => {
+            /* stopPropagation é OBRIGATÓRIO aqui. O menu se fecha sozinho em
+               qualquer clique no documento (ver components/menu.js), e sem
+               barrar a propagação este mesmo clique sobe até o document e
+               fecha o menu no instante em que ele abre — o botão parece morto,
+               sem erro nenhum no console. */
+            e.stopPropagation();
             const b = e.target.closest('button');
             abrirMenu(b, Object.entries(STATUS).map(([id, s]) => ({
                 id, label: s.rotulo, icon: s.icone,
@@ -256,9 +274,12 @@ export const renderRoteiro = async (container, conteudoId) => {
             }));
 
         content.querySelectorAll('[data-acoes-bloco]').forEach(botao =>
-            botao.addEventListener('click', () => {
+            botao.addEventListener('click', (e) => {
+                e.stopPropagation();   // ver a explicação no menu de status
                 const id = botao.dataset.acoesBloco;
                 const b = blocos.find(x => x.id === id);
+                const i = blocos.findIndex(x => x.id === id);
+
                 abrirMenu(botao, [
                     ...TIPOS.filter(t => t.id !== b.tipo).map(t => ({
                         id: `tipo-${t.id}`, label: `Virar ${t.nome.toLowerCase()}`, icon: t.icone,
@@ -269,17 +290,171 @@ export const renderRoteiro = async (container, conteudoId) => {
                         },
                     })),
                     {
+                        id: 'duplicar', label: 'Duplicar bloco', icon: 'copy', separadorAntes: true,
+                        onClick: async () => {
+                            /* A cópia entra LOGO ABAIXO do original, não no fim.
+                               Duplicar serve para escrever uma variação da fala
+                               que está ali; mandar a cópia para o fim do roteiro
+                               obrigaria a subi-la de volta clique a clique. */
+                            const copia = {
+                                ...b, id: crypto.randomUUID(),
+                                criado_em: new Date().toISOString(),
+                            };
+                            blocos = renumerar([...blocos.slice(0, i + 1), copia, ...blocos.slice(i + 1)]);
+                            for (const x of blocos) await store.blocos.salvar(x);
+                            toast('Bloco duplicado.');
+                            desenhar();
+                        },
+                    },
+                    {
                         id: 'excluir', label: 'Excluir bloco', icon: 'trash-2',
                         variante: 'danger', separadorAntes: true,
                         onClick: async () => {
+                            const apagado = { ...b };
+                            const posicao = i;
                             await store.blocos.excluir(id);
                             blocos = renumerar(blocos.filter(x => x.id !== id));
                             for (const x of blocos) await store.blocos.salvar(x);
+
+                            toast('Bloco excluído.', {
+                                label: 'Desfazer',
+                                onClick: async () => {
+                                    blocos = renumerar([
+                                        ...blocos.slice(0, posicao), apagado, ...blocos.slice(posicao),
+                                    ]);
+                                    for (const x of blocos) await store.blocos.salvar(x);
+                                    desenhar();
+                                },
+                            });
                             desenhar();
                         },
                     },
                 ]);
             }));
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       COLAR O ROTEIRO INTEIRO
+
+       O caminho normal desta tela é montar bloco a bloco, e ele é bom para
+       ESCREVER. Não serve para RECEBER: a roteirista manda o roteiro pronto
+       num bloco de texto, e transformar isso em nove blocos à mão — clicando
+       "Fala", colando, clicando "Fala", colando — é trabalho de digitação
+       que o sistema pode fazer sozinho.
+
+       A separação e a tipagem saem de lib/importar.js, o mesmo parser da tela
+       de importação em massa. E, como lá, nada entra sem a pessoa ver antes o
+       que foi entendido.
+       ═══════════════════════════════════════════════════════════════════ */
+    function abrirColar() {
+        const temRoteiro = blocos.length > 0;
+
+        openDrawer({
+            title: 'Colar roteiro',
+            subtitle: c.titulo,
+            body: `
+                <div class="rt-colar">
+                    <p class="rt-colar__dica">
+                        Cole o texto como a roteirista mandou. Cada marcador
+                        (<code>-</code>, <code>*</code>, <code>1.</code>) ou parágrafo vira um bloco.
+                        A primeira fala vira <strong>gancho</strong>, a última vira
+                        <strong>chamada para ação</strong> se pedir algo, e frases curtas viram
+                        <strong>frase curta</strong>. Tudo é editável depois.
+                    </p>
+                    <textarea class="ds-input rt-colar__campo" id="rt-texto" rows="12"
+                              placeholder="*ROTEIRO FLACIDEZ NA FACE*&#10;&#10;- Você emagreceu e percebeu que seu rosto ficou mais caído?&#10;&#10;- Isso é mais comum do que parece.&#10;&#10;- Eu sou a Dra. Laiz e te aguardo pra uma avaliação!"></textarea>
+                    <div id="rt-previa"></div>
+                </div>`,
+            footer: `
+                <span style="flex:1"></span>
+                <button class="ds-btn ds-btn--ghost" id="rt-cancelar">Cancelar</button>
+                ${temRoteiro
+                    ? `<button class="ds-btn ds-btn--ghost" id="rt-acrescentar" disabled>Acrescentar ao fim</button>
+                       <button class="ds-btn ds-btn--primary" id="rt-substituir" disabled>Substituir roteiro</button>`
+                    : `<button class="ds-btn ds-btn--primary" id="rt-substituir" disabled>Criar roteiro</button>`}`,
+            onMount: (painel) => {
+                injectEstilosColar();
+                const campo = painel.querySelector('#rt-texto');
+                const previa = painel.querySelector('#rt-previa');
+                const substituir = painel.querySelector('#rt-substituir');
+                const acrescentar = painel.querySelector('#rt-acrescentar');
+                let lido = { titulo: null, blocos: [] };
+
+                const analisar = () => {
+                    lido = lerRoteiroUnico(campo.value);
+                    const vazio = !lido.blocos.length;
+                    substituir.disabled = vazio;
+                    if (acrescentar) acrescentar.disabled = vazio;
+
+                    if (vazio) { previa.innerHTML = ''; return; }
+
+                    const conta = {};
+                    for (const b of lido.blocos) conta[b.tipo] = (conta[b.tipo] || 0) + 1;
+
+                    previa.innerHTML = `
+                        <div class="rt-previa">
+                            <div class="rt-previa__cabeca">
+                                <i data-lucide="wand-sparkles"></i>
+                                ${lido.blocos.length} bloco${lido.blocos.length > 1 ? 's' : ''} ·
+                                ${Object.entries(conta).map(([t, n]) => `${n} ${tipoBloco(t).nome.toLowerCase()}`).join(', ')}
+                                · ~${esc(duracaoTotal(lido.blocos))} de fala
+                            </div>
+                            ${lido.titulo && lido.titulo.toLowerCase() !== c.titulo.toLowerCase() ? `
+                                <p class="rt-previa__titulo">
+                                    O texto se chama “${esc(lido.titulo)}”. O título do conteúdo não muda —
+                                    continua “${esc(c.titulo)}”.
+                                </p>` : ''}
+                            <ol class="rt-previa__lista">
+                                ${lido.blocos.map(b => `
+                                    <li>
+                                        <span class="rt-previa__tipo rt-previa__tipo--${esc(b.tipo)}">
+                                            <i data-lucide="${esc(tipoBloco(b.tipo).icone)}"></i>${esc(tipoBloco(b.tipo).nome)}
+                                        </span>
+                                        <span class="rt-previa__texto">${esc(b.texto || b.titulo || '')}</span>
+                                    </li>`).join('')}
+                            </ol>
+                        </div>`;
+                    if (window.lucide) lucide.createIcons();
+                };
+
+                campo.addEventListener('input', analisar);
+                painel.querySelector('#rt-cancelar').addEventListener('click', closeDrawer);
+
+                const gravar = async (modo) => {
+                    const b = modo === 'substituir' ? substituir : acrescentar;
+                    b.disabled = true;
+                    b.textContent = 'Gravando…';
+                    try {
+                        if (modo === 'substituir') {
+                            for (const antigo of blocos) await store.blocos.excluir(antigo.id);
+                        }
+                        let ordem = modo === 'substituir' ? 10 : proximaOrdem(blocos);
+                        for (const bloco of lido.blocos) {
+                            await store.blocos.salvar({
+                                conteudo_id: conteudoId,
+                                tipo: bloco.tipo,
+                                titulo: bloco.titulo || null,
+                                texto: bloco.texto || null,
+                                ordem,
+                            });
+                            ordem += 10;
+                        }
+                        closeDrawer();
+                        toast(`${lido.blocos.length} bloco(s) criado(s). Confira os tipos antes de liberar.`);
+                        recarregar();
+                    } catch (e) {
+                        console.error('[roteiro] falha ao colar:', e);
+                        toast('Não foi possível gravar. Tente de novo.');
+                        b.disabled = false;
+                        b.textContent = modo === 'substituir' ? 'Substituir roteiro' : 'Acrescentar ao fim';
+                    }
+                };
+
+                substituir.addEventListener('click', () => gravar('substituir'));
+                acrescentar?.addEventListener('click', () => gravar('acrescentar'));
+                campo.focus();
+            },
+        });
     }
 
     /* O botão de editar a ficha mora no herói, que renderShell desenha uma vez
@@ -332,6 +507,68 @@ const blocoEditavel = (b, i, total) => {
                           placeholder="${esc(t.placeholder)}">${esc(b.texto || '')}</textarea>`}
         </div>`;
 };
+
+/* Os estilos do painel de colar vão num <style> próprio, injetado uma vez.
+   Não podem entrar no ESTILOS da página: o painel mora no <body>, fora do
+   #app que o roteador reescreve, e o bloco da página some junto com ela. */
+function injectEstilosColar() {
+    if (document.getElementById('roteiro-colar-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'roteiro-colar-styles';
+    style.textContent = `
+        .rt-colar { display: flex; flex-direction: column; gap: var(--space-4); }
+        .rt-colar__dica { margin: 0; font-size: var(--text-sm); color: var(--text-secondary); line-height: var(--leading-body); }
+        .rt-colar__dica strong { color: var(--text-primary); }
+        .rt-colar__dica code {
+            font-family: var(--font-mono); font-size: 12px;
+            padding: 1px 5px; border-radius: var(--radius-xs);
+            background: rgba(255, 255, 255, 0.10); color: var(--text-primary);
+        }
+        .rt-colar__campo {
+            height: auto; padding: var(--space-3) var(--space-4);
+            resize: vertical; line-height: var(--leading-body);
+            font-family: var(--font-sans); font-size: var(--text-sm);
+        }
+
+        /* ── Prévia ───────────────────────────────────────────────────────
+           Aparece enquanto se cola e some quando o campo esvazia. É o que
+           transforma "confie no parser" em "veja o que ele entendeu". */
+        .rt-previa {
+            display: flex; flex-direction: column; gap: var(--space-3);
+            padding: var(--space-4);
+            border-radius: var(--radius-md);
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--glass-border);
+        }
+        .rt-previa__cabeca {
+            display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;
+            font-size: var(--text-xs); font-weight: 700; color: var(--accent);
+            text-transform: uppercase; letter-spacing: var(--tracking-wide);
+        }
+        .rt-previa__cabeca i, .rt-previa__cabeca svg { width: 14px; height: 14px; }
+        .rt-previa__titulo { margin: 0; font-size: var(--text-xs); color: var(--text-secondary); line-height: var(--leading-body); }
+
+        .rt-previa__lista { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-2); max-height: 40vh; overflow-y: auto; }
+        .rt-previa__lista li { display: flex; flex-direction: column; gap: 3px; }
+        .rt-previa__tipo {
+            display: inline-flex; align-items: center; gap: 5px; align-self: flex-start;
+            font-size: 10px; font-weight: 700; letter-spacing: var(--tracking-wide);
+            text-transform: uppercase; color: var(--text-tertiary);
+        }
+        .rt-previa__tipo i, .rt-previa__tipo svg { width: 11px; height: 11px; }
+        /* Os três tipos que o sistema DEDUZIU ganham cor. O resto é fala, que
+           é o padrão — colorir tudo faria a cor deixar de significar algo. */
+        .rt-previa__tipo--gancho { color: var(--accent); }
+        .rt-previa__tipo--cta    { color: var(--success); }
+        .rt-previa__tipo--frase  { color: var(--data-3); }
+        .rt-previa__texto {
+            font-size: var(--text-sm); color: var(--text-primary);
+            line-height: var(--leading-body);
+            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+        }
+    `;
+    document.head.appendChild(style);
+}
 
 /**
  * O campo cresce com o texto.

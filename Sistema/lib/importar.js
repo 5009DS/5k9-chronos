@@ -632,4 +632,84 @@ const tipar = (blocos) => {
     if (!jaTemCta && ultimo?.tipo === 'fala' && SINAIS_CTA.test(ultimo.texto || '')) {
         ultimo.tipo = 'cta';
     }
+
+    /* Frase curta: uma afirmação só, curta e sem vírgula, no MEIO do roteiro.
+       "Isso é mais comum do que parece." é isso; "Por isso, a avaliação
+       individualizada é fundamental para definir o melhor plano" não é.
+       Os três limites juntos é que tornam a regra segura:
+
+         · até 58 caracteres — acima disso é argumento, não frase de efeito;
+         · sem vírgula — frase de impacto não tem oração subordinada;
+         · nem primeira nem última — essas já são gancho e chamada.
+
+       Errar aqui custa um clique no editor para trocar o tipo. Não classificar
+       nada custa a pessoa marcar tudo à mão, que é o problema que este parser
+       existe para resolver. */
+    blocos.forEach((b, i) => {
+        if (b.tipo !== 'fala' || i === 0 || i === blocos.length - 1) return;
+        const t = (b.texto || '').trim();
+        if (t.length <= 58 && !t.includes(',') && /[.!?…]$/.test(t)) b.tipo = 'frase';
+    });
+};
+
+/**
+ * Lê UM roteiro colado inteiro, sem depender de casar com conteúdo nenhum.
+ *
+ * `lerRoteiros` existe para o documento com vários roteiros, e por isso precisa
+ * de títulos para saber onde um termina e o outro começa. Aqui o contexto já
+ * diz de quem é o roteiro — a pessoa está dentro do conteúdo — então título é
+ * opcional e tudo que vier vira bloco.
+ *
+ * @returns {{titulo: string|null, blocos: object[]}}
+ */
+export const lerRoteiroUnico = (texto) => {
+    const linhas = String(texto || '').split('\n').map(l => l.trim());
+    const blocos = [];
+    let titulo = null;
+    let paragrafo = [];
+
+    const fecharParagrafo = () => {
+        const t = paragrafo.join(' ').trim();
+        paragrafo = [];
+        if (t) blocos.push({ tipo: 'fala', titulo: null, texto: t });
+    };
+
+    for (const linha of linhas) {
+        if (!linha) { fecharParagrafo(); continue; }
+
+        /* Só a PRIMEIRA linha pode ser o título, e só antes de qualquer bloco.
+           Depois disso, uma linha em caixa alta no meio do roteiro é ênfase da
+           roteirista — não um segundo título. */
+        if (!titulo && !blocos.length && !paragrafo.length) {
+            const t = tituloDeclarado(linha);
+            if (t) { titulo = t; continue; }
+        }
+
+        const rotulado = tipoDaLinha(semMarcacao(linha));
+        if (rotulado) {
+            fecharParagrafo();
+            blocos.push({
+                tipo: rotulado.tipo,
+                titulo: rotulado.tipo === 'secao' ? rotulado.texto : null,
+                texto: rotulado.tipo === 'secao' ? null : rotulado.texto,
+            });
+            continue;
+        }
+
+        // Marcador de lista é um bloco inteiro: é o recorte que a roteirista
+        // já fez à mão, e juntá-lo ao vizinho seria desfazer trabalho pronto.
+        if (ehItem(linha)) {
+            fecharParagrafo();
+            const t = semMarcacao(linha.replace(SEM_MARCADOR, ''));
+            if (t) blocos.push({ tipo: 'fala', titulo: null, texto: t });
+            continue;
+        }
+
+        paragrafo.push(semMarcacao(linha));
+    }
+    fecharParagrafo();
+
+    const limpos = blocos.filter(b => (b.texto && b.texto.trim()) || (b.titulo && b.titulo.trim()));
+    tipar(limpos);
+    return { titulo, blocos: limpos };
 };
