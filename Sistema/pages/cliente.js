@@ -162,17 +162,22 @@ let tourRodando = false;
 const abrirTour = (container, token, visao) => {
     if (tourRodando) return;
 
-    const comRoteiro = visao.conteudos.filter(c =>
-        visao.blocos.some(b => b.conteudo_id === c.id));
+    const comRoteiro = (visao.conteudos || []).filter(c =>
+        (visao.blocos || []).some(b => b.conteudo_id === c.id));
+    /* Sem exemplo o tour AINDA roda, só sem os passos de dentro do roteiro
+       (lib/tour.js corta a lista). Antes ele desistia em silêncio, e o botão
+       "Ver o tour desta tela" não fazia nada — que é o mesmo que estar
+       quebrado, para quem está do outro lado. */
     const exemplo = comRoteiro.find(c => c.status === 'em_revisao')
                  || comRoteiro.find(c => c.status === 'ajuste')
-                 || comRoteiro[0];
-    if (!exemplo) return;
+                 || comRoteiro[0]
+                 || null;
 
     tourRodando = true;
+    try {
     iniciarTour({
         cliente: visao.cliente,
-        conteudoId: exemplo.id,
+        conteudoId: exemplo?.id || null,
         /* Navega pelo ROTEADOR, e não chamando renderCliente direto. Desenhar
            na mão deixaria o endereço mostrando o cronograma enquanto a tela
            mostra um roteiro — e quem fechasse o tour ali e recarregasse a
@@ -187,6 +192,13 @@ const abrirTour = (container, token, visao) => {
             marcarTourVisto(token);
         },
     });
+    } catch (e) {
+        /* Se o tour quebrar, ele não pode levar a tela junto NEM sumir calado:
+           a pessoa apertou um botão e precisa saber que ele foi apertado. */
+        console.error('[cliente] falha ao abrir o tour:', e);
+        tourRodando = false;
+        toast('Não consegui abrir o tour agora. O cronograma continua funcionando normalmente.');
+    }
 };
 
 const semanaHTML = ({ segunda, conteudos }, token) => {

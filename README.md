@@ -197,10 +197,13 @@ Então é uma marca no navegador, por token de cliente. O limite é honesto: que
 abrir noutro aparelho vê de novo, e quem limpar o navegador também. O custo de
 errar é ver uma explicação repetida, com o botão de fechar no primeiro passo.
 
-Duas condições para ele rodar: existir pelo menos um conteúdo **com roteiro** —
-sem blocos, metade dos passos não teria o que apontar — e a visita começar pelo
-cronograma. Quem chega por um link direto de roteiro veio revisar aquilo, e não
-é hora de ser interrompido; o tour espera a próxima visita.
+Sem nenhum conteúdo com roteiro, os passos que moram dentro de um roteiro saem
+da lista e o tour roda com o que dá para mostrar — cinco passos em vez de onze.
+Ele desistia em silêncio nesse caso, e o resultado era o pior possível: apertar
+"Ver o tour desta tela" não fazia nada, sem erro e sem pista.
+
+O início automático espera a visita começar pelo cronograma: quem chega por um
+link direto de roteiro veio revisar aquilo, e não é hora de ser interrompido.
 
 ## O cliente comenta a fala, não só o conteúdo
 
@@ -248,6 +251,22 @@ o engano. "Excluir roteiro" é um botão só, ao lado de "Copiar texto", e a
 distância entre clicar nele sem querer e perder trinta falas não pode ser um
 clique. A ficha do conteúdo — data, fase, objetivo — não é tocada: sai só o
 texto.
+
+### Quando o roteiro acaba, a conversa acaba junto
+
+Enquanto sobra um bloco, o histórico continua de pé — ele fala de um texto que
+ainda existe. Quando não sobra nenhum, ele passa a falar do nada: "aprovado por
+você" num conteúdo sem roteiro, e pedidos de ajuste sobre falas que ninguém
+consegue mais ler.
+
+Então apagar o roteiro inteiro apaga também a conversa dele, e devolve o
+conteúdo a **rascunho** — que é o único estado honesto: existe no cronograma da
+equipe e não aparece para o cliente até haver texto de novo.
+
+Isto contraria a regra geral da tabela, que é nunca apagar retorno, e a
+contradição é deliberada: o valor daquele histórico era provar o que foi
+combinado sobre UM texto. Sem o texto, ele deixa de ser prova e vira ruído com
+data. O desfazer devolve tudo — blocos, conversa e estado.
 
 ### O desfazer devolve os comentários também
 
@@ -305,6 +324,11 @@ resposta a alguém?" — e por isso são dois selos.
 No menu `⋯` de cada bloco. Mostra a conversa inteira em linha do tempo, com o
 texto de partida riscado sobre o texto de chegada: a pergunta real não é "o que
 foi dito", é "mudou o quê".
+
+O fio dentro do bloco **recolhe**: o cabeçalho mostra o estado e quantas
+mensagens, e um clique abre. O padrão é o estado, não uma preferência — pendente
+nasce aberta porque é dívida nossa, encerrada nasce fechada porque é arquivo.
+Quem discorda clica, e a escolha fica gravada para aquele bloco.
 
 O fio dentro do bloco já mostra a conversa, e basta enquanto ela é curta. Depois
 de três idas e vindas ele empurra o roteiro para baixo e atrapalha quem está

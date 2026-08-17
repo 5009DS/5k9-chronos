@@ -81,7 +81,7 @@ export const iniciarTour = ({ cliente, conteudoId, irPara, aoFim }) => {
     let alvoAtual = null;
 
     // ── Os passos ────────────────────────────────────────────────────────
-    const passos = [
+    const TODOS = [
         {
             tela: 'cheia',
             titulo: `Bem-vindo ao Chronos, ${saudar(cliente)}`,
@@ -116,6 +116,7 @@ export const iniciarTour = ({ cliente, conteudoId, irPara, aoFim }) => {
                  + 'que pé está: esperando você, aprovado ou com ajuste pedido. Tocar no cartão '
                  + 'abre o roteiro.',
             botao: 'Abrir este conteúdo',
+            abreConteudo: true,
             // O clique é simulado: a pessoa precisa VER que foi o toque no
             // cartão que abriu a próxima tela, senão a navegação parece um
             // salto do sistema e não uma ação dela.
@@ -200,6 +201,20 @@ export const iniciarTour = ({ cliente, conteudoId, irPara, aoFim }) => {
             botao: 'Finalizar',
         },
     ];
+
+    /* Sem conteúdo com roteiro, os passos que moram dentro de um roteiro saem
+       da lista — e o tour continua, com o que dá para mostrar.
+
+       Antes ele simplesmente não abria nesse caso, e o resultado era o pior
+       possível: apertar "Ver o tour desta tela" não fazia nada, sem erro, sem
+       aviso, sem pista. Um cliente novo, ou um cliente cujo único roteiro
+       acabou de ser apagado, caía exatamente nisso. */
+    const passos = TODOS
+        .filter(p => p.tela !== 'conteudo' || !!conteudoId)
+        // Sem os passos de dentro do roteiro, o passo do cartão não abre coisa
+        // nenhuma — e um botão escrito "Abrir este conteúdo" que leva à tela de
+        // despedida é pior que a falta do tour.
+        .map(p => (p.abreConteudo && !conteudoId ? { ...p, botao: undefined, depois: undefined } : p));
 
     // ── Motor ────────────────────────────────────────────────────────────
     const sair = () => {

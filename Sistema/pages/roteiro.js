@@ -337,12 +337,12 @@ export const renderRoteiro = async (container, conteudoId) => {
             const botao = e.target.closest('button');
             botao.disabled = true;
             const escolhidos = blocos.filter(b => selecionadas.has(b.id));
-            await excluirBlocos(escolhidos, {
+            const esvaziou = await excluirBlocos(escolhidos, {
                 rotulo: `${escolhidos.length} bloco${escolhidos.length > 1 ? 's excluídos.' : ' excluído.'}`,
             });
             selecionadas.clear();
             selecionando = false;
-            desenhar();
+            if (!esvaziou) desenhar();
         });
 
         // ── Ir até a fala comentada ─────────────────────────────────────
@@ -353,6 +353,9 @@ export const renderRoteiro = async (container, conteudoId) => {
         content.querySelectorAll('[data-responder]').forEach(botao =>
             botao.addEventListener('click', () => responder(
                 blocos.find(x => x.id === botao.dataset.blocoFio), botao.dataset.responder)));
+
+        content.querySelectorAll('[data-fio]').forEach(caixa =>
+            caixa.addEventListener('toggle', () => guardarFio(caixa.dataset.fio, caixa.open)));
 
         content.querySelectorAll('[data-responder-conteudo]').forEach(botao =>
             botao.addEventListener('click', () => responder(null, botao.dataset.responderConteudo)));
@@ -853,19 +856,62 @@ export const renderRoteiro = async (container, conteudoId) => {
         blocos = renumerar(blocos.filter(x => !ids.has(x.id)));
         for (const x of blocos) await store.blocos.salvar(x);
 
-        toast(`${rotulo}${comentarios.length
-            ? ` ${comentarios.length} comentário${comentarios.length > 1 ? 's ficaram' : ' ficou'} sem fala.`
-            : ''}`, {
+        /* ── O ROTEIRO ACABOU: A CONVERSA ACABA JUNTO ────────────────────
+           Enquanto sobra um bloco, o histórico continua de pé — ele fala de
+           um texto que ainda existe. Quando não sobra nenhum, ele passa a
+           falar do nada: "aprovado por você" num conteúdo sem roteiro, e
+           pedidos de ajuste sobre falas que ninguém consegue mais ler.
+
+           Isto contraria a regra geral da tabela, que é nunca apagar retorno,
+           e a contradição é deliberada: o valor daquele histórico era provar
+           o que foi combinado sobre UM texto. Sem o texto, ele deixa de ser
+           prova e vira ruído com data.
+
+           O status volta para RASCUNHO pelo mesmo motivo. "Aprovado" sem
+           roteiro é mentira, "em revisão" é mentira maior — não há o que
+           revisar — e rascunho é o único estado honesto: existe no
+           cronograma da equipe e não aparece para o cliente até haver texto. */
+        const esvaziou = blocos.length === 0;
+        const conversaMorta = esvaziou ? historico.map(r => ({ ...r })) : [];
+        const statusAnterior = c.status;
+
+        if (esvaziou) {
+            for (const r of conversaMorta) await store.retornos.excluir(r.id);
+            if (c.status !== 'rascunho') await store.conteudos.salvar({ ...c, status: 'rascunho' });
+        }
+
+        const nota = esvaziou
+            ? (conversaMorta.length
+                ? ` A conversa (${conversaMorta.length}) e o estado foram junto.`
+                : ' O conteúdo voltou a rascunho.')
+            : (comentarios.length
+                ? ` ${comentarios.length} comentário${comentarios.length > 1 ? 's ficaram' : ' ficou'} sem fala.`
+                : '');
+
+        toast(`${rotulo}${nota}`, {
             label: 'Desfazer',
             onClick: async () => {
                 for (const b of apagados) await store.blocos.salvar(b);
                 // Os comentários voltam a apontar para a fala que criticam.
                 for (const r of comentarios) await store.retornos.salvar(r);
+                // E a conversa inteira volta, com o estado que o conteúdo
+                // tinha antes — desfazer pela metade não é desfazer.
+                for (const r of conversaMorta) await store.retornos.salvar(r);
+                if (esvaziou && statusAnterior !== 'rascunho') {
+                    await store.conteudos.salvar({ ...c, status: statusAnterior });
+                }
                 recarregar();
             },
         });
 
+        /* Esvaziou: a tela inteira mudou de assunto — o cartão da conversa
+           deixou de existir e o status é outro. Redesenhar com o `historico`
+           que esta função ainda tem na memória mostraria a conversa que
+           acabou de ser apagada. Recarrega, e quem chamou não redesenha. */
+        if (esvaziou) { recarregar(); return true; }
+
         aoTerminar?.();
+        return false;
     }
 
     /* Excluir o roteiro inteiro PERGUNTA antes; excluir uma seleção, não.
@@ -875,8 +921,6 @@ export const renderRoteiro = async (container, conteudoId) => {
        roteiro" é um botão só, ao lado de "Copiar texto", e a distância entre
        clicar nele por engano e perder trinta falas não pode ser um clique. */
     function confirmarExcluirTudo() {
-        const comConversa = blocos.filter(b => fio.porBloco.has(b.id)).length;
-
         openDrawer({
             title: 'Excluir o roteiro inteiro',
             subtitle: c.titulo,
@@ -884,18 +928,15 @@ export const renderRoteiro = async (container, conteudoId) => {
                 <div class="rt-resp">
                     <p class="rt-resp__perigo">
                         <i data-lucide="triangle-alert"></i>
-                        Isto apaga <strong>${blocos.length} bloco${blocos.length > 1 ? 's' : ''}</strong>.
-                        A ficha do conteúdo, a data e a classificação continuam como estão —
-                        só o texto sai.
+                        Isto apaga <strong>${blocos.length} bloco${blocos.length > 1 ? 's' : ''}</strong>${historico.length
+                            ? ` e <strong>a conversa inteira</strong> deste conteúdo (${historico.length} registro${historico.length > 1 ? 's' : ''})`
+                            : ''}.
+                        A data e a classificação continuam como estão.
                     </p>
-                    ${comConversa ? `
-                        <p class="rt-resp__dica">
-                            ${comConversa === 1
-                                ? 'Uma das falas tem conversa com o cliente. Ela'
-                                : `${comConversa} falas têm conversa com o cliente. Elas`}
-                            ${comConversa === 1 ? 'não é apagada' : 'não são apagadas'} —
-                            fica no histórico do conteúdo, sem a fala a que se referia.
-                        </p>` : ''}
+                    <p class="rt-resp__dica">
+                        Sem roteiro, o conteúdo volta a <strong>rascunho</strong> e sai da tela do
+                        cliente${c.status === 'aprovado' ? ' — inclusive o "aprovado por você", que passaria a valer para um texto que não existe mais' : ''}.
+                    </p>
                     <p class="rt-resp__dica">
                         Dá para desfazer logo depois, pelo aviso que aparece no rodapé.
                         Depois de sair da página, não.
@@ -916,10 +957,10 @@ export const renderRoteiro = async (container, conteudoId) => {
                     botao.textContent = 'Excluindo…';
                     const todos = [...blocos];
                     closeDrawer();
-                    await excluirBlocos(todos, { rotulo: 'Roteiro excluído.' });
+                    const esvaziou = await excluirBlocos(todos, { rotulo: 'Roteiro excluído.' });
                     selecionando = false;
                     selecionadas.clear();
-                    desenhar();
+                    if (!esvaziou) desenhar();
                 });
                 if (window.lucide) lucide.createIcons();
             },
@@ -1167,8 +1208,19 @@ const blocoEditavel = (b, i, total, conversa = null, selecionando = false, marca
    ═══════════════════════════════════════════════════════════════════════════ */
 const fioHTML = (b, { entradas, estado }) => {
     const atual = b.texto || b.titulo || '';
+    const meta = estadoMeta(estado);
 
     return `
+        <details class="rt-fio-caixa" data-fio="${esc(b.id)}" ${fioAberto(b.id, estado) ? 'open' : ''}>
+            <summary class="rt-fio__resumo">
+                <i class="rt-fio__seta" data-lucide="chevron-right"></i>
+                <span class="rt-fio__rotulo rt-fio__rotulo--${esc(meta.tom)}">
+                    <i data-lucide="${esc(meta.icone)}"></i>${esc(meta.rotulo)}
+                </span>
+                <!-- "mensagens", não "mensagems": o plural de palavra terminada
+                     em -m troca o m por n. O ternário de sempre erraria aqui. -->
+                <span class="rt-fio__quantas">${entradas.length} ${entradas.length > 1 ? 'mensagens' : 'mensagem'}</span>
+            </summary>
         <div class="rt-fio">
             ${entradas.map(r => {
                 const a = ato(r);
@@ -1208,7 +1260,35 @@ const fioHTML = (b, { entradas, estado }) => {
                         <i data-lucide="circle-check"></i> Encerrar
                     </button>
                 </div>`}
-        </div>`;
+        </div>
+        </details>`;
+};
+
+/* ── Recolher a conversa ─────────────────────────────────────────────────
+   Nem sempre o time quer reler o desenrolar de um ajuste num roteiro que
+   segue vivo — e um fio de seis mensagens empurra o roteiro inteiro para
+   baixo justamente de quem está escrevendo.
+
+   O padrão é o estado da conversa, não uma preferência: PENDENTE nasce aberta
+   porque é dívida nossa, ENCERRADA nasce fechada porque é arquivo. Respondida
+   fica aberta — a bola está com o cliente e a equipe precisa ver o que
+   mandou. Quem discorda clica, e a escolha vale para aquele bloco.
+
+   <details> e não um botão com estado em JavaScript: abre e fecha sozinho,
+   funciona no teclado, e sobrevive a qualquer redesenho da página. */
+const CHAVE_FIO = '5k9_visualizador_fio';
+
+const fioAberto = (blocoId, estado) => {
+    try {
+        const guardado = localStorage.getItem(`${CHAVE_FIO}_${blocoId}`);
+        if (guardado !== null) return guardado === '1';
+    } catch { /* sem localStorage: vale o padrão */ }
+    return estado !== 'fechado';
+};
+
+const guardarFio = (blocoId, aberto) => {
+    try { localStorage.setItem(`${CHAVE_FIO}_${blocoId}`, aberto ? '1' : '0'); }
+    catch { /* a preferência não persiste, e nada mais quebra */ }
 };
 
 /* A barra da seleção múltipla.
@@ -1617,6 +1697,28 @@ const ESTILOS = `
 .rt-selo--atencao { background: var(--warning-muted); color: var(--warning); }
 .rt-selo--info    { background: var(--accent-muted);  color: var(--accent); }
 .rt-selo--ok      { background: var(--success-muted); color: var(--success); }
+
+.rt-fio-caixa { margin-top: var(--space-2); }
+.rt-fio__resumo {
+    display: flex; align-items: center; gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-sm);
+    cursor: pointer; list-style: none;
+    font-size: var(--text-xs);
+}
+.rt-fio__resumo::-webkit-details-marker { display: none; }
+.rt-fio__resumo:hover { background: var(--surface-3); }
+.rt-fio__seta {
+    width: 13px; height: 13px; flex-shrink: 0; color: var(--text-tertiary);
+    transition: transform var(--dur-fast);
+}
+.rt-fio-caixa[open] .rt-fio__seta { transform: rotate(90deg); }
+.rt-fio__rotulo { display: inline-flex; align-items: center; gap: 5px; font-weight: 700; }
+.rt-fio__rotulo i, .rt-fio__rotulo svg { width: 13px; height: 13px; }
+.rt-fio__rotulo--atencao { color: var(--warning); }
+.rt-fio__rotulo--info    { color: var(--accent); }
+.rt-fio__rotulo--ok      { color: var(--success); }
+.rt-fio__quantas { margin-left: auto; color: var(--text-tertiary); }
 
 .rt-fio { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); }
 .rt-fala {
