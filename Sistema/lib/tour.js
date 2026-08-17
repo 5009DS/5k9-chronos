@@ -228,6 +228,9 @@ export const iniciarTour = ({ cliente, irPara, aoFim }) => {
             alvo: () => document.querySelector('.cl-estrategia') || document.querySelector('.cl-ficha'),
             titulo: 'Por que este conteúdo existe',
             antes: () => realcarEmCiclo('.cl-estrategia > *'),
+            // Ver a explicação em posicionar(): é o único passo em que o alvo
+            // muda de altura sozinho, e o card seguí-lo vira pêndulo.
+            ancorarCard: true,
             texto: 'Esta parte é escrita pelo sistema, não por nós: ele cruza o papel no funil '
                  + 'com o objetivo da peça e explica o que ela precisa provocar, o que evitar e '
                  + 'como medir depois de publicada. É a resposta para "por que estamos gravando '
@@ -457,15 +460,20 @@ export const iniciarTour = ({ cliente, irPara, aoFim }) => {
         foco.style.width = `${dir - esq}px`;
         foco.style.height = `${base - topo}px`;
 
-        /* ── NO CELULAR, O CARD MORA NO RODAPÉ ───────────────────────────
-           Ele acompanhava o alvo, e no passo que passeia pelos cartões da
-           estratégia isso virava um pêndulo: a cada 1,5s o destaque subia ou
-           descia e o card ia junto, saltando de cima para baixo da tela. O
-           que a pessoa precisa ler fica parado; o que ela precisa ver é que
-           se move. Na tela grande há espaço para o balão apontar, e ele
-           continua apontando. */
-        const estreito = window.innerWidth < 720;
-        if (estreito) {
+        /* ── O CARD ANCORADO NO RODAPÉ, SÓ ONDE FAZ FALTA ────────────────
+           Vale para UM passo: o que passeia pelos cartões da estratégia. Ali o
+           alvo troca de altura sozinho a cada 1,5s, e o card seguindo-o virava
+           pêndulo — o que a pessoa precisa ler saltava de cima para baixo da
+           tela enquanto ela lia.
+
+           Nos outros passos o card continua colado no que ele explica, que é
+           o que faz um balão ser um balão. Alvo parado, card parado: não há
+           problema a resolver, e resolver mesmo assim custaria a relação
+           visual entre a explicação e a coisa explicada.
+
+           Só em tela estreita. Na grande, o card cabe ao lado sem disputar
+           espaço com nada. */
+        if (window.innerWidth < 720 && p.ancorarCard) {
             const larguraM = window.innerWidth - 24;
             card.style.width = larguraM + "px";
             card.style.left = "12px";
