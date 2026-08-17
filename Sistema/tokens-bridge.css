@@ -290,3 +290,34 @@ html .ds-card-title,
 html .dw__title { text-transform: lowercase; }
 html .ds-card-title::first-letter,
 html .dw__title::first-letter { text-transform: uppercase; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   O TECLADO NÃO DÁ ZOOM
+
+   O Safari do iPhone amplia a página sozinho quando o campo que recebe foco
+   tem fonte menor que 16px — e não desfaz o zoom ao fechar o teclado. Quem
+   tocava numa fala para comentá-la via a tela inteira crescer e a fala sair
+   de vista: exatamente o texto que a pessoa está criticando, sumindo no
+   momento em que ela vai escrever sobre ele.
+
+   Nossos campos herdam --text-sm, que aqui é 13px. Daí o zoom.
+
+   POR QUE NÃO `maximum-scale=1` NO VIEWPORT
+   Resolveria numa linha e tiraria de quem enxerga pouco o único jeito de
+   aumentar o texto. Numa tela cuja razão de existir é ser lida, essa não é
+   uma troca que se faça — ainda mais para poupar 3px.
+
+   `pointer: coarse` limita a regra a dedo. No monitor os campos continuam com
+   o tamanho desenhado.
+
+   O `!important` é da mesma família dos outros deste sistema (movimento
+   reduzido, cursor de arraste): não é preferência de estilo que alguém possa
+   querer sobrescrever depois, é o limite de um navegador. E cada página
+   injeta o próprio <style> DEPOIS deste arquivo, com seletor de classe —
+   sem ele, toda regra `.cl-comentario__campo { font-size: var(--text-sm) }`
+   ganharia e o zoom voltaria só naquela tela. */
+@media (pointer: coarse) {
+    input:not([type="checkbox"]):not([type="radio"]),
+    textarea,
+    select { font-size: 16px !important; }
+}
