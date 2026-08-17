@@ -87,6 +87,9 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
             <a class="ds-btn ds-btn--ghost" href="/c/${esc(cliente.apelido || cliente.token)}" target="_blank" rel="noopener">
                 <i data-lucide="external-link"></i> Ver como o cliente vê
             </a>
+            <button class="ds-btn ds-btn--ghost cr-perigo" id="cr-apagar">
+                <i data-lucide="trash-2"></i> Apagar cronograma
+            </button>
             <button class="ds-btn ds-btn--primary" id="cr-novo">
                 <i data-lucide="plus"></i> Novo conteúdo
             </button>`,
@@ -203,6 +206,9 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
     document.getElementById('cr-link').addEventListener('click',
         () => abrirLinkDoCliente(cliente, recarregar));
 
+    document.getElementById('cr-apagar').addEventListener('click',
+        () => abrirApagarCronograma(cliente, conteudos, mes, recarregar));
+
     document.getElementById('cr-novo').addEventListener('click',
         () => formularioConteudo(null, cliente, mes, recarregar));
 
@@ -303,6 +309,165 @@ const cartaoHTML = (c, todos) => {
    segurança disfarçada de decisão estética, e a tela precisa dizer isso NA
    HORA — não num rodapé de documentação que ninguém lê.
    ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   APAGAR O CRONOGRAMA
+
+   Existe porque importar errado é normal: sobe-se um PDF, o documento vem com
+   uma fase faltando ou com os temas repetidos, e o cronograma precisa voltar
+   à estaca zero. Sem isto, a saída era apagar oitenta conteúdos um a um.
+
+   ── DUAS PORTAS, E A MENOR PRIMEIRO ───────────────────────────────────────
+   Só o mês visível, ou tudo. São situações diferentes: a primeira é "esta
+   importação saiu errada", a segunda é "recomeçar o cliente". Oferecer só a
+   segunda faria alguém apagar um ano de histórico para consertar um mês.
+
+   ── O QUE VAI JUNTO ───────────────────────────────────────────────────────
+   Roteiro e conversa saem com o conteúdo, porque o banco tem cascata — e é o
+   comportamento certo: um roteiro sem conteúdo não tem onde aparecer. A
+   contagem no painel diz quantos roteiros e quantas conversas vão junto,
+   ANTES de apertar; a diferença entre "apaguei 12 rascunhos" e "apaguei 12
+   conteúdos com roteiro pronto e a conversa de aprovação" é grande demais
+   para ficar implícita.
+
+   ── SEM DESFAZER ──────────────────────────────────────────────────────────
+   E o painel diz isso com todas as letras. Desfazer aqui significaria
+   remontar conteúdos, blocos e retornos em ordem, com ids novos costurados de
+   volta — e um desfazer que às vezes não devolve tudo é pior que nenhum,
+   porque muda o cuidado de quem aperta. Por isso a confirmação é digitada:
+   este é o único lugar do sistema onde um clique errado custa trabalho de
+   verdade.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function abrirApagarCronograma(cliente, conteudos, mes, aoTerminar) {
+    const doMes = conteudos.filter(c => chaveMes(c.data) === mes);
+    const escopos = {
+        mes:  { lista: doMes,     rotulo: mesExtenso(mes) },
+        tudo: { lista: conteudos, rotulo: 'todo o cronograma' },
+    };
+    let escopo = doMes.length ? 'mes' : 'tudo';
+
+    openDrawer({
+        title: 'Apagar cronograma',
+        subtitle: cliente.nome,
+        body: `
+            <div class="cr-apagar">
+                <div class="cr-apagar__opcoes" id="cr-escopo">
+                    <button type="button" class="cr-apagar__op ${escopo === 'mes' ? 'is-active' : ''}"
+                            data-escopo="mes" ${doMes.length ? '' : 'disabled'}>
+                        <strong>Só ${esc(mesExtenso(mes))}</strong>
+                        <span>${doMes.length} conteúdo${doMes.length === 1 ? '' : 's'}</span>
+                    </button>
+                    <button type="button" class="cr-apagar__op ${escopo === 'tudo' ? 'is-active' : ''}" data-escopo="tudo">
+                        <strong>Tudo</strong>
+                        <span>${conteudos.length} conteúdo${conteudos.length === 1 ? '' : 's'}</span>
+                    </button>
+                </div>
+
+                <p class="cr-apagar__perigo" id="cr-apagar-resumo"></p>
+
+                <label class="vz-rotulo" for="cr-apagar-ok">Para confirmar, escreva <strong>APAGAR</strong></label>
+                <input class="ds-input" id="cr-apagar-ok" type="text" autocomplete="off" placeholder="APAGAR">
+                <p class="rt-resp__dica">Isto não tem desfazer.</p>
+            </div>`,
+        footer: `
+            <span style="flex:1"></span>
+            <button class="ds-btn ds-btn--ghost" id="cr-apagar-cancelar">Cancelar</button>
+            <button class="ds-btn cr-btn-perigo" id="cr-apagar-ok-btn" disabled>Apagar</button>`,
+        onMount: async (painel) => {
+            injectEstilosApagar();
+            const resumo = painel.querySelector('#cr-apagar-resumo');
+            const campo = painel.querySelector('#cr-apagar-ok');
+            const botao = painel.querySelector('#cr-apagar-ok-btn');
+            painel.querySelector('#cr-apagar-cancelar').addEventListener('click', closeDrawer);
+
+            /* As duas coleções são lidas UMA vez, e a contagem é recalculada a
+               cada troca de escopo — não vale uma ida ao banco por clique. */
+            const [blocos, retornos] = await Promise.all([
+                store.blocos.listar(), store.retornos.listar(),
+            ]);
+
+            const atualizar = () => {
+                const { lista, rotulo } = escopos[escopo];
+                const ids = new Set(lista.map(c => c.id));
+                const comRoteiro = new Set(blocos.filter(b => ids.has(b.conteudo_id)).map(b => b.conteudo_id)).size;
+                const conversas = retornos.filter(r => ids.has(r.conteudo_id)).length;
+
+                resumo.innerHTML = `<i data-lucide="triangle-alert"></i> <span>Isto apaga
+                    <strong>${lista.length} conteúdo${lista.length === 1 ? '' : 's'}</strong> de ${esc(rotulo)}`
+                    + (comRoteiro ? `, incluindo <strong>${comRoteiro} com roteiro escrito</strong>` : '')
+                    + (conversas ? ` e <strong>${conversas} registro${conversas === 1 ? '' : 's'} de conversa</strong> com o cliente` : '')
+                    + '.</span>';
+                botao.textContent = lista.length ? `Apagar ${lista.length}` : 'Nada a apagar';
+                botao.disabled = !lista.length || campo.value.trim().toUpperCase() !== 'APAGAR';
+                if (window.lucide) lucide.createIcons();
+            };
+
+            painel.querySelector('#cr-escopo').addEventListener('click', (e) => {
+                const b = e.target.closest('[data-escopo]');
+                if (!b || b.disabled) return;
+                escopo = b.dataset.escopo;
+                painel.querySelectorAll('[data-escopo]').forEach(x => x.classList.toggle('is-active', x === b));
+                atualizar();
+            });
+            campo.addEventListener('input', atualizar);
+            atualizar();
+
+            botao.addEventListener('click', async () => {
+                const { lista } = escopos[escopo];
+                botao.disabled = true;
+                botao.textContent = 'Apagando…';
+                try {
+                    // Um por vez: o adaptador local grava a coleção inteira a
+                    // cada escrita, e em paralelo a última sobrescreve as outras.
+                    for (const c of lista) await store.conteudos.excluir(c.id);
+                    closeDrawer();
+                    toast(`${lista.length} conteúdo(s) apagado(s).`);
+                    aoTerminar();
+                } catch (e) {
+                    console.error('[cronograma] falha ao apagar:', e);
+                    toast('Não consegui apagar tudo. Recarregue e confira o que sobrou.');
+                    botao.disabled = false;
+                    botao.textContent = `Apagar ${lista.length}`;
+                }
+            });
+        },
+    });
+}
+
+function injectEstilosApagar() {
+    if (document.getElementById('cronograma-apagar-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'cronograma-apagar-styles';
+    style.textContent = `
+        .cr-apagar { display: flex; flex-direction: column; gap: var(--space-3); }
+        .cr-apagar__opcoes { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+        .cr-apagar__op {
+            flex: 1 1 150px; display: flex; flex-direction: column; gap: 2px;
+            padding: var(--space-3) var(--space-4); text-align: left;
+            border: 1px solid var(--glass-border); border-radius: var(--radius-md);
+            background: rgba(255, 255, 255, 0.06); color: var(--text-secondary);
+            font-family: var(--font-sans); cursor: pointer;
+        }
+        .cr-apagar__op strong { font-size: var(--text-sm); color: var(--text-primary); }
+        .cr-apagar__op span { font-size: var(--text-xs); }
+        .cr-apagar__op.is-active { border-color: var(--danger); background: var(--danger-muted); }
+        .cr-apagar__op[disabled] { opacity: 0.4; cursor: default; }
+        .cr-apagar__perigo {
+            display: flex; align-items: flex-start; gap: var(--space-2); margin: 0;
+            padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
+            background: var(--danger-muted); color: var(--danger);
+            font-size: var(--text-sm); line-height: var(--leading-body);
+        }
+        .cr-apagar__perigo i, .cr-apagar__perigo svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 2px; }
+        .cr-apagar__perigo strong { color: var(--danger); }
+        .rt-resp__dica { margin: 0; font-size: var(--text-xs); color: var(--text-tertiary); }
+        .cr-btn-perigo { background: var(--danger); color: var(--surface-1); border-color: transparent; }
+        .cr-btn-perigo:hover { background: var(--danger); filter: brightness(1.1); }
+        .cr-btn-perigo[disabled] { opacity: 0.45; filter: none; transform: none; cursor: default; }
+    `;
+    document.head.appendChild(style);
+}
+
 export function abrirLinkDoCliente(cliente, aoTerminar) {
     const painel = openDrawer({
         title: 'Link do cliente',
@@ -625,6 +790,11 @@ export function formularioConteudo(c, cliente, mesSugerido, aoTerminar) {
 
 const ESTILOS = `
 <style>
+/* Vermelho só na letra: um botão sólido no cabeçalho pesaria mais que a
+   ação mais usada da tela, e apagar cronograma não é ação de rotina. */
+.cr-perigo { color: var(--danger); }
+.cr-perigo:hover { background: var(--danger-muted); color: var(--danger); }
+
 .cr-semanas { display: flex; flex-direction: column; gap: var(--space-8); }
 .cr-semana__lado { display: flex; align-items: center; gap: var(--space-3); }
 .cr-seta { width: 16px; height: 16px; color: var(--text-disabled); align-self: center; flex-shrink: 0; }

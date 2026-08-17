@@ -55,12 +55,20 @@ export const local = {
     excluir: async (colecao, id) => {
         gravar(colecao, ler(colecao).filter(l => l.id !== id));
 
-        /* O Postgres faz isto sozinho: `bloco_id references vz_blocos on delete
-           set null`. Aqui não há chave estrangeira, e sem esta linha o
-           comentário continuaria apontando para um bloco que não existe mais —
-           some das duas telas, porque cada uma só desenha conversa de bloco
-           presente. O mesmo dado, dois comportamentos, e a diferença só
-           apareceria em produção. */
+        /* Cascata, como no banco: vz_blocos e vz_retornos apontam para
+           vz_conteudos com `on delete cascade`. Sem isto, apagar um conteúdo
+           aqui deixava roteiro e conversa órfãos — o mesmo dado com dois
+           comportamentos, que é o tipo de divergência que só aparece quando
+           alguém liga o banco de verdade. */
+        if (colecao === 'conteudos') {
+            gravar('blocos', ler('blocos').filter(b => b.conteudo_id !== id));
+            gravar('retornos', ler('retornos').filter(r => r.conteudo_id !== id));
+        }
+
+        /* E aqui o Postgres faz o outro lado: `bloco_id references vz_blocos
+           on delete set null`. Sem esta parte o comentário continuaria
+           apontando para um bloco que não existe mais — e sumiria das duas
+           telas, porque cada uma só desenha conversa de bloco presente. */
         if (colecao === 'blocos') {
             const retornos = ler('retornos');
             let mexeu = false;
