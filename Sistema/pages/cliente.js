@@ -266,13 +266,22 @@ const desenharConteudo = (container, token, visao, conteudoId) => {
                 <!-- ══ O roteiro ═══════════════════════════════════════ -->
                 <section class="cl-roteiro">
                     <h2 class="cl-secao-titulo">Roteiro</h2>
+                    ${meus.length && podeResponder ? `
+                        <p class="cl-roteiro__dica">
+                            <i data-lucide="hand-pointer"></i>
+                            Toque em uma fala para comentar só nela.
+                        </p>` : ''}
                     ${meus.length
                         ? roteiroHTML(meus)
                         : vazioHTML('file-text', 'Roteiro ainda não escrito',
                             'A equipe está preparando. Você recebe um aviso quando estiver pronto.')}
                 </section>
 
-                ${historico.length ? historicoHTML(historico) : ''}
+                <!-- Só o que é do conteúdo INTEIRO. O que foi dito sobre uma
+                     fala específica já aparece grudado nela, e repetir aqui
+                     faria o cliente achar que mandou duas vezes. -->
+                ${historico.filter(r => !r.bloco_id).length
+                    ? historicoHTML(historico.filter(r => !r.bloco_id)) : ''}
 
                 <div class="cl-espaco-barra"></div>
             </main>
@@ -280,10 +289,163 @@ const desenharConteudo = (container, token, visao, conteudoId) => {
             ${podeResponder ? barraAcao(c) : ''}
         </div>`;
 
-    if (podeResponder) ligarAcoes(container, token, c);
+    if (podeResponder) {
+        ligarAcoes(container, token, c);
+        ligarFalas(container, token, c, meus, historico);
+    }
+    marcarFalasComentadas(container, historico);
     if (window.lucide) lucide.createIcons();
     window.scrollTo(0, 0);
 };
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMENTAR UMA FALA
+
+   O pedido de ajuste do rodapé fala do conteúdo inteiro. Serve, e é insuficiente
+   no caso mais comum: "a abertura ficou agressiva". A equipe recebia isso e
+   abria um roteiro de nove blocos para descobrir qual era a abertura.
+
+   Aqui o cliente TOCA na fala. Ela se acende, e o campo de comentário abre logo
+   abaixo dela — não num painel que cobre a tela, porque o texto que ele está
+   criticando precisa continuar visível enquanto ele escreve a crítica.
+
+   ── UMA POR VEZ ───────────────────────────────────────────────────────────
+   Só uma fala fica selecionada. Poder abrir cinco campos ao mesmo tempo
+   convidaria a escrever cinco comentários e mandar nenhum: cada envio é um
+   registro, e o cliente precisa ver cada um chegar.
+
+   ── O QUE NÃO É CLICÁVEL ──────────────────────────────────────────────────
+   Seção é divisória e orientação de gravação é instrução interna. Comentar
+   "muda essa" numa divisória não diz nada a ninguém.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function ligarFalas(container, token, conteudo, blocos, historico) {
+    const comentaveis = new Set(
+        blocos.filter(b => !['secao', 'nota'].includes(b.tipo)).map(b => b.id));
+
+    let aberto = null;   // id do bloco com o campo aberto
+
+    const fechar = () => {
+        container.querySelectorAll('.cl-comentario').forEach(e => e.remove());
+        container.querySelectorAll('.is-selecionada').forEach(e => e.classList.remove('is-selecionada'));
+        aberto = null;
+    };
+
+    container.querySelectorAll('[data-bloco]').forEach(el => {
+        const id = el.dataset.bloco;
+        if (!comentaveis.has(id)) return;
+
+        el.classList.add('cl-fala');
+        el.setAttribute('role', 'button');
+        el.setAttribute('tabindex', '0');
+        el.setAttribute('aria-label', 'Comentar nesta fala');
+
+        const abrir = () => {
+            if (aberto === id) { fechar(); return; }
+            fechar();
+            aberto = id;
+            el.classList.add('is-selecionada');
+
+            const bloco = blocos.find(b => b.id === id);
+            const caixa = document.createElement('div');
+            caixa.className = 'cl-comentario';
+            caixa.innerHTML = `
+                <label class="cl-comentario__rotulo" for="cl-cmt">O que muda nesta fala?</label>
+                <textarea class="ds-input cl-comentario__campo" id="cl-cmt" rows="3"
+                          placeholder="Ex.: essa palavra ficou dura demais, prefiro algo mais acolhedor."></textarea>
+                <input class="ds-input cl-comentario__nome" id="cl-cmt-nome" type="text"
+                       placeholder="Seu nome" autocomplete="name" value="${esc(lembrarNome() || '')}">
+                <p class="cl-comentario__erro" id="cl-cmt-erro" hidden></p>
+                <div class="cl-comentario__acoes">
+                    <button class="ds-btn ds-btn--ghost ds-btn--sm" data-cmt-cancelar>Cancelar</button>
+                    <button class="ds-btn ds-btn--primary ds-btn--sm" data-cmt-enviar>Enviar comentário</button>
+                </div>`;
+            el.insertAdjacentElement('afterend', caixa);
+            if (window.lucide) lucide.createIcons();
+
+            const campo = caixa.querySelector('#cl-cmt');
+            campo.focus();
+            /* Rola o conjunto para o meio da tela: com o teclado aberto no
+               celular, o campo nasceria atrás dele — e a pessoa digitaria sem
+               ver o que escreve nem a fala que está comentando. */
+            setTimeout(() => caixa.scrollIntoView({ block: 'center', behavior: 'smooth' }), 120);
+
+            caixa.querySelector('[data-cmt-cancelar]').addEventListener('click', (e) => {
+                e.stopPropagation();
+                fechar();
+            });
+
+            caixa.querySelector('[data-cmt-enviar]').addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const botao = e.target.closest('button');
+                const texto = campo.value.trim();
+                const erro = caixa.querySelector('#cl-cmt-erro');
+
+                if (!texto) {
+                    erro.textContent = 'Escreva o que precisa mudar nesta fala.';
+                    erro.hidden = false;
+                    campo.focus();
+                    return;
+                }
+                botao.disabled = true;
+                botao.textContent = 'Enviando…';
+                try {
+                    const nome = caixa.querySelector('#cl-cmt-nome').value.trim();
+                    guardarNome(nome);
+                    await store.registrarRetorno(token, {
+                        conteudo_id: conteudo.id,
+                        tipo: 'ajuste',
+                        texto,
+                        autor: nome || null,
+                        bloco_id: id,
+                        // O texto de HOJE. A equipe vai reescrever esta fala, e
+                        // sem o trecho o comentário perde o que ele critica.
+                        trecho: bloco?.texto || bloco?.titulo || null,
+                    });
+                    toast('Comentário enviado. A equipe já foi avisada.');
+                    await renderCliente(container, token, conteudo.id);
+                } catch (err) {
+                    console.error('[cliente] falha ao comentar a fala:', err);
+                    erro.textContent = err.message || 'Não foi possível enviar agora.';
+                    erro.hidden = false;
+                    botao.disabled = false;
+                    botao.textContent = 'Enviar comentário';
+                }
+            });
+        };
+
+        el.addEventListener('click', abrir);
+        el.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(); }
+        });
+    });
+}
+
+/* A fala que já recebeu comentário fica marcada — inclusive depois de o
+   conteúdo ser aprovado, quando ninguém mais pode comentar. É o que evita o
+   cliente escrever duas vezes a mesma coisa por não lembrar se mandou. */
+function marcarFalasComentadas(container, historico) {
+    const porBloco = {};
+    for (const r of historico) {
+        if (r.bloco_id) (porBloco[r.bloco_id] = porBloco[r.bloco_id] || []).push(r);
+    }
+
+    for (const [blocoId, lista] of Object.entries(porBloco)) {
+        const el = container.querySelector(`[data-bloco="${blocoId}"]`);
+        if (!el) continue;
+        el.classList.add('cl-fala--comentada');
+        el.insertAdjacentHTML('afterend', `
+            <div class="cl-comentado">
+                ${lista.map(r => `
+                    <p class="cl-comentado__item">
+                        <i data-lucide="message-circle"></i>
+                        <span>
+                            <strong>Você comentou${r.autor ? ` (${esc(r.autor)})` : ''}:</strong>
+                            ${esc(r.texto || '')}
+                        </span>
+                    </p>`).join('')}
+            </div>`);
+    }
+}
 
 /* A nota de conformidade que o CLIENTE vê é diferente da interna. Ele não
    precisa da instrução de redação ("evite promessa de resultado") — precisa
@@ -618,6 +780,57 @@ function injectStyles() {
         .cl-estrategia { display: flex; flex-direction: column; gap: var(--space-3); }
         .cl-roteiro, .cl-historico { display: flex; flex-direction: column; }
 
+        /* ── Comentar uma fala ─────────────────────────────────────────── */
+        .cl-roteiro__dica {
+            display: flex; align-items: center; gap: var(--space-2);
+            margin: 0 0 var(--space-3);
+            font-size: var(--text-xs); color: var(--text-tertiary);
+        }
+        .cl-roteiro__dica i, .cl-roteiro__dica svg { width: 14px; height: 14px; }
+
+        /* A fala clicável não anuncia isso o tempo todo: um roteiro inteiro de
+           caixas destacadas viraria um formulário. Ela só reage ao toque, e a
+           dica acima da lista explica uma vez. */
+        .cl-fala { cursor: pointer; transition: border-color var(--dur-fast), background-color var(--dur-fast); }
+        .cl-fala:hover { border-color: var(--accent-border); }
+        .cl-fala:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+        .cl-fala.is-selecionada {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 1px var(--accent);
+        }
+        .cl-fala--comentada { border-left: 3px solid var(--warning); }
+
+        .cl-comentario {
+            display: flex; flex-direction: column; gap: var(--space-2);
+            margin-top: calc(var(--space-3) * -1 + 2px);
+            padding: var(--space-4);
+            border: 1px solid var(--accent); border-top: none;
+            border-radius: 0 0 var(--radius-md) var(--radius-md);
+            background: var(--accent-muted);
+        }
+        .cl-comentario__rotulo { font-size: var(--text-xs); font-weight: 600; color: var(--text-primary); }
+        .cl-comentario__campo {
+            height: auto; padding: var(--space-3); resize: vertical;
+            font-family: var(--font-sans); font-size: var(--text-sm); line-height: var(--leading-body);
+        }
+        .cl-comentario__nome { font-size: var(--text-sm); }
+        .cl-comentario__acoes { display: flex; gap: var(--space-2); }
+        .cl-comentario__acoes .ds-btn { flex: 1; min-height: 42px; }
+        .cl-comentario__erro {
+            margin: 0; padding: var(--space-2) var(--space-3);
+            border-radius: var(--radius-sm); background: var(--danger-muted);
+            font-size: var(--text-xs); color: var(--danger);
+        }
+        .cl-comentario__erro[hidden] { display: none; }
+
+        .cl-comentado { display: flex; flex-direction: column; gap: var(--space-2); margin: var(--space-2) 0 0 var(--space-4); }
+        .cl-comentado__item {
+            display: flex; align-items: flex-start; gap: var(--space-2); margin: 0;
+            font-size: var(--text-xs); color: var(--text-secondary); line-height: var(--leading-body);
+        }
+        .cl-comentado__item i, .cl-comentado__item svg { width: 13px; height: 13px; flex-shrink: 0; margin-top: 2px; color: var(--warning); }
+        .cl-comentado__item strong { color: var(--warning); }
+
         .cl-retorno {
             padding: var(--space-4); border-radius: var(--radius-md);
             background: var(--surface-2); border: 1px solid var(--border-subtle);
@@ -637,11 +850,15 @@ function injectStyles() {
            Fixa no rodapé, com respiro para a área de gestos do iPhone. Se ela
            ficasse no fim do roteiro, aprovar exigiria rolar de volta um texto
            que a pessoa acabou de ler. */
-        .cl-espaco-barra { height: 88px; }
+        .cl-espaco-barra { height: 132px; }
+        /* EMPILHADA por padrão. Em linha, "Aguardando você" + dois botões
+           passavam da largura do celular e o "Aprovar" era cortado pela borda
+           direita — o botão mais importante da tela, justamente. O estado sobe
+           para uma linha própria e os botões dividem a largura por igual. */
         .cl-barra {
             position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
-            display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
-            padding: var(--space-3) var(--space-5);
+            display: flex; flex-direction: column; align-items: stretch; gap: var(--space-2);
+            padding: var(--space-3) var(--space-4);
             padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
             background: var(--glass-bg);
             -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
@@ -651,14 +868,17 @@ function injectStyles() {
             .cl-barra { background: var(--surface-1); }
         }
         .cl-barra__estado {
-            display: flex; align-items: center; gap: var(--space-2);
+            display: flex; align-items: center; justify-content: center; gap: var(--space-2);
             font-size: var(--text-xs); color: var(--text-tertiary); white-space: nowrap;
         }
         .cl-barra__estado i, .cl-barra__estado svg { width: 14px; height: 14px; }
         .cl-barra__botoes { display: flex; align-items: center; gap: var(--space-2); }
-        /* 44px de altura nos dois botões: são as únicas ações da tela e as
-           mais consequentes. Botão de 32px em toque é onde nasce o "cliquei e
-           não aconteceu nada". */
+        /* Dividem a largura por igual. Um botão de "Aprovar" mais estreito que
+           o "Pedir ajuste" sugeriria uma hierarquia que não existe: as duas são
+           respostas legítimas, e a cor já diz qual é a principal. */
+        .cl-barra__botoes .ds-btn { flex: 1; }
+        /* 44px de altura: são as únicas ações da tela e as mais consequentes.
+           Botão de 32px em toque é onde nasce o "cliquei e não aconteceu". */
         .cl-barra .ds-btn { min-height: 44px; }
 
         /* ── Painel de pedido de ajuste ────────────────────────────────── */
@@ -679,6 +899,14 @@ function injectStyles() {
 
         /* ── E ENTÃO CRESCE ────────────────────────────────────────────────
            A partir daqui, tela grande. Tudo acima já funciona sem isto. */
+        /* Cabendo em linha, volta a ser uma faixa só — o estado à esquerda e as
+           ações à direita, que é a leitura mais rápida quando há espaço. */
+        @media (min-width: 480px) {
+            .cl-barra { flex-direction: row; align-items: center; justify-content: space-between; gap: var(--space-3); padding-left: var(--space-5); padding-right: var(--space-5); }
+            .cl-barra__botoes .ds-btn { flex: 0 0 auto; }
+            .cl-espaco-barra { height: 96px; }
+        }
+
         @media (min-width: 720px) {
             .cl-topo { padding: var(--space-8) var(--space-8) var(--space-6); align-items: center; }
             .cl-topo__marca, .cl-nome, .cl-proposito { width: 100%; max-width: 760px; }

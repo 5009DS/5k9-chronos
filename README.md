@@ -157,6 +157,35 @@ exclui com desfazer. Ele fecha sozinho quando o botão sai da tela — é o mesm
 comportamento dos outros menus do estúdio, e evita um popover flutuando solto
 sem relação com o que o abriu.
 
+## O cliente comenta a fala, não só o conteúdo
+
+Na tela do cliente, **tocar numa fala** a seleciona e abre o campo de comentário
+logo abaixo dela — não num painel que cobre a tela, porque o texto que ele está
+criticando precisa continuar visível enquanto ele escreve a crítica.
+
+O pedido do rodapé continua existindo e fala do conteúdo inteiro. O da fala
+resolve o caso mais comum: *"a abertura ficou agressiva"* chegava sem dizer qual
+era a abertura, e a equipe abria um roteiro de nove blocos para descobrir.
+
+Só uma fala fica selecionada por vez. Cinco campos abertos convidariam a
+escrever cinco comentários e mandar nenhum.
+
+Seção e orientação de gravação não são clicáveis: uma é divisória, a outra é
+instrução interna.
+
+**O comentário guarda o trecho.** Junto com o `bloco_id` vai o texto que o
+cliente estava lendo. A equipe vai reescrever aquela fala — é para isso que o
+pedido serve — e sem o trecho o comentário passaria a apontar para uma frase que
+não existe mais. No roteiro interno o trecho antigo só aparece **quando o texto
+mudou**, com a nota "na época ele estava lendo".
+
+Do lado da equipe o comentário aparece **dentro do bloco**, não numa lista à
+parte. É a diferença entre "o cliente reclamou de alguma coisa" e "o cliente
+reclamou disto aqui".
+
+O cliente não vê o mesmo comentário duas vezes: o que é sobre uma fala aparece
+grudado nela, e a lista "Suas respostas" mostra só o que é do conteúdo inteiro.
+
 ## O link do cliente
 
 Em **Cliente → Link do cliente**: ver o endereço, copiar, e personalizar.

@@ -166,7 +166,7 @@ export const renderRoteiro = async (container, conteudoId) => {
 
                 <div class="rt-blocos" id="rt-blocos">
                     ${blocos.length
-                        ? blocos.map((b, i) => blocoEditavel(b, i, blocos.length)).join('')
+                        ? blocos.map((b, i) => blocoEditavel(b, i, blocos.length, historico)).join('')
                         : vazioHTML('clipboard-paste', 'Roteiro em branco',
                             'Cole o roteiro inteiro de uma vez — o sistema separa em blocos e marca o gancho, '
                           + 'as falas e a chamada para ação. Ou monte à mão, bloco a bloco, abaixo.',
@@ -509,13 +509,15 @@ const medida = (blocos) => {
          + `~${duracaoTotal(blocos)} de fala (estimado)`;
 };
 
-const blocoEditavel = (b, i, total) => {
+const blocoEditavel = (b, i, total, historico = []) => {
     const t = tipoBloco(b.tipo);
     const usaTitulo = ['secao', 'bloco'].includes(b.tipo);
     const soTitulo = b.tipo === 'secao';
+    const comentarios = historico.filter(r => r.bloco_id === b.id);
 
     return `
-        <div class="rt-bloco rt-bloco--${esc(b.tipo)}" data-bloco="${esc(b.id)}">
+        <div class="rt-bloco rt-bloco--${esc(b.tipo)} ${comentarios.length ? 'rt-bloco--comentado' : ''}"
+             data-bloco="${esc(b.id)}">
             <div class="rt-bloco__cabeca">
                 <span class="rt-bloco__tipo"><i data-lucide="${esc(t.icone)}"></i>${esc(t.nome)}</span>
                 ${t.falado ? `<span class="rt-bloco__dur" data-duracao>${esc(duracao(segundosDeFala(b.texto)))}</span>` : ''}
@@ -540,6 +542,25 @@ const blocoEditavel = (b, i, total) => {
             ${soTitulo ? '' : `
                 <textarea class="rt-bloco__texto" data-campo-bloco="texto" rows="2"
                           placeholder="${esc(t.placeholder)}">${esc(b.texto || '')}</textarea>`}
+
+            ${comentarios.map(r => `
+                <div class="rt-comentario">
+                    <div class="rt-comentario__cabeca">
+                        <i data-lucide="message-circle"></i>
+                        O cliente pediu ajuste nesta fala
+                        ${r.autor ? `· ${esc(r.autor)}` : ''}
+                        <span class="rt-comentario__data">${esc(dataBR(String(r.criado_em).slice(0, 10)))}</span>
+                    </div>
+                    <p class="rt-comentario__texto">${esc(r.texto || '')}</p>
+                    ${r.trecho && r.trecho !== b.texto ? `
+                        <!-- Só aparece quando o texto MUDOU desde o comentário. Sem
+                             isso, quem lê depois não entende a crítica: ela fala de
+                             uma frase que já foi reescrita. -->
+                        <p class="rt-comentario__antes">
+                            <i data-lucide="history"></i>
+                            Na época ele estava lendo: “${esc(r.trecho)}”
+                        </p>` : ''}
+                </div>`).join('')}
         </div>`;
 };
 
@@ -721,6 +742,30 @@ const ESTILOS = `
     font-size: var(--text-xs); font-weight: 700; color: var(--text-tertiary);
     text-transform: uppercase; letter-spacing: var(--tracking-wide);
 }
+
+/* ── Comentário do cliente numa fala ─────────────────────────────────────
+   Mora DENTRO do bloco, não numa lista à parte. É a diferença entre "o cliente
+   reclamou de alguma coisa" e "o cliente reclamou disto aqui" — e é o motivo
+   inteiro de o comentário por fala existir. */
+.rt-bloco--comentado { border-color: color-mix(in oklch, var(--warning) 45%, transparent); }
+.rt-comentario {
+    display: flex; flex-direction: column; gap: var(--space-2);
+    margin-top: var(--space-2); padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-sm);
+    background: color-mix(in oklch, var(--warning) 10%, transparent);
+}
+.rt-comentario__cabeca {
+    display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;
+    font-size: var(--text-xs); font-weight: 600; color: var(--warning);
+}
+.rt-comentario__cabeca i, .rt-comentario__cabeca svg { width: 13px; height: 13px; }
+.rt-comentario__data { margin-left: auto; font-weight: 400; color: var(--text-tertiary); }
+.rt-comentario__texto { margin: 0; font-size: var(--text-sm); color: var(--text-primary); line-height: var(--leading-body); }
+.rt-comentario__antes {
+    display: flex; align-items: flex-start; gap: var(--space-2); margin: 0;
+    font-size: var(--text-xs); color: var(--text-tertiary); font-style: italic; line-height: var(--leading-body);
+}
+.rt-comentario__antes i, .rt-comentario__antes svg { width: 12px; height: 12px; flex-shrink: 0; margin-top: 2px; }
 
 /* ── Adicionar ───────────────────────────────────────────────────────── */
 .rt-adicionar { display: flex; flex-direction: column; gap: var(--space-3); }

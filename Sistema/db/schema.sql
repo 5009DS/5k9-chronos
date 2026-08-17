@@ -148,10 +148,17 @@ create table if not exists vz_retornos (
     tipo         text not null,                  -- aprovado | ajuste
     texto        text,
     autor        text,
+    -- A fala a que o pedido se refere, quando o cliente apontou uma. Ver
+    -- db/migracao-ajuste-por-fala.sql. `trecho` congela o texto que ele estava
+    -- lendo: a equipe vai REESCREVER o bloco, e sem isso o comentário passa a
+    -- apontar para uma frase que não existe mais.
+    bloco_id     text references vz_blocos(id) on delete set null,
+    trecho       text,
     criado_em    timestamptz not null default now()
 );
 
 create index if not exists vz_retornos_conteudo_idx on vz_retornos(conteudo_id, criado_em desc);
+create index if not exists vz_retornos_bloco_idx on vz_retornos(bloco_id) where bloco_id is not null;
 
 -- ── Diretório enviado pela interface ──────────────────────────────────────
 -- Uma linha só (id = 'atual'). O diretório de verdade é o arquivo gerado em
@@ -259,7 +266,9 @@ create or replace function vz_registrar_retorno(
     p_conteudo text,
     p_tipo     text,
     p_texto    text default null,
-    p_autor    text default null
+    p_autor    text default null,
+    p_bloco    text default null,
+    p_trecho   text default null
 ) returns jsonb
 language plpgsql
 security definer
@@ -267,6 +276,7 @@ set search_path = public
 as $$
 declare
     v_id text;
+    v_bloco text;
     v_retorno jsonb;
 begin
     if p_tipo not in ('aprovado', 'ajuste') then
@@ -291,10 +301,20 @@ begin
     -- `to_jsonb(vz_retornos.*)` e não `to_jsonb(vz_retornos)`: a segunda forma
     -- depende de o nome da tabela estar visível como variável de linha, o que
     -- muda entre versões do Postgres. Com `.*` é a linha inteira, sempre.
-    insert into vz_retornos (conteudo_id, tipo, texto, autor)
+    -- O bloco precisa ser DESTE conteúdo: sem a checagem, quem tivesse um
+    -- link válido penduraria comentário no roteiro de outro cliente.
+    if p_bloco is not null then
+        select b.id into v_bloco
+          from vz_blocos b
+         where b.id = p_bloco and b.conteudo_id = v_id;
+    end if;
+
+    insert into vz_retornos (conteudo_id, tipo, texto, autor, bloco_id, trecho)
          values (v_id, p_tipo,
                  nullif(trim(coalesce(p_texto, '')), ''),
-                 nullif(trim(coalesce(p_autor, '')), ''))
+                 nullif(trim(coalesce(p_autor, '')), ''),
+                 v_bloco,
+                 nullif(trim(coalesce(p_trecho, '')), ''))
       returning to_jsonb(vz_retornos.*) into v_retorno;
 
     update vz_conteudos
@@ -308,6 +328,6 @@ $$;
 -- Só estas duas funções, e nada mais deste sistema, ficam ao alcance de quem
 -- não tem login.
 revoke all on function vz_visualizacao(text)                              from anon, public;
-revoke all on function vz_registrar_retorno(text, text, text, text, text) from anon, public;
+revoke all on function vz_registrar_retorno(text, text, text, text, text, text, text) from anon, public;
 grant execute on function vz_visualizacao(text)                              to anon, authenticated;
-grant execute on function vz_registrar_retorno(text, text, text, text, text) to anon, authenticated;
+grant execute on function vz_registrar_retorno(text, text, text, text, text, text, text) to anon, authenticated;

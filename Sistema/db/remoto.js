@@ -131,6 +131,8 @@ export const remoto = {
         p_tipo:     retorno.tipo,
         p_texto:    retorno.texto || null,
         p_autor:    retorno.autor || null,
+        p_bloco:    retorno.bloco_id || null,
+        p_trecho:   retorno.trecho || null,
     }),
 };
 
