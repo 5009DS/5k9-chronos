@@ -49,7 +49,19 @@ const parecidoCom = (a, b) => {
 
 const detectarFase = (linha) => {
     const n = soLetras(linha);
-    if (!n.includes('funil') || n.length > 32) return null;
+    const temFunil = n.includes('funil');
+
+    /* O documento do Canva costuma trazer o nome da fase com subtítulo
+       inline: "TOPO DE FUNIL – Emagrecimento e Metabolismo" (47 chars).
+       O limite original de 32 rejeitava tudo isso e o parser perdia a
+       seção inteira. 60 cobre o caso real com margem.
+
+       Linha SEM "funil" também pode ser cabeçalho de fase: alguns
+       documentos escrevem apenas "Topo", "Meio" ou "Fundo" numa linha
+       curta. Aceitar quando a linha é curta (≤ 20 chars) evita falso
+       positivo sem perder esse caso. */
+    if (temFunil && n.length > 60) return null;
+    if (!temFunil && n.length > 20) return null;
 
     const primeira = n.split(' ')[0];
     let melhor = null, nota = 0;
@@ -134,6 +146,12 @@ const acharEnfeites = (linhas) => {
     const enfeite = new Set();
     for (const [l, n] of conta) {
         if (n >= 3) enfeite.add(l);
+        /* Documento de duas páginas tem cabeçalho que aparece EXATAMENTE
+           duas vezes. Antes só era removido a partir de três — e o nome
+           da cliente poluía o resultado. A condição extra (curta + sem
+           pontuação final) evita remover um tema que por coincidência
+           apareceu duas vezes. */
+        else if (n >= 2 && l.length <= 50 && !/[.?!]$/.test(l)) enfeite.add(l);
         else if (l.includes('|')) enfeite.add(l);
         else if (/^[A-Za-z]{0,3}\/\d/.test(l)) enfeite.add(l);
     }
@@ -250,13 +268,26 @@ export const lerTemas = (texto) => {
 
         const obj = linha.match(OBJETIVO_LINHA);
         if (obj) {
-            atual.objetivoTexto = obj[1].trim();
-            atual.objetivo = sugerirObjetivo(atual.objetivoTexto, atual.fase);
-            esperandoNota = true;
+            /* Só aceita Objetivo: se a seção ainda não tem temas.
+               Documento com múltiplas páginas por fase repete o
+               cabeçalho e o objetivo em cada página — sem este guarda,
+               o flag esperandoNota reativava e todos os temas da
+               página seguinte iam para nota em vez de temas. */
+            if (!atual.temas.length) {
+                atual.objetivoTexto = obj[1].trim();
+                atual.objetivo = sugerirObjetivo(atual.objetivoTexto, atual.fase);
+                esperandoNota = true;
+            }
             continue;
         }
 
         if (ehEixo(linha)) { eixo = linha; esperandoNota = false; continue; }
+
+        /* Tema numerado desativa esperandoNota. Sem isso, um documento
+           com Objetivo: seguido direto de temas numerados (sem eixo no
+           meio) engolia TODOS os temas como nota da seção. */
+        const item = linha.match(ITEM);
+        if (esperandoNota && item) esperandoNota = false;
 
         /* Continuação de título. Um tema longo quebra em duas linhas no PDF, e
            a segunda vem sem numeração:
@@ -274,7 +305,7 @@ export const lerTemas = (texto) => {
            deixaram de ser numerados, qualquer linha passou a poder ser tema —
            e a continuação, que nunca chegava a ser testada, virou tema órfão. */
         const ultimo = atual.temas[atual.temas.length - 1];
-        if (!esperandoNota && ultimo && !/[.?!:…”"]$/.test(ultimo.titulo)) {
+        if (!esperandoNota && ultimo && !/[.?!:…""]$/.test(ultimo.titulo)) {
             ultimo.titulo = tirarAspas(`${ultimo.titulo} ${linha}`);
             ultimo.divergencia = conferirTema(ultimo.titulo, atual.fase);
             continue;
@@ -287,7 +318,6 @@ export const lerTemas = (texto) => {
            não. Quando existe, vira o rótulo; quando não, a posição na seção
            serve. O que identifica um tema é o descarte de tudo o mais —
            enfeite, eixo, objetivo, nota e continuação já saíram antes daqui. */
-        const item = linha.match(ITEM);
         const titulo = tirarAspas(item ? item[2] : linha);
         if (!titulo) continue;
 
@@ -295,11 +325,12 @@ export const lerTemas = (texto) => {
            apoiar, qualquer linha solta viraria tema, e o fim do documento
            costuma trazer capa e página de estratégia:
 
-             · menos de 15 caracteres não é tema, é rótulo picado pela extração
-               ("Reel 1", "oln M dl oo");
+             · menos de 10 caracteres não é tema, é rótulo picado pela extração
+               ("Reel 1", "oln M dl oo"). O limite original de 15 rejeitava
+               temas curtos válidos como "Botox facial" (12 chars);
              · terminar em dois-pontos é abertura de lista, não pauta
                ("…pensamos em trabalhar com o método do funil de conteúdo:"). */
-        if (titulo.length < 15 || /:$/.test(titulo)) continue;
+        if (titulo.length < 10 || /:$/.test(titulo)) continue;
 
         /* Documento escrito por gente repete bloco ao copiar e colar entre
            seções. Importar o mesmo tema duas vezes criaria dois conteúdos

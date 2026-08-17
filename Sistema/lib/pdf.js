@@ -245,10 +245,12 @@ const extrairDoStream = (st, mapas, padrao) => {
             const pedaco = decodificarString(t, mapa);
             if (!pedaco) continue;
             const y = cy + ty;
-            // 2 unidades de tolerância: sobrescrito e acento deslocam a linha
-            // de base em menos que isso e não devem quebrar a linha.
+            // 3 unidades de tolerância: sobrescrito e acento deslocam a linha
+            // de base em menos que isso e não devem quebrar a linha. O valor
+            // original (2) era justo demais para PDFs do Canva com templates
+            // compactos, onde o deslocamento de acento passava de 2.
             if (linhaY === null) linhaY = y;
-            else if (Math.abs(y - linhaY) > 2) { soltar(); linhaY = y; }
+            else if (Math.abs(y - linhaY) > 3) { soltar(); linhaY = y; }
             atual += pedaco;
         }
     }

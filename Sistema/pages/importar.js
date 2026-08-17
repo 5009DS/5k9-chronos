@@ -265,7 +265,8 @@ export const renderImportar = async (container, clienteId, modoInicial = 'temas'
         const dias = { fundo: 0, meio: 2, topo: 4 };
         const fila = {};
         for (const s of leitura.secoes || []) {
-            fila[s.fase] = s.temas.filter(t => selecao.has(chaveTema(s.fase, t.numero)));
+            const temasDaSecao = s.temas.filter(t => selecao.has(chaveTema(s.fase, t.numero)));
+            fila[s.fase] = [...(fila[s.fase] || []), ...temasDaSecao];
         }
         const semanas = Math.max(0, ...Object.values(fila).map(f => f.length));
         const plano = [];
