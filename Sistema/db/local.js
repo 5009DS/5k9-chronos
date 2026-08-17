@@ -54,6 +54,21 @@ export const local = {
 
     excluir: async (colecao, id) => {
         gravar(colecao, ler(colecao).filter(l => l.id !== id));
+
+        /* O Postgres faz isto sozinho: `bloco_id references vz_blocos on delete
+           set null`. Aqui não há chave estrangeira, e sem esta linha o
+           comentário continuaria apontando para um bloco que não existe mais —
+           some das duas telas, porque cada uma só desenha conversa de bloco
+           presente. O mesmo dado, dois comportamentos, e a diferença só
+           apareceria em produção. */
+        if (colecao === 'blocos') {
+            const retornos = ler('retornos');
+            let mexeu = false;
+            for (const r of retornos) {
+                if (r.bloco_id === id) { r.bloco_id = null; mexeu = true; }
+            }
+            if (mexeu) gravar('retornos', retornos);
+        }
     },
 
     /** Troca a coleção inteira de uma vez — usado pela importação de JSON. */

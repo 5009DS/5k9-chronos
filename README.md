@@ -186,6 +186,34 @@ reclamou disto aqui".
 O cliente não vê o mesmo comentário duas vezes: o que é sobre uma fala aparece
 grudado nela, e a lista "Suas respostas" mostra só o que é do conteúdo inteiro.
 
+## Apagar mais de uma fala
+
+**Selecionar**, no cabeçalho do roteiro, põe uma caixa em cada bloco. Marque as
+que vão sair e apague de uma vez. Apagar pelo menu `⋯` continua ali e serve
+para um engano; não serve para o caso real, que é a roteirista mandar a versão
+nova inteira e sete falas antigas precisarem sair juntas.
+
+A contagem se atualiza no lugar, sem redesenhar a página — redesenhar devolveria
+a rolagem ao topo, e marcar sete falas exigiria rolar sete vezes até o mesmo
+ponto.
+
+**Excluir roteiro** apaga tudo, e é o único que pergunta antes. Não é
+inconsistência: a seleção é uma escolha feita item por item, e o desfazer cobre
+o engano. "Excluir roteiro" é um botão só, ao lado de "Copiar texto", e a
+distância entre clicar nele sem querer e perder trinta falas não pode ser um
+clique. A ficha do conteúdo — data, fase, objetivo — não é tocada: sai só o
+texto.
+
+### O desfazer devolve os comentários também
+
+Excluir um bloco não apaga a conversa dele: o banco só solta o vínculo
+(`on delete set null`), e o comentário passa a existir sem a fala que ele
+critica. O aviso diz quantos comentários ficaram nessa situação.
+
+Se o desfazer devolvesse só os blocos, seria um desfazer pela metade — a fala
+voltaria órfã do que o cliente disse sobre ela. Por isso os comentários
+afetados são copiados antes de excluir e regravados com o mesmo id.
+
 ## A conversa tem fim
 
 Comentar era metade do caminho. O comentário chegava e a equipe não tinha o que

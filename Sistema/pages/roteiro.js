@@ -70,6 +70,14 @@ export const renderRoteiro = async (container, conteudoId) => {
        lados olham o mesmo estado. */
     const fio = conversas(historico);
 
+    /* ── Seleção múltipla ───────────────────────────────────────────────
+       Vive fora de desenhar() porque desenhar() é chamado a cada mudança, e
+       uma seleção que se perde ao trocar o tipo de um bloco é pior que não
+       existir: a pessoa marca cinco falas, encosta em qualquer outra coisa e
+       recomeça. */
+    let selecionando = false;
+    let selecionadas = new Set();
+
     const { content } = renderShell(container, {
         path: '/',
         /* O rastro inteiro importa aqui: chega-se a esta tela direto do painel,
@@ -196,6 +204,14 @@ export const renderRoteiro = async (container, conteudoId) => {
                         <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-copiar">
                             <i data-lucide="copy"></i> Copiar texto
                         </button>
+                        ${blocos.length ? `
+                            <button class="ds-btn ds-btn--ghost ds-btn--sm ${selecionando ? 'is-ativo' : ''}" id="rt-selecionar">
+                                <i data-lucide="${selecionando ? 'x' : 'list-checks'}"></i>
+                                ${selecionando ? 'Cancelar seleção' : 'Selecionar'}
+                            </button>
+                            <button class="ds-btn ds-btn--ghost ds-btn--sm rt-perigo" id="rt-excluir-tudo">
+                                <i data-lucide="trash-2"></i> Excluir roteiro
+                            </button>` : ''}
                     </div>
                 </div>
 
@@ -204,9 +220,12 @@ export const renderRoteiro = async (container, conteudoId) => {
                         ${avisos.map(a => `<p class="rt-aviso"><i data-lucide="triangle-alert"></i> ${esc(a)}</p>`).join('')}
                     </div>` : ''}
 
-                <div class="rt-blocos" id="rt-blocos">
+                ${selecionando ? barraSelecao(blocos, selecionadas) : ''}
+
+                <div class="rt-blocos ${selecionando ? 'rt-blocos--selecionando' : ''}" id="rt-blocos">
                     ${blocos.length
-                        ? blocos.map((b, i) => blocoEditavel(b, i, blocos.length, fio.porBloco.get(b.id))).join('')
+                        ? blocos.map((b, i) => blocoEditavel(b, i, blocos.length, fio.porBloco.get(b.id),
+                                                            selecionando, selecionadas.has(b.id))).join('')
                         : vazioHTML('clipboard-paste', 'Roteiro em branco',
                             'Cole o roteiro inteiro de uma vez — o sistema separa em blocos e marca o gancho, '
                           + 'as falas e a chamada para ação. Ou monte à mão, bloco a bloco, abaixo.',
@@ -230,6 +249,25 @@ export const renderRoteiro = async (container, conteudoId) => {
         ligarEventos();
         if (window.lucide) lucide.createIcons();
     };
+
+    /* A barra é atualizada no lugar, sem redesenho: redesenhar a página a cada
+       marcação a devolveria ao topo, e marcar sete falas exigiria rolar sete
+       vezes até o mesmo ponto. */
+    function atualizarBarra() {
+        const n = selecionadas.size;
+        const conta = content.querySelector('#rt-sel-conta');
+        const excluir = content.querySelector('#rt-sel-excluir');
+        const todas = content.querySelector('#rt-sel-todas');
+        if (!conta) return;
+        conta.textContent = n
+            ? `${n} de ${blocos.length} selecionada${n > 1 ? 's' : ''}`
+            : 'Marque as falas que vão sair';
+        if (excluir) {
+            excluir.disabled = !n;
+            excluir.querySelector('span').textContent = n > 1 ? `Excluir ${n}` : 'Excluir';
+        }
+        if (todas) todas.textContent = n === blocos.length ? 'Limpar seleção' : 'Selecionar todas';
+    }
 
     // ─────────────────────────────────────────────────────────────────────
     function ligarEventos() {
@@ -265,6 +303,47 @@ export const renderRoteiro = async (container, conteudoId) => {
         });
 
         content.querySelector('#rt-avisar')?.addEventListener('click', abrirAviso);
+
+        // ── Seleção múltipla ────────────────────────────────────────────
+        content.querySelector('#rt-selecionar')?.addEventListener('click', () => {
+            selecionando = !selecionando;
+            selecionadas.clear();
+            desenhar();
+        });
+
+        content.querySelector('#rt-excluir-tudo')?.addEventListener('click', confirmarExcluirTudo);
+
+        content.querySelectorAll('[data-marcar]').forEach(caixa =>
+            caixa.addEventListener('change', () => {
+                const id = caixa.dataset.marcar;
+                if (caixa.checked) selecionadas.add(id); else selecionadas.delete(id);
+                /* Sem redesenhar: a página inteira voltaria ao topo a cada
+                   marcação, e marcar sete falas exigiria rolar sete vezes. */
+                caixa.closest('[data-bloco]').classList.toggle('rt-bloco--marcada', caixa.checked);
+                atualizarBarra();
+            }));
+
+        content.querySelector('#rt-sel-todas')?.addEventListener('click', () => {
+            const todas = selecionadas.size === blocos.length;
+            selecionadas = todas ? new Set() : new Set(blocos.map(b => b.id));
+            content.querySelectorAll('[data-marcar]').forEach(caixa => {
+                caixa.checked = !todas;
+                caixa.closest('[data-bloco]').classList.toggle('rt-bloco--marcada', !todas);
+            });
+            atualizarBarra();
+        });
+
+        content.querySelector('#rt-sel-excluir')?.addEventListener('click', async (e) => {
+            const botao = e.target.closest('button');
+            botao.disabled = true;
+            const escolhidos = blocos.filter(b => selecionadas.has(b.id));
+            await excluirBlocos(escolhidos, {
+                rotulo: `${escolhidos.length} bloco${escolhidos.length > 1 ? 's excluídos.' : ' excluído.'}`,
+            });
+            selecionadas.clear();
+            selecionando = false;
+            desenhar();
+        });
 
         // ── Ir até a fala comentada ─────────────────────────────────────
         content.querySelectorAll('[data-ir-bloco]').forEach(botao =>
@@ -747,6 +826,107 @@ export const renderRoteiro = async (container, conteudoId) => {
     }
 
     /* ═══════════════════════════════════════════════════════════════════
+       EXCLUIR MAIS DE UM DE UMA VEZ
+
+       Apagar bloco a bloco pelo menu ⋯ funciona para um engano. Não funciona
+       para o caso real: a roteirista mandou a versão nova inteira, e as sete
+       falas antigas precisam sair juntas — sete menus, sete confirmações e
+       sete redesenhos.
+
+       ── O DESFAZER DEVOLVE OS COMENTÁRIOS TAMBÉM ─────────────────────────
+       Excluir um bloco não apaga a conversa dele: o banco só solta o vínculo
+       (`on delete set null`), e o comentário passa a flutuar sem a fala que
+       ele critica. Se o desfazer devolvesse só os blocos, o "desfazer" seria
+       mentira — a fala voltaria órfã do que o cliente disse sobre ela.
+
+       Por isso os retornos afetados são copiados ANTES de excluir e gravados
+       de volta com o mesmo id (`upsert`) na hora de desfazer.
+       ═══════════════════════════════════════════════════════════════════ */
+    async function excluirBlocos(lista, { rotulo, aoTerminar }) {
+        if (!lista.length) return;
+
+        const apagados = lista.map(b => ({ ...b }));
+        const ids = new Set(apagados.map(b => b.id));
+        const comentarios = historico.filter(r => ids.has(r.bloco_id)).map(r => ({ ...r }));
+
+        for (const b of apagados) await store.blocos.excluir(b.id);
+        blocos = renumerar(blocos.filter(x => !ids.has(x.id)));
+        for (const x of blocos) await store.blocos.salvar(x);
+
+        toast(`${rotulo}${comentarios.length
+            ? ` ${comentarios.length} comentário${comentarios.length > 1 ? 's ficaram' : ' ficou'} sem fala.`
+            : ''}`, {
+            label: 'Desfazer',
+            onClick: async () => {
+                for (const b of apagados) await store.blocos.salvar(b);
+                // Os comentários voltam a apontar para a fala que criticam.
+                for (const r of comentarios) await store.retornos.salvar(r);
+                recarregar();
+            },
+        });
+
+        aoTerminar?.();
+    }
+
+    /* Excluir o roteiro inteiro PERGUNTA antes; excluir uma seleção, não.
+
+       Não é inconsistência. A seleção é uma escolha que a pessoa acabou de
+       fazer, item por item, e o desfazer do aviso cobre o engano. "Excluir
+       roteiro" é um botão só, ao lado de "Copiar texto", e a distância entre
+       clicar nele por engano e perder trinta falas não pode ser um clique. */
+    function confirmarExcluirTudo() {
+        const comConversa = blocos.filter(b => fio.porBloco.has(b.id)).length;
+
+        openDrawer({
+            title: 'Excluir o roteiro inteiro',
+            subtitle: c.titulo,
+            body: `
+                <div class="rt-resp">
+                    <p class="rt-resp__perigo">
+                        <i data-lucide="triangle-alert"></i>
+                        Isto apaga <strong>${blocos.length} bloco${blocos.length > 1 ? 's' : ''}</strong>.
+                        A ficha do conteúdo, a data e a classificação continuam como estão —
+                        só o texto sai.
+                    </p>
+                    ${comConversa ? `
+                        <p class="rt-resp__dica">
+                            ${comConversa === 1
+                                ? 'Uma das falas tem conversa com o cliente. Ela'
+                                : `${comConversa} falas têm conversa com o cliente. Elas`}
+                            ${comConversa === 1 ? 'não é apagada' : 'não são apagadas'} —
+                            fica no histórico do conteúdo, sem a fala a que se referia.
+                        </p>` : ''}
+                    <p class="rt-resp__dica">
+                        Dá para desfazer logo depois, pelo aviso que aparece no rodapé.
+                        Depois de sair da página, não.
+                    </p>
+                </div>`,
+            footer: `
+                <span style="flex:1"></span>
+                <button class="ds-btn ds-btn--ghost" id="rt-del-cancelar">Cancelar</button>
+                <button class="ds-btn rt-btn-perigo" id="rt-del-confirmar">
+                    Excluir ${blocos.length} bloco${blocos.length > 1 ? 's' : ''}
+                </button>`,
+            onMount: (painel) => {
+                injectEstilosPainel();
+                painel.querySelector('#rt-del-cancelar').addEventListener('click', closeDrawer);
+                painel.querySelector('#rt-del-confirmar').addEventListener('click', async (e) => {
+                    const botao = e.target.closest('button');
+                    botao.disabled = true;
+                    botao.textContent = 'Excluindo…';
+                    const todos = [...blocos];
+                    closeDrawer();
+                    await excluirBlocos(todos, { rotulo: 'Roteiro excluído.' });
+                    selecionando = false;
+                    selecionadas.clear();
+                    desenhar();
+                });
+                if (window.lucide) lucide.createIcons();
+            },
+        });
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════
        COLAR O ROTEIRO INTEIRO
 
        O caminho normal desta tela é montar bloco a bloco, e ele é bom para
@@ -922,16 +1102,22 @@ const medida = (blocos) => {
          + `~${duracaoTotal(blocos)} de fala (estimado)`;
 };
 
-const blocoEditavel = (b, i, total, conversa = null) => {
+const blocoEditavel = (b, i, total, conversa = null, selecionando = false, marcada = false) => {
     const t = tipoBloco(b.tipo);
     const usaTitulo = ['secao', 'bloco'].includes(b.tipo);
     const soTitulo = b.tipo === 'secao';
     const estado = conversa?.estado || null;
 
     return `
-        <div class="rt-bloco rt-bloco--${esc(b.tipo)} ${estado ? `rt-bloco--fio rt-bloco--${esc(estado)}` : ''}"
+        <div class="rt-bloco rt-bloco--${esc(b.tipo)} ${estado ? `rt-bloco--fio rt-bloco--${esc(estado)}` : ''}
+                    ${marcada ? 'rt-bloco--marcada' : ''}"
              data-bloco="${esc(b.id)}">
             <div class="rt-bloco__cabeca">
+                ${selecionando ? `
+                    <label class="rt-marca">
+                        <input type="checkbox" data-marcar="${esc(b.id)}" ${marcada ? 'checked' : ''}
+                               aria-label="Selecionar ${esc(t.nome.toLowerCase())}">
+                    </label>` : ''}
                 <span class="rt-bloco__tipo"><i data-lucide="${esc(t.icone)}"></i>${esc(t.nome)}</span>
                 ${t.falado ? `<span class="rt-bloco__dur" data-duracao>${esc(duracao(segundosDeFala(b.texto)))}</span>` : ''}
                 ${/* O selo de EDITADO é sobre o texto; o de estado é sobre a
@@ -1022,6 +1208,29 @@ const fioHTML = (b, { entradas, estado }) => {
                         <i data-lucide="circle-check"></i> Encerrar
                     </button>
                 </div>`}
+        </div>`;
+};
+
+/* A barra da seleção múltipla.
+
+   Fica no TOPO da lista, não flutuando no rodapé. A lista de blocos é longa e
+   a página inteira rola: uma barra fixa no rodapé cobriria justamente a última
+   fala, que é onde a mão está quando se termina de marcar. No topo ela some da
+   vista enquanto se rola e reaparece ao voltar — e a contagem é a única coisa
+   que precisa ser vista, não o botão. */
+const barraSelecao = (blocos, selecionadas) => {
+    const n = selecionadas.size;
+    return `
+        <div class="rt-selecao">
+            <span class="rt-selecao__conta" id="rt-sel-conta">
+                ${n ? `${n} de ${blocos.length} selecionada${n > 1 ? 's' : ''}` : 'Marque as falas que vão sair'}
+            </span>
+            <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-sel-todas">
+                ${n === blocos.length ? 'Limpar seleção' : 'Selecionar todas'}
+            </button>
+            <button class="ds-btn ds-btn--sm rt-btn-perigo" id="rt-sel-excluir" ${n ? '' : 'disabled'}>
+                <i data-lucide="trash-2"></i> <span>${n > 1 ? `Excluir ${n}` : 'Excluir'}</span>
+            </button>
         </div>`;
 };
 
@@ -1185,6 +1394,14 @@ function injectEstilosPainel() {
             background: var(--danger-muted); font-size: var(--text-xs); color: var(--danger);
         }
         .rt-resp__erro[hidden] { display: none; }
+        .rt-resp__perigo {
+            display: flex; align-items: flex-start; gap: var(--space-2); margin: 0;
+            padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
+            background: var(--danger-muted); color: var(--danger);
+            font-size: var(--text-sm); line-height: var(--leading-body);
+        }
+        .rt-resp__perigo i, .rt-resp__perigo svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 2px; }
+        .rt-resp__perigo strong { color: var(--danger); }
 
         /* ── Histórico ────────────────────────────────────────────────────
            Antes e depois EMPILHADOS, não lado a lado. Duas colunas de texto
@@ -1257,7 +1474,49 @@ function autoAltura(campo) {
 const ESTILOS = `
 <style>
 .rt-chips { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
-.rt-acoes-topo, .rt-status-troca { display: flex; align-items: center; gap: var(--space-2); }
+/* flex-wrap: com quatro botões, o último era cortado pela borda numa tela de
+   trabalho estreita — o mesmo defeito que já custou a barra do celular. */
+.rt-acoes-topo, .rt-status-troca { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+
+/* Excluir o roteiro fica ao lado de "Copiar texto" e precisa não se parecer
+   com ele. Vermelho só na letra: um botão sólido vermelho no cabeçalho pesaria
+   mais que a ação mais usada da tela. */
+.rt-perigo { color: var(--danger); }
+.rt-perigo:hover { background: var(--danger-muted); color: var(--danger); }
+.ds-btn.is-ativo { background: var(--accent-muted); color: var(--accent); }
+
+/* O DS não tem botão destrutivo sólido — tem primary, solid e ghost. Em vez de
+   inventar um ds-btn--danger que o estúdio não desenhou, e que a próxima
+   atualização de ds/ sobrescreveria, a variante mora aqui, no escopo desta
+   página, com o nome do sistema e não o do DS.
+
+   (Sem crase neste comentário: ele vive DENTRO de um template literal, e uma
+   crase aqui fecha a string no meio do CSS. O erro que sai disso é
+   "invalid left-hand side expression in postfix operation", apontando para os
+   dois hifens de um nome de token — nada que leve a pensar em aspas.) */
+.rt-btn-perigo { background: var(--danger); color: var(--surface-1); border-color: transparent; }
+.rt-btn-perigo:hover { background: var(--danger); filter: brightness(1.1); }
+.rt-btn-perigo[disabled] { opacity: 0.45; filter: none; transform: none; cursor: default; }
+
+/* ── Seleção múltipla ────────────────────────────────────────────────── */
+.rt-selecao {
+    display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--accent-border); border-radius: var(--radius-md);
+    background: var(--accent-muted);
+}
+.rt-selecao__conta {
+    flex: 1; min-width: 140px;
+    font-size: var(--text-sm); font-weight: 600; color: var(--text-primary);
+}
+.rt-marca { display: flex; align-items: center; }
+/* 20px e não o tamanho padrão: em toque, caixa de seleção pequena é onde
+   nasce o "marquei e não marcou". */
+.rt-marca input { width: 20px; height: 20px; accent-color: var(--accent); cursor: pointer; }
+.rt-bloco--marcada { border-color: var(--accent); background: var(--accent-muted); }
+/* Em modo de seleção o clique é para marcar. Os campos continuam editáveis —
+   travá-los seria impedir a correção que a pessoa acabou de ver ao reler. */
+.rt-blocos--selecionando .rt-bloco { cursor: default; }
 
 .rt-interna {
     display: flex; align-items: flex-start; gap: var(--space-2);
