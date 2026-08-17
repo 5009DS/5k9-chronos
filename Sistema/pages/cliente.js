@@ -80,6 +80,19 @@ let mesVisto = null;
 const desenharCronograma = (container, token, visao) => {
     const { cliente, conteudos } = visao;
 
+    /* ── SEM ROTEIRO, SEM ESTADO ──────────────────────────────────────────
+       Um conteúdo cujo roteiro foi apagado não pode continuar dizendo
+       "aprovado por você": a aprovação era de um texto que não existe mais.
+
+       Isto é DERIVAÇÃO, não limpeza. A limpeza no banco acontece quando a
+       equipe exclui o roteiro, e é a solução certa dali para a frente — mas
+       ela nunca alcança o que foi apagado antes dela existir, e dependia de
+       alguém abrir a tela interna daquele conteúdo para rodar. A tela do
+       cliente não pode ficar esperando isso: ela olha se há roteiro e decide
+       na hora. Enquanto não houver texto, não há estado nem conversa para
+       mostrar — e nenhum dado antigo no banco muda essa leitura. */
+    const comRoteiro = new Set((visao.blocos || []).map(b => b.conteudo_id));
+
     /* O mês inicial é o do PRÓXIMO conteúdo, não o de hoje. No dia 28, o que
        interessa é o que vem — e um cronograma que abre vazio no fim do mês
        parece um sistema quebrado. */
@@ -114,7 +127,7 @@ const desenharCronograma = (container, token, visao) => {
 
                     <div class="cl-semanas" id="semanas">
                         ${doMes.length
-                            ? semanas.map(s => semanaHTML(s, token)).join('')
+                            ? semanas.map(s => semanaHTML(s, token, comRoteiro)).join('')
                             : vazioHTML('calendar-off', 'Nada programado neste mês',
                                 'Quando a equipe publicar o cronograma, ele aparece aqui.')}
                     </div>
@@ -225,7 +238,7 @@ const marcarModelo = (container) => {
     if (window.lucide) lucide.createIcons();
 };
 
-const semanaHTML = ({ segunda, conteudos }, token) => {
+const semanaHTML = ({ segunda, conteudos }, token, comRoteiro) => {
     const atual = segunda === semanaAtual();
     const cob = cobertura(conteudos);
 
@@ -244,12 +257,12 @@ const semanaHTML = ({ segunda, conteudos }, token) => {
             </header>
 
             ${conteudos.length
-                ? porData(conteudos).map(c => cartaoConteudo(c, token)).join('')
+                ? porData(conteudos).map(c => cartaoConteudo(c, token, comRoteiro)).join('')
                 : `<p class="cl-semana-vazia">Sem publicações programadas nesta semana.</p>`}
         </section>`;
 };
 
-const cartaoConteudo = (c, token) => {
+const cartaoConteudo = (c, token, comRoteiro) => {
     const o = objetivo(c.objetivo);
     return `
         <a class="vz-conteudo" href="/c/${esc(token)}/${esc(c.id)}">
@@ -264,7 +277,7 @@ const cartaoConteudo = (c, token) => {
                 <div class="vz-conteudo__pe">
                     ${o ? `<span>${esc(o.nome)}</span>` : ''}
                     ${c.formato ? `<span>${esc(c.formato)}</span>` : ''}
-                    ${estadoCurto(c)}
+                    ${comRoteiro?.has(c.id) ? estadoCurto(c) : ''}
                 </div>
             </div>
             <i class="cl-seta" data-lucide="chevron-right"></i>
@@ -300,7 +313,10 @@ const desenharConteudo = (container, token, visao, conteudoId) => {
     const o = objetivo(c.objetivo);
     const f = fase(c.fase);
     const historico = retornosDe(retornos, c.id);
-    const podeResponder = ['em_revisao', 'aprovado', 'ajuste'].includes(c.status);
+    /* Sem roteiro não há o que aprovar nem o que comentar — e não há conversa
+       para mostrar, mesmo que o banco ainda guarde a de um texto apagado. */
+    const semRoteiro = meus.length === 0;
+    const podeResponder = !semRoteiro && ['em_revisao', 'aprovado', 'ajuste'].includes(c.status);
     /* Lido ANTES de marcar a visita: marcar primeiro apagaria a novidade no
        instante em que ela deveria aparecer. */
     const novidades = novidadesPara(historico, ultimaVisita(c.id));
@@ -382,7 +398,7 @@ const desenharConteudo = (container, token, visao, conteudoId) => {
                 <!-- Só o que é do conteúdo INTEIRO. O que foi dito sobre uma
                      fala específica já aparece grudado nela, e repetir aqui
                      faria o cliente achar que mandou duas vezes. -->
-                ${historico.filter(r => !r.bloco_id).length
+                ${!semRoteiro && historico.filter(r => !r.bloco_id).length
                     ? historicoHTML(historico.filter(r => !r.bloco_id)) : ''}
 
                 <div class="cl-espaco-barra"></div>
