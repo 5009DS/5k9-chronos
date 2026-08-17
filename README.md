@@ -186,6 +186,106 @@ reclamou disto aqui".
 O cliente não vê o mesmo comentário duas vezes: o que é sobre uma fala aparece
 grudado nela, e a lista "Suas respostas" mostra só o que é do conteúdo inteiro.
 
+## A conversa tem fim
+
+Comentar era metade do caminho. O comentário chegava e a equipe não tinha o que
+fazer com ele: reescrever a fala resolvia o roteiro e não resolvia a conversa —
+o pedido continuava com a mesma cara de pendência, e ninguém conseguia dizer se
+aquilo tinha sido tratado.
+
+Agora cada fala comentada carrega o fio inteiro, e ele tem três estados:
+
+| Estado | Quem deve | O que a equipe lê | O que o cliente lê |
+|---|---|---|---|
+| **pendente** | a equipe | pendente | A equipe está vendo isto |
+| **respondido** | o cliente | respondido | A equipe respondeu — veja se ficou bom |
+| **fechado** | ninguém | encerrado | Assunto encerrado |
+
+A borda do bloco tem a cor do estado, então de quem é a vez se lê rolando a
+página, sem abrir nada.
+
+**O estado não é uma coluna.** Ele é a última entrada da conversa. Uma coluna
+`resolvido` seria uma segunda verdade sobre o mesmo fato — bastava um
+comentário novo gravado sem atualizar a flag para a tela dizer "resolvido"
+embaixo de uma reclamação de ontem. A derivação vive em
+[`lib/conversa.js`](Sistema/lib/conversa.js) e é a MESMA nos dois lados: se a
+equipe visse "pendente" e o cliente visse "resolvido", o sistema perderia a
+única coisa que ele oferece.
+
+### Dois desfechos, de propósito
+
+**Ajustamos** diz que o texto mudou. **Respondemos** diz que não vai mudar, e
+por quê. Colapsar os dois num "resolvido" ensinaria a marcar como ajustado o
+que não foi ajustado, que é o caminho mais curto para um histórico inútil.
+
+O que a equipe escreve nesse painel **o cliente lê** — a mesma tabela alimenta
+as duas telas, e o painel avisa isso em destaque antes do campo de texto.
+
+### O selo de editado
+
+É sobre o texto, não sobre a conversa. Um bloco pode ter sido reescrito e
+continuar pendente: são perguntas diferentes — "esta fala mudou?" e "ainda devo
+resposta a alguém?" — e por isso são dois selos.
+
+### Histórico
+
+No menu `⋯` de cada bloco. Mostra a conversa inteira em linha do tempo, com o
+texto de partida riscado sobre o texto de chegada: a pergunta real não é "o que
+foi dito", é "mudou o quê".
+
+O fio dentro do bloco já mostra a conversa, e basta enquanto ela é curta. Depois
+de três idas e vindas ele empurra o roteiro para baixo e atrapalha quem está
+escrevendo — o painel é onde a conversa inteira cabe sem custar espaço à tela de
+trabalho.
+
+### Clicar no comentário leva até a fala
+
+Na lista "A conversa", todo item que fala de uma fala é um botão: ele rola até o
+bloco e o acende por um instante. Ler *"a abertura ficou agressiva"* e ter de
+caçar qual bloco é a abertura era o trabalho que esse clique elimina.
+
+### "Ficou bom" não aprova o conteúdo
+
+O cliente encerra UM assunto. A aprovação da peça continua sendo o botão do
+rodapé — quem gostou de uma frase corrigida não disse que o roteiro está pronto.
+Quem garante isso é a função do banco, não a interface: o status do conteúdo só
+se move quando o retorno não tem bloco (`db/migracao-conversa.sql`).
+
+## Avisar que o ajuste ficou pronto
+
+O cliente pede e vai embora. Sem aviso, o roteiro corrigido fica esperando
+alguém que não sabe que precisa voltar.
+
+**Avisar o cliente** escreve a mensagem — com o link que abre direto naquele
+roteiro e o número de pontos mexidos — e abre o canal. Copiar, para o WhatsApp,
+que é onde essas conversas realmente acontecem; ou abrir o e-mail já preenchido,
+usando o endereço gravado na ficha do cliente.
+
+**Ela não envia sozinha, e isso é uma limitação real.** O Chronos é um site
+estático sobre um banco: não existe servidor que possa mandar e-mail em nome do
+estúdio. O botão abre o cliente de e-mail de quem está usando, e quem aperta
+enviar é a pessoa. Tem uma vantagem que não é consolo — a mensagem sai do
+endereço do estúdio, com a assinatura de sempre, em vez de um "noreply" que o
+cliente ignora.
+
+**Notificação de navegador não está aqui**, e vale explicar por quê: para chegar
+no celular de alguém que não está com a página aberta, ela precisa de service
+worker, de assinatura push com chave VAPID e de um servidor que empurre a
+mensagem. Nada disso existe hoje neste projeto. Some-se que o cliente abre o
+link uma vez, vindo do WhatsApp — a taxa de gente que concederia a permissão
+seria perto de zero, e o canal ficaria caro e vazio. Se um dia valer, o lugar é
+uma Edge Function do Supabase.
+
+### O que mudou desde a última visita
+
+Quando a equipe mexe em alguma coisa, a próxima abertura do link marca o que
+mudou, com um aviso no topo do roteiro e um selo *novo* na fala. A data da
+última visita fica no navegador do cliente, não no banco: guardar no banco
+transformaria cada leitura numa escrita, e o dado só interessa àquele aparelho.
+
+Na primeira visita não marca nada. Destacar tudo é a maneira mais rápida de
+ensinar que o destaque não significa nada.
+
 ## O link do cliente
 
 Em **Cliente → Link do cliente**: ver o endereço, copiar, e personalizar.
@@ -439,6 +539,17 @@ Este sistema **não tem projeto Supabase próprio**: ele mora dentro do projeto 
 4. Cole as duas em `Sistema/lib/supabase-config.js`.
 
 Não é preciso criar usuário: a equipe entra com o mesmo login do Forms.
+
+Num banco que já está rodando, o `schema.sql` não altera tabela existente — quem
+faz isso são as migrações, na ordem em que estão aqui:
+
+| Arquivo | O que acrescenta |
+|---|---|
+| `db/migracao-responsavel.sql` | quem faz cada conteúdo |
+| `db/migracao-posicao.sql` | de onde o conteúdo saiu, para o quadro saber quem deslocou quem |
+| `db/migracao-apelido.sql` | link personalizado do cliente |
+| `db/migracao-ajuste-por-fala.sql` | comentário preso a uma fala |
+| `db/migracao-conversa.sql` | resposta da equipe, e-mail do cliente, e o fim da conversa |
 
 ## Decisões que valem saber
 

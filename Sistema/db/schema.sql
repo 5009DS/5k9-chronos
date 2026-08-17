@@ -62,6 +62,11 @@ create table if not exists vz_clientes (
     -- por isso mesmo, adivinhável — o token continua valendo em paralelo.
     apelido    text,
     contato    text,
+    -- Quem aprova, e para onde vai o aviso de "ajustamos o que você pediu".
+    -- Dois campos porque são duas coisas: `contato` é texto livre e diz com
+    -- quem falar; `email` é endereço e precisa ser um só. Ver
+    -- db/migracao-conversa.sql.
+    email      text,
     cor        text,
     -- Uma frase da estratégia daquele cliente, mostrada no topo do cronograma
     -- dele. Dá contexto ao que ele está vendo.
@@ -138,16 +143,31 @@ create table if not exists vz_blocos (
 
 create index if not exists vz_blocos_conteudo_idx on vz_blocos(conteudo_id, ordem);
 
--- ── Retornos do cliente ───────────────────────────────────────────────────
--- Aprovação ou pedido de ajuste, gravado pela tela pública. Nunca é apagado
--- nem editado: é o histórico da conversa sobre aquele conteúdo, e é o que
--- responde "quando foi que ele aprovou isso" três meses depois.
+-- ── A conversa sobre um conteúdo ──────────────────────────────────────────
+-- Nasceu como "retornos do cliente" e virou a conversa inteira: o pedido dele
+-- e a resposta da equipe moram na MESMA tabela, distinguidos por `origem`.
+-- Duas tabelas obrigariam a unir e reordenar em toda tela que mostrasse o
+-- assunto, e a primeira que esquecesse a união mostraria metade do diálogo.
+-- O raciocínio completo está em db/migracao-conversa.sql.
+--
+-- Nunca é apagada nem editada: é o que responde "quando foi que ele aprovou
+-- isso" três meses depois.
+--
+-- NÃO EXISTE COLUNA DE ESTADO. Se a conversa está pendente, respondida ou
+-- fechada sai da ÚLTIMA entrada dela (lib/conversa.js). Uma coluna seria uma
+-- segunda verdade sobre o mesmo fato, e as duas divergiriam no primeiro
+-- comentário gravado sem atualizar a flag.
 create table if not exists vz_retornos (
     id           text primary key default gen_random_uuid()::text,
     conteudo_id  text not null references vz_conteudos(id) on delete cascade,
-    tipo         text not null,                  -- aprovado | ajuste
+    -- cliente: aprovado | ajuste · equipe: ajustado | resposta | aprovado
+    tipo         text not null,
     texto        text,
     autor        text,
+    -- cliente | equipe. Gravado pela função pública como 'cliente' sempre,
+    -- sem parâmetro: se o lado viesse por argumento, qualquer pessoa com o
+    -- link escreveria uma "resposta da equipe" no próprio roteiro.
+    origem       text not null default 'cliente',
     -- A fala a que o pedido se refere, quando o cliente apontou uma. Ver
     -- db/migracao-ajuste-por-fala.sql. `trecho` congela o texto que ele estava
     -- lendo: a equipe vai REESCREVER o bloco, e sem isso o comentário passa a
@@ -158,7 +178,10 @@ create table if not exists vz_retornos (
 );
 
 create index if not exists vz_retornos_conteudo_idx on vz_retornos(conteudo_id, criado_em desc);
-create index if not exists vz_retornos_bloco_idx on vz_retornos(bloco_id) where bloco_id is not null;
+-- Em ordem crescente: toda tela que abre um roteiro pergunta "o que já foi
+-- dito sobre este bloco, na ordem em que foi dito".
+create index if not exists vz_retornos_bloco_idx
+    on vz_retornos(bloco_id, criado_em) where bloco_id is not null;
 
 -- ── Diretório enviado pela interface ──────────────────────────────────────
 -- Uma linha só (id = 'atual'). O diretório de verdade é o arquivo gerado em
@@ -309,17 +332,23 @@ begin
          where b.id = p_bloco and b.conteudo_id = v_id;
     end if;
 
-    insert into vz_retornos (conteudo_id, tipo, texto, autor, bloco_id, trecho)
+    insert into vz_retornos (conteudo_id, tipo, texto, autor, bloco_id, trecho, origem)
          values (v_id, p_tipo,
                  nullif(trim(coalesce(p_texto, '')), ''),
                  nullif(trim(coalesce(p_autor, '')), ''),
                  v_bloco,
-                 nullif(trim(coalesce(p_trecho, '')), ''))
+                 nullif(trim(coalesce(p_trecho, '')), ''),
+                 'cliente')
       returning to_jsonb(vz_retornos.*) into v_retorno;
 
-    update vz_conteudos
-       set status = case when p_tipo = 'aprovado' then 'aprovado' else 'ajuste' end
-     where id = v_id;
+    -- Só o retorno sobre o conteúdo INTEIRO move o status dele. "Esta fala
+    -- ficou boa" é o fim de um assunto, não a aprovação da peça — e o
+    -- cronograma da equipe não pode passar a dizer "aprovado" por causa disso.
+    if v_bloco is null then
+        update vz_conteudos
+           set status = case when p_tipo = 'aprovado' then 'aprovado' else 'ajuste' end
+         where id = v_id;
+    end if;
 
     return v_retorno;
 end;

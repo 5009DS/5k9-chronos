@@ -11,6 +11,7 @@ import {
 } from '../lib/formato.js';
 import { openDrawer, closeDrawer } from '../components/drawer.js';
 import { toast } from '../components/toast.js';
+import { conversas, estadoMeta, ato, daEquipe, novidadesPara } from '../lib/conversa.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    A TELA DO CLIENTE — /c/<token> e /c/<token>/<conteúdo>
@@ -210,6 +211,9 @@ const desenharConteudo = (container, token, visao, conteudoId) => {
     const f = fase(c.fase);
     const historico = retornosDe(retornos, c.id);
     const podeResponder = ['em_revisao', 'aprovado', 'ajuste'].includes(c.status);
+    /* Lido ANTES de marcar a visita: marcar primeiro apagaria a novidade no
+       instante em que ela deveria aparecer. */
+    const novidades = novidadesPara(historico, ultimaVisita(c.id));
 
     container.innerHTML = `
         <div class="cl cl--roteiro">
@@ -266,6 +270,14 @@ const desenharConteudo = (container, token, visao, conteudoId) => {
                 <!-- ══ O roteiro ═══════════════════════════════════════ -->
                 <section class="cl-roteiro">
                     <h2 class="cl-secao-titulo">Roteiro</h2>
+                    ${novidades.length ? `
+                        <!-- Some sozinho na próxima visita: é um aviso de
+                             mudança, não um estado permanente da tela. -->
+                        <p class="cl-novidade">
+                            <i data-lucide="sparkles"></i>
+                            A equipe mexeu em ${novidades.length === 1 ? 'um ponto' : `${novidades.length} pontos`}
+                            desde a sua última visita. ${novidades.length === 1 ? 'Ele está marcado' : 'Eles estão marcados'} abaixo.
+                        </p>` : ''}
                     ${meus.length && podeResponder ? `
                         <p class="cl-roteiro__dica">
                             <i data-lucide="hand-pointer"></i>
@@ -293,9 +305,10 @@ const desenharConteudo = (container, token, visao, conteudoId) => {
         ligarAcoes(container, token, c);
         ligarFalas(container, token, c, meus, historico);
     }
-    marcarFalasComentadas(container, historico);
+    desenharConversas(container, token, c, meus, historico, novidades);
     if (window.lucide) lucide.createIcons();
     window.scrollTo(0, 0);
+    marcarVisita(c.id);
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -366,8 +379,18 @@ function ligarFalas(container, token, conteudo, blocos, historico) {
             campo.focus();
             /* Rola o conjunto para o meio da tela: com o teclado aberto no
                celular, o campo nasceria atrás dele — e a pessoa digitaria sem
-               ver o que escreve nem a fala que está comentando. */
-            setTimeout(() => caixa.scrollIntoView({ block: 'center', behavior: 'smooth' }), 120);
+               ver o que escreve nem a fala que está comentando.
+
+               Com conferência: `behavior: 'smooth'` é ignorado em silêncio por
+               alguns navegadores, sem erro no console. O salto seco é pior que
+               a animação e melhor que o campo ficar atrás do teclado. */
+            setTimeout(() => {
+                const antes = window.scrollY;
+                caixa.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                setTimeout(() => {
+                    if (window.scrollY === antes) caixa.scrollIntoView({ block: 'center' });
+                }, 350);
+            }, 120);
 
             caixa.querySelector('[data-cmt-cancelar]').addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -420,32 +443,124 @@ function ligarFalas(container, token, conteudo, blocos, historico) {
     });
 }
 
-/* A fala que já recebeu comentário fica marcada — inclusive depois de o
-   conteúdo ser aprovado, quando ninguém mais pode comentar. É o que evita o
-   cliente escrever duas vezes a mesma coisa por não lembrar se mandou. */
-function marcarFalasComentadas(container, historico) {
-    const porBloco = {};
-    for (const r of historico) {
-        if (r.bloco_id) (porBloco[r.bloco_id] = porBloco[r.bloco_id] || []).push(r);
-    }
+/* ═══════════════════════════════════════════════════════════════════════════
+   A CONVERSA, DO LADO DE QUEM PEDIU
 
-    for (const [blocoId, lista] of Object.entries(porBloco)) {
+   O comentário do cliente virava um bilhete que ele mandava e nunca mais via
+   resposta. Aqui a fala carrega o fio inteiro: o que ele pediu, o que a equipe
+   fez, e — quando a equipe já respondeu — o botão que encerra o assunto.
+
+   ── O ESTADO É O MESMO DOS DOIS LADOS ─────────────────────────────────────
+   Sai de lib/conversa.js, o mesmo módulo que a tela da equipe usa. As palavras
+   é que mudam: "pendente" é linguagem de quem deve a resposta; para quem
+   espera, a informação é "a equipe está vendo isto".
+
+   ── "FICOU BOM" NÃO APROVA O CONTEÚDO ─────────────────────────────────────
+   Encerra UM assunto. A aprovação da peça inteira continua sendo o botão do
+   rodapé — quem gostou de uma frase corrigida não disse que o roteiro está
+   pronto. A função do banco garante isso e não depende desta tela (ver
+   db/migracao-conversa.sql).
+   ═══════════════════════════════════════════════════════════════════════════ */
+function desenharConversas(container, token, conteudo, blocos, historico, novidades) {
+    const { porBloco } = conversas(historico);
+    const novos = new Set(novidades.map(r => r.id));
+
+    for (const [blocoId, conversa] of porBloco) {
         const el = container.querySelector(`[data-bloco="${blocoId}"]`);
         if (!el) continue;
-        el.classList.add('cl-fala--comentada');
+
+        const bloco = blocos.find(b => b.id === blocoId);
+        const atual = bloco?.texto || bloco?.titulo || '';
+        const meta = estadoMeta(conversa.estado);
+        const temNovidade = conversa.entradas.some(r => novos.has(r.id));
+
+        el.classList.add('cl-fala--conversa', `cl-fala--${conversa.estado}`);
+
         el.insertAdjacentHTML('afterend', `
-            <div class="cl-comentado">
-                ${lista.map(r => `
-                    <p class="cl-comentado__item">
-                        <i data-lucide="message-circle"></i>
-                        <span>
-                            <strong>Você comentou${r.autor ? ` (${esc(r.autor)})` : ''}:</strong>
-                            ${esc(r.texto || '')}
-                        </span>
-                    </p>`).join('')}
+            <div class="cl-fio cl-fio--${esc(conversa.estado)} ${temNovidade ? 'cl-fio--novo' : ''}">
+                <div class="cl-fio__estado">
+                    <i data-lucide="${esc(meta.icone)}"></i>
+                    ${esc(meta.cliente)}
+                    ${temNovidade ? '<span class="cl-fio__novo">novo</span>' : ''}
+                </div>
+
+                ${conversa.entradas.map(r => {
+                    const equipe = daEquipe(r);
+                    /* O trecho só aparece quando a fala mudou desde então —
+                       e aí ele é a única coisa que faz o comentário antigo
+                       continuar fazendo sentido. */
+                    const mudou = !equipe && r.trecho && r.trecho !== atual;
+                    return `
+                    <div class="cl-fio__item cl-fio__item--${equipe ? 'equipe' : 'voce'}">
+                        <div class="cl-fio__quem">
+                            ${equipe
+                                ? `<i data-lucide="${esc(ato(r).icone)}"></i> ${esc(ato(r).rotulo)}`
+                                : `<i data-lucide="message-circle"></i> Você${r.autor ? ` (${esc(r.autor)})` : ''}${r.tipo === 'aprovado' ? ' encerrou o assunto' : ' pediu'}`}
+                            <span class="cl-fio__data">${esc(dataBR(String(r.criado_em).slice(0, 10)))}</span>
+                        </div>
+                        ${r.texto ? `<p class="cl-fio__texto">${esc(r.texto)}</p>` : ''}
+                        ${mudou ? `<p class="cl-fio__antes">Era: “${esc(r.trecho)}”</p>` : ''}
+                    </div>`;
+                }).join('')}
+
+                ${conversa.estado === 'respondido' ? `
+                    <button class="ds-btn ds-btn--primary ds-btn--sm cl-fio__ok" data-ok-bloco="${esc(blocoId)}">
+                        <i data-lucide="circle-check"></i> Ficou bom, pode encerrar
+                    </button>` : ''}
             </div>`);
     }
+
+    // ── Encerrar um assunto ─────────────────────────────────────────────
+    container.querySelectorAll('[data-ok-bloco]').forEach(botao =>
+        botao.addEventListener('click', async (e) => {
+            e.stopPropagation();   // o clique não pode abrir o campo da fala
+            const blocoId = botao.dataset.okBloco;
+            const bloco = blocos.find(b => b.id === blocoId);
+            botao.disabled = true;
+            botao.textContent = 'Registrando…';
+            try {
+                await store.registrarRetorno(token, {
+                    conteudo_id: conteudo.id,
+                    tipo: 'aprovado',
+                    texto: null,
+                    autor: lembrarNome() || null,
+                    bloco_id: blocoId,
+                    trecho: bloco?.texto || bloco?.titulo || null,
+                });
+                toast('Assunto encerrado. Obrigado!');
+                await renderCliente(container, token, conteudo.id);
+            } catch (err) {
+                console.error('[cliente] falha ao encerrar o assunto:', err);
+                toast(err.message || 'Não foi possível registrar agora.');
+                botao.disabled = false;
+                botao.textContent = 'Ficou bom, pode encerrar';
+            }
+        }));
 }
+
+/* ── O que mudou desde a última visita ───────────────────────────────────
+   O cliente pede o ajuste e volta dias depois. Sem marca, ele reabre um
+   roteiro de nove blocos e procura a diferença — que é exatamente o trabalho
+   que ele delegou ao pedir o ajuste.
+
+   A data da última visita fica no NAVEGADOR dele, não no banco. Guardar no
+   banco significaria gravar em cada abertura de link, transformando uma
+   leitura numa escrita — e o dado só interessa àquele aparelho.
+
+   Na primeira visita não marca nada (ver novidadesPara em lib/conversa.js):
+   destacar tudo é a maneira mais rápida de ensinar que o destaque não
+   significa nada. */
+const CHAVE_VISITA = '5k9_visualizador_visto';
+
+const ultimaVisita = (conteudoId) => {
+    try { return localStorage.getItem(`${CHAVE_VISITA}_${conteudoId}`) || null; }
+    catch { return null; }
+};
+
+const marcarVisita = (conteudoId) => {
+    try { localStorage.setItem(`${CHAVE_VISITA}_${conteudoId}`, new Date().toISOString()); }
+    catch { /* navegador sem localStorage: some a marca de novidade, nada mais */ }
+};
 
 /* A nota de conformidade que o CLIENTE vê é diferente da interna. Ele não
    precisa da instrução de redação ("evite promessa de resultado") — precisa
@@ -467,19 +582,28 @@ const conformidadeHTML = (c) => {
         </div>`;
 };
 
+/* A conversa sobre o conteúdo INTEIRO. O que foi dito sobre uma fala aparece
+   grudado nela — repetir aqui faria o cliente achar que mandou duas vezes.
+   A resposta da equipe entra na mesma lista: é o mesmo assunto, e separar em
+   "suas respostas" e "respostas da equipe" quebraria a ordem do diálogo. */
 const historicoHTML = (historico) => `
     <section class="cl-historico">
-        <h2 class="cl-secao-titulo">Suas respostas</h2>
-        ${historico.map(r => `
-            <div class="cl-retorno cl-retorno--${esc(r.tipo)}">
+        <h2 class="cl-secao-titulo">Esta conversa</h2>
+        ${historico.map(r => {
+            const equipe = daEquipe(r);
+            const a = ato(r);
+            return `
+            <div class="cl-retorno cl-retorno--${esc(a.tom)} ${equipe ? 'cl-retorno--equipe' : ''}">
                 <div class="cl-retorno__cabeca">
-                    <i data-lucide="${r.tipo === 'aprovado' ? 'circle-check' : 'message-circle'}"></i>
-                    ${r.tipo === 'aprovado' ? 'Aprovado' : 'Ajuste pedido'}
-                    ${r.autor ? `por ${esc(r.autor)}` : ''}
+                    <i data-lucide="${esc(a.icone)}"></i>
+                    ${equipe
+                        ? esc(a.rotulo)
+                        : `${r.tipo === 'aprovado' ? 'Você aprovou' : 'Você pediu ajuste'}${r.autor ? ` (${esc(r.autor)})` : ''}`}
                     <span class="cl-retorno__data">${esc(dataBR(r.criado_em))}</span>
                 </div>
                 ${r.texto ? `<p class="cl-retorno__texto">${esc(r.texto)}</p>` : ''}
-            </div>`).join('')}
+            </div>`;
+        }).join('')}
     </section>`;
 
 const barraAcao = (c) => `
@@ -798,7 +922,6 @@ function injectStyles() {
             border-color: var(--accent);
             box-shadow: 0 0 0 1px var(--accent);
         }
-        .cl-fala--comentada { border-left: 3px solid var(--warning); }
 
         .cl-comentario {
             display: flex; flex-direction: column; gap: var(--space-2);
@@ -823,13 +946,65 @@ function injectStyles() {
         }
         .cl-comentario__erro[hidden] { display: none; }
 
-        .cl-comentado { display: flex; flex-direction: column; gap: var(--space-2); margin: var(--space-2) 0 0 var(--space-4); }
-        .cl-comentado__item {
-            display: flex; align-items: flex-start; gap: var(--space-2); margin: 0;
-            font-size: var(--text-xs); color: var(--text-secondary); line-height: var(--leading-body);
+        /* ── O fio da conversa, sob a fala ────────────────────────────────
+           A cor da borda diz de quem é a vez sem exigir leitura: amarelo é "a
+           equipe está vendo", roxo é "responderam, olha aí", verde é
+           "encerrado". A mesma escala da tela da equipe — os dois lados
+           precisam estar falando do mesmo estado. */
+        .cl-fala--conversa   { border-left-width: 3px; border-left-style: solid; }
+        .cl-fala--pendente   { border-left-color: var(--warning); }
+        .cl-fala--respondido { border-left-color: var(--accent); }
+        .cl-fala--fechado    { border-left-color: var(--success); }
+
+        .cl-fio {
+            display: flex; flex-direction: column; gap: var(--space-3);
+            margin: var(--space-2) 0 0 var(--space-4);
+            padding: var(--space-3) var(--space-4);
+            border-radius: var(--radius-md);
+            background: var(--surface-2); border: 1px solid var(--border-subtle);
         }
-        .cl-comentado__item i, .cl-comentado__item svg { width: 13px; height: 13px; flex-shrink: 0; margin-top: 2px; color: var(--warning); }
-        .cl-comentado__item strong { color: var(--warning); }
+        .cl-fio--respondido { border-color: color-mix(in oklch, var(--accent) 40%, transparent); }
+        .cl-fio--fechado    { border-color: color-mix(in oklch, var(--success) 30%, transparent); }
+        .cl-fio--novo       { background: var(--accent-muted); }
+
+        .cl-fio__estado {
+            display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;
+            font-size: var(--text-xs); font-weight: 700; color: var(--text-tertiary);
+            text-transform: uppercase; letter-spacing: var(--tracking-wide);
+        }
+        .cl-fio__estado i, .cl-fio__estado svg { width: 13px; height: 13px; }
+        .cl-fio--pendente   .cl-fio__estado { color: var(--warning); }
+        .cl-fio--respondido .cl-fio__estado { color: var(--accent); }
+        .cl-fio--fechado    .cl-fio__estado { color: var(--success); }
+        .cl-fio__novo {
+            padding: 1px 7px; border-radius: var(--radius-pill);
+            background: var(--accent); color: var(--surface-1);
+            font-size: 10px; letter-spacing: var(--tracking-wide);
+        }
+
+        .cl-fio__item { display: flex; flex-direction: column; gap: 4px; }
+        /* A equipe entra recuada, como em qualquer conversa: o recuo diz quem
+           falou antes de o texto ser lido. */
+        .cl-fio__item--equipe { padding-left: var(--space-4); border-left: 2px solid var(--border-subtle); }
+        .cl-fio__quem {
+            display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;
+            font-size: var(--text-xs); font-weight: 600; color: var(--text-secondary);
+        }
+        .cl-fio__quem i, .cl-fio__quem svg { width: 13px; height: 13px; }
+        .cl-fio__data { margin-left: auto; font-weight: 400; color: var(--text-tertiary); }
+        .cl-fio__texto { margin: 0; font-size: var(--text-sm); color: var(--text-primary); line-height: var(--leading-body); }
+        .cl-fio__antes { margin: 0; font-size: var(--text-xs); color: var(--text-tertiary); font-style: italic; line-height: var(--leading-body); }
+        /* 44px: é ação consequente, e o dedo é o único ponteiro desta tela. */
+        .cl-fio__ok { min-height: 44px; }
+
+        /* Some sozinho na próxima visita: é aviso de mudança, não estado. */
+        .cl-novidade {
+            display: flex; align-items: flex-start; gap: var(--space-2); margin: 0;
+            padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
+            background: var(--accent-muted); color: var(--accent);
+            font-size: var(--text-sm); font-weight: 500; line-height: var(--leading-body);
+        }
+        .cl-novidade i, .cl-novidade svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 2px; }
 
         .cl-retorno {
             padding: var(--space-4); border-radius: var(--radius-md);
@@ -841,8 +1016,10 @@ function injectStyles() {
             font-size: var(--text-xs); font-weight: 600; color: var(--text-tertiary);
         }
         .cl-retorno__cabeca i, .cl-retorno__cabeca svg { width: 13px; height: 13px; }
-        .cl-retorno--aprovado .cl-retorno__cabeca { color: var(--success); }
-        .cl-retorno--ajuste   .cl-retorno__cabeca { color: var(--warning); }
+        .cl-retorno--ok      .cl-retorno__cabeca { color: var(--success); }
+        .cl-retorno--atencao .cl-retorno__cabeca { color: var(--warning); }
+        .cl-retorno--info    .cl-retorno__cabeca { color: var(--accent); }
+        .cl-retorno--equipe { margin-left: var(--space-4); }
         .cl-retorno__data { margin-left: auto; font-weight: 400; }
         .cl-retorno__texto { margin: var(--space-2) 0 0; font-size: var(--text-sm); color: var(--text-secondary); line-height: var(--leading-body); }
 

@@ -7,6 +7,11 @@ import { toast } from '../components/toast.js';
 import { esc, dataBR, quandoRelativo, nomeDia, duracao, segundosDeFala } from '../lib/formato.js';
 import { objetivo } from '../lib/diretorio.js';
 import { retornosDe } from '../lib/cronograma.js';
+import { timeSalvo } from '../lib/gestor.js';
+import { linkDoCliente } from '../lib/apelido.js';
+import {
+    conversas, estadoMeta, ato, daEquipe, textoOriginal, entradaDaEquipe,
+} from '../lib/conversa.js';
 import {
     TIPOS, tipo as tipoBloco, ordenar, mover, renumerar, blocoNovo, proximaOrdem,
     duracaoTotal, contarPalavras, avisosDeEstrutura, paraTexto,
@@ -59,6 +64,11 @@ export const renderRoteiro = async (container, conteudoId) => {
     const cliente = clientes.find(x => x.id === c.cliente_id);
     let blocos = ordenar(todosBlocos.filter(b => b.conteudo_id === conteudoId));
     const historico = retornosDe(retornos, c.id);
+    /* A leitura das conversas sai de lib/conversa.js e é a MESMA que a tela do
+       cliente usa. Duas leituras do mesmo histórico acabariam discordando, e o
+       sistema perderia a única coisa que ele oferece: um lugar onde os dois
+       lados olham o mesmo estado. */
+    const fio = conversas(historico);
 
     const { content } = renderShell(container, {
         path: '/',
@@ -124,22 +134,52 @@ export const renderRoteiro = async (container, conteudoId) => {
                 <article class="ds-card vz-secao">
                     <div class="vz-secao__cabeca">
                         <div>
-                            <h2 class="ds-card-title">O que o cliente respondeu</h2>
-                            <span class="ds-card-sub">${historico.length} resposta${historico.length > 1 ? 's' : ''}</span>
+                            <h2 class="ds-card-title">A conversa</h2>
+                            <span class="ds-card-sub">${esc(resumoDoFio(fio, historico))}</span>
                         </div>
+                        ${fio.respondidas ? `
+                            <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-avisar">
+                                <i data-lucide="send"></i> Avisar o cliente
+                            </button>` : ''}
                     </div>
                     <div class="rt-retornos">
-                        ${historico.map(r => `
-                            <div class="rt-retorno rt-retorno--${esc(r.tipo)}">
+                        ${historico.map(r => {
+                            const a = ato(r);
+                            /* Clicável quando fala de uma fala. Ler "a abertura
+                               ficou agressiva" aqui e ter de caçar qual bloco é
+                               o trabalho que este clique elimina. */
+                            const tag = r.bloco_id ? 'button' : 'div';
+                            return `
+                            <${tag} class="rt-retorno rt-retorno--${esc(a.tom)} ${r.bloco_id ? 'rt-retorno--ir' : ''}"
+                                    ${r.bloco_id ? `data-ir-bloco="${esc(r.bloco_id)}" title="Ir até a fala"` : ''}>
                                 <div class="rt-retorno__cabeca">
-                                    <i data-lucide="${r.tipo === 'aprovado' ? 'circle-check' : 'message-circle'}"></i>
-                                    ${r.tipo === 'aprovado' ? 'Aprovado' : 'Ajuste pedido'}
-                                    ${r.autor ? `por ${esc(r.autor)}` : ''}
+                                    <i data-lucide="${esc(a.icone)}"></i>
+                                    ${esc(daEquipe(r) ? a.rotulo : (r.tipo === 'aprovado' ? 'O cliente aprovou' : 'O cliente pediu ajuste'))}
+                                    ${r.autor ? `· ${esc(r.autor)}` : ''}
                                     <span class="rt-retorno__data">${esc(dataBR(String(r.criado_em).slice(0, 10)))}</span>
                                 </div>
                                 ${r.texto ? `<p class="rt-retorno__texto">${esc(r.texto)}</p>` : ''}
-                            </div>`).join('')}
+                                ${r.bloco_id ? `<span class="rt-retorno__ir"><i data-lucide="corner-down-right"></i> ver a fala</span>` : ''}
+                            </${tag}>`;
+                        }).join('')}
                     </div>
+
+                    ${/* O pedido do RODAPÉ da tela do cliente fala do conteúdo
+                          inteiro e não tem bloco para pendurar resposta. Sem
+                          estas ações, o pedido mais antigo do sistema seria o
+                          único que a equipe não consegue encerrar. */''}
+                    ${fio.doConteudo.estado && fio.doConteudo.estado !== 'fechado' ? `
+                        <div class="rt-fio__acoes">
+                            <button class="ds-btn ds-btn--primary ds-btn--sm" data-responder-conteudo="ajustado">
+                                <i data-lucide="pencil-line"></i> Ajustamos o roteiro
+                            </button>
+                            <button class="ds-btn ds-btn--ghost ds-btn--sm" data-responder-conteudo="resposta">
+                                <i data-lucide="message-square-reply"></i> Responder
+                            </button>
+                            <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-encerrar-conteudo">
+                                <i data-lucide="circle-check"></i> Encerrar
+                            </button>
+                        </div>` : ''}
                 </article>` : ''}
 
             <!-- ══ Roteiro ═════════════════════════════════════════════ -->
@@ -166,7 +206,7 @@ export const renderRoteiro = async (container, conteudoId) => {
 
                 <div class="rt-blocos" id="rt-blocos">
                     ${blocos.length
-                        ? blocos.map((b, i) => blocoEditavel(b, i, blocos.length, historico)).join('')
+                        ? blocos.map((b, i) => blocoEditavel(b, i, blocos.length, fio.porBloco.get(b.id))).join('')
                         : vazioHTML('clipboard-paste', 'Roteiro em branco',
                             'Cole o roteiro inteiro de uma vez — o sistema separa em blocos e marca o gancho, '
                           + 'as falas e a chamada para ação. Ou monte à mão, bloco a bloco, abaixo.',
@@ -224,6 +264,44 @@ export const renderRoteiro = async (container, conteudoId) => {
             }
         });
 
+        content.querySelector('#rt-avisar')?.addEventListener('click', abrirAviso);
+
+        // ── Ir até a fala comentada ─────────────────────────────────────
+        content.querySelectorAll('[data-ir-bloco]').forEach(botao =>
+            botao.addEventListener('click', () => irAteOBloco(botao.dataset.irBloco)));
+
+        // ── Responder e encerrar ────────────────────────────────────────
+        content.querySelectorAll('[data-responder]').forEach(botao =>
+            botao.addEventListener('click', () => responder(
+                blocos.find(x => x.id === botao.dataset.blocoFio), botao.dataset.responder)));
+
+        content.querySelectorAll('[data-responder-conteudo]').forEach(botao =>
+            botao.addEventListener('click', () => responder(null, botao.dataset.responderConteudo)));
+
+        content.querySelector('#rt-encerrar-conteudo')?.addEventListener('click', async (e) => {
+            const botao = e.target.closest('button');
+            botao.disabled = true;
+            await store.retornos.salvar(entradaDaEquipe({
+                conteudoId: c.id, blocoId: null, tipo: 'aprovado',
+                texto: null, autor: autorPadrao(),
+            }));
+            toast('Assunto encerrado. Fica no histórico.');
+            recarregar();
+        });
+
+        content.querySelectorAll('[data-encerrar]').forEach(botao =>
+            botao.addEventListener('click', async () => {
+                const b = blocos.find(x => x.id === botao.dataset.encerrar);
+                botao.disabled = true;
+                await store.retornos.salvar(entradaDaEquipe({
+                    conteudoId: c.id, blocoId: b.id, tipo: 'aprovado',
+                    texto: null, autor: autorPadrao(),
+                    trecho: b.texto || b.titulo || null,
+                }));
+                toast('Assunto encerrado. Fica no histórico.');
+                recarregar();
+            }));
+
         // ── Adicionar bloco ─────────────────────────────────────────────
         content.querySelectorAll('[data-novo]').forEach(botao =>
             botao.addEventListener('click', async () => {
@@ -280,7 +358,16 @@ export const renderRoteiro = async (container, conteudoId) => {
                 const b = blocos.find(x => x.id === id);
                 const i = blocos.findIndex(x => x.id === id);
 
+                const conversa = fio.porBloco.get(id);
+
                 abrirMenu(botao, [
+                    /* O histórico vem PRIMEIRO quando existe. Quem abre o menu
+                       de um bloco marcado como pendente quase sempre quer ver
+                       o que já foi dito, não trocar o tipo dele. */
+                    ...(conversa ? [{
+                        id: 'historico', label: 'Histórico da conversa', icon: 'history',
+                        onClick: () => abrirHistorico(b, conversa),
+                    }] : []),
                     ...TIPOS.filter(t => t.id !== b.tipo).map(t => ({
                         id: `tipo-${t.id}`, label: `Virar ${t.nome.toLowerCase()}`, icon: t.icone,
                         onClick: async () => {
@@ -331,6 +418,332 @@ export const renderRoteiro = async (container, conteudoId) => {
                     },
                 ]);
             }));
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       RESPONDER AO CLIENTE
+
+       O comentário chegava e a equipe não tinha o que fazer com ele. Reescrever
+       o bloco resolvia o roteiro e não resolvia a conversa: o pedido continuava
+       com a mesma cara de pendência, e ninguém conseguia dizer se aquilo tinha
+       sido tratado.
+
+       Dois desfechos, e eles são diferentes de propósito:
+         AJUSTAMOS  o texto mudou — o `trecho` congela como ele ficou
+         RESPONDEMOS não mudou, e aqui está o porquê
+
+       Colapsar os dois num "resolvido" ensinaria a marcar como ajustado o que
+       não foi ajustado, que é a maneira mais rápida de tornar o histórico
+       inútil.
+
+       O QUE A EQUIPE ESCREVE AQUI, O CLIENTE LÊ. O painel diz isso em letras
+       grandes: a mesma tabela alimenta as duas telas, e um comentário interno
+       digitado por engano aqui vai parar no celular dele.
+       ═══════════════════════════════════════════════════════════════════ */
+    function responder(bloco, tipo) {
+        const ajustou = tipo === 'ajustado';
+        /* `bloco` nulo = a conversa é sobre o conteúdo inteiro, que é o que o
+           pedido de ajuste do rodapé produz na tela do cliente. Sem este caso,
+           o pedido mais antigo do sistema seria o único sem resposta possível. */
+        const atual = bloco ? (bloco.texto || bloco.titulo || '') : '';
+
+        openDrawer({
+            title: ajustou
+                ? (bloco ? 'Ajustamos esta fala' : 'Ajustamos o roteiro')
+                : 'Responder ao cliente',
+            subtitle: c.titulo,
+            body: `
+                <div class="rt-resp">
+                    <p class="rt-resp__aviso">
+                        <i data-lucide="eye"></i>
+                        O cliente lê esta mensagem no link dele. Não é nota interna.
+                    </p>
+
+                    ${ajustou && bloco ? `
+                        <div class="rt-resp__texto">
+                            <span class="vz-rotulo">Como a fala está agora</span>
+                            <p>${esc(atual) || '<em>vazia</em>'}</p>
+                        </div>
+                        <p class="rt-resp__dica">
+                            Edite a fala na página antes de mandar, se ainda não editou —
+                            é este texto que fica registrado como o "depois".
+                        </p>` : ''}
+
+                    <label class="vz-rotulo" for="rt-resp-texto">
+                        ${ajustou ? 'O que mudou (opcional)' : 'O que você quer dizer a ele'}
+                    </label>
+                    <textarea class="ds-input rt-resp__campo" id="rt-resp-texto" rows="4"
+                              placeholder="${esc(ajustou
+                                  ? 'Ex.: trocamos a abertura por uma pergunta mais leve.'
+                                  : 'Ex.: preferimos manter esse trecho porque é o que segura a atenção nos 3 primeiros segundos.')}"></textarea>
+
+                    <label class="vz-rotulo" for="rt-resp-autor">Quem está respondendo</label>
+                    <input class="ds-input" id="rt-resp-autor" type="text" list="rt-time"
+                           value="${esc(autorPadrao())}" placeholder="Seu nome" autocomplete="off">
+                    <datalist id="rt-time">
+                        ${timeSalvo().map(i => `<option value="${esc(i.nome)}"></option>`).join('')}
+                    </datalist>
+
+                    <p class="rt-resp__erro" id="rt-resp-erro" hidden></p>
+                </div>`,
+            footer: `
+                <span style="flex:1"></span>
+                <button class="ds-btn ds-btn--ghost" id="rt-resp-cancelar">Cancelar</button>
+                <button class="ds-btn ds-btn--primary" id="rt-resp-enviar">
+                    ${ajustou ? 'Marcar como ajustado' : 'Enviar resposta'}
+                </button>`,
+            onMount: (painel) => {
+                injectEstilosPainel();
+                const campo = painel.querySelector('#rt-resp-texto');
+                const erro = painel.querySelector('#rt-resp-erro');
+                const botao = painel.querySelector('#rt-resp-enviar');
+                painel.querySelector('#rt-resp-cancelar').addEventListener('click', closeDrawer);
+
+                botao.addEventListener('click', async () => {
+                    const texto = campo.value.trim();
+                    const autor = painel.querySelector('#rt-resp-autor').value.trim();
+
+                    /* Texto é obrigatório em "responder" e opcional em
+                       "ajustamos". Uma resposta sem texto não responde nada;
+                       um ajuste sem texto ainda diz a coisa mais importante,
+                       que é "mexemos nisto" — e o texto novo está na tela. */
+                    if (!ajustou && !texto) {
+                        erro.textContent = 'Escreva a resposta — é ela que o cliente vai ler.';
+                        erro.hidden = false;
+                        campo.focus();
+                        return;
+                    }
+
+                    botao.disabled = true;
+                    botao.textContent = 'Enviando…';
+                    try {
+                        guardarAutor(autor);
+                        await store.retornos.salvar(entradaDaEquipe({
+                            conteudoId: c.id, blocoId: bloco?.id || null, tipo,
+                            texto, autor,
+                            // O texto de AGORA. É ele que vira o "depois" no
+                            // histórico, e o que sobrevive à próxima edição.
+                            trecho: atual || null,
+                        }));
+                        closeDrawer();
+                        toast(ajustou ? 'Marcado como ajustado.' : 'Resposta enviada.', {
+                            label: 'Avisar o cliente',
+                            onClick: abrirAviso,
+                        });
+                        recarregar();
+                    } catch (e) {
+                        console.error('[roteiro] falha ao responder:', e);
+                        erro.textContent = e.message || 'Não foi possível gravar agora.';
+                        erro.hidden = false;
+                        botao.disabled = false;
+                        botao.textContent = ajustou ? 'Marcar como ajustado' : 'Enviar resposta';
+                    }
+                });
+                campo.focus();
+            },
+        });
+    }
+
+    /* O histórico completo de UMA fala, em painel.
+
+       O fio dentro do bloco mostra a conversa, e é o suficiente enquanto ela é
+       curta. Depois de três idas e vindas ele empurra o roteiro para baixo e
+       atrapalha justamente quem está escrevendo. O painel é onde a conversa
+       inteira cabe sem custar espaço à tela de trabalho — com o texto de
+       partida e o de chegada lado a lado, que é a pergunta real: mudou o quê? */
+    function abrirHistorico(bloco, conversa) {
+        const atual = bloco.texto || bloco.titulo || '';
+        const original = textoOriginal(conversa.entradas, atual);
+        const meta = estadoMeta(conversa.estado);
+
+        openDrawer({
+            title: 'Histórico da conversa',
+            subtitle: `${tipoBloco(bloco.tipo).nome} · ${c.titulo}`,
+            body: `
+                <div class="rt-hist">
+                    <div class="rt-hist__estado rt-hist__estado--${esc(meta.tom)}">
+                        <i data-lucide="${esc(meta.icone)}"></i> ${esc(meta.rotulo)}
+                    </div>
+
+                    ${original ? `
+                        <div class="rt-hist__diff">
+                            <div class="rt-hist__lado">
+                                <span class="vz-rotulo">Como começou</span>
+                                <p class="rt-hist__antes">${esc(original)}</p>
+                            </div>
+                            <i class="rt-hist__seta" data-lucide="arrow-down"></i>
+                            <div class="rt-hist__lado">
+                                <span class="vz-rotulo">Como está hoje</span>
+                                <p class="rt-hist__depois">${esc(atual)}</p>
+                            </div>
+                        </div>` : `
+                        <div class="rt-hist__lado">
+                            <span class="vz-rotulo">A fala</span>
+                            <p class="rt-hist__depois">${esc(atual)}</p>
+                            <p class="rt-hist__igual">O texto não mudou desde o primeiro comentário.</p>
+                        </div>`}
+
+                    <ol class="rt-hist__linha">
+                        ${conversa.entradas.map(r => {
+                            const a = ato(r);
+                            const equipe = daEquipe(r);
+                            return `
+                            <li class="rt-hist__item rt-hist__item--${equipe ? 'equipe' : 'cliente'}">
+                                <span class="rt-hist__marca rt-hist__marca--${esc(a.tom)}">
+                                    <i data-lucide="${esc(a.icone)}"></i>
+                                </span>
+                                <div>
+                                    <div class="rt-hist__cabeca">
+                                        ${esc(equipe ? a.rotulo : (r.tipo === 'aprovado' ? 'O cliente aprovou' : 'O cliente pediu ajuste'))}
+                                        ${r.autor ? `· ${esc(r.autor)}` : ''}
+                                        <span class="rt-hist__data">${esc(dataBR(String(r.criado_em).slice(0, 10)))}</span>
+                                    </div>
+                                    ${r.texto ? `<p class="rt-hist__texto">${esc(r.texto)}</p>` : ''}
+                                    ${r.trecho ? `<p class="rt-hist__trecho">“${esc(r.trecho)}”</p>` : ''}
+                                </div>
+                            </li>`;
+                        }).join('')}
+                    </ol>
+                </div>`,
+            footer: `
+                <span style="flex:1"></span>
+                <button class="ds-btn ds-btn--ghost" id="rt-hist-fechar">Fechar</button>`,
+            onMount: (painel) => {
+                injectEstilosPainel();
+                painel.querySelector('#rt-hist-fechar').addEventListener('click', closeDrawer);
+                if (window.lucide) lucide.createIcons();
+            },
+        });
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       AVISAR O CLIENTE
+
+       Ele pediu o ajuste e foi embora. Sem aviso, o roteiro corrigido fica
+       esperando alguém que não sabe que precisa voltar — e a equipe cobra por
+       WhatsApp, que é onde a conversa some.
+
+       ── O QUE ESTA TELA FAZ E O QUE NÃO FAZ ──────────────────────────────
+       Ela ESCREVE a mensagem e abre o canal. Não envia sozinha: o Chronos é
+       um site estático sobre um banco, sem servidor que possa mandar e-mail em
+       nome do estúdio. O botão de e-mail abre o cliente de e-mail DA PESSOA,
+       com tudo preenchido, e quem aperta enviar é ela.
+
+       É menos automático e mais honesto que a alternativa — e tem uma
+       vantagem que não é consolo: a mensagem sai do endereço do estúdio, com
+       a assinatura de sempre, em vez de um "noreply" que o cliente ignora.
+
+       O botão de copiar existe porque o canal real destes clientes é o
+       WhatsApp, e ninguém vai colar HTML lá.
+       ═══════════════════════════════════════════════════════════════════ */
+    function abrirAviso() {
+        const link = `${linkDoCliente(cliente)}/${c.id}`;
+        const mensagem = mensagemDeAviso(c, cliente, fio, link);
+
+        openDrawer({
+            title: 'Avisar o cliente',
+            subtitle: c.titulo,
+            body: `
+                <div class="rt-aviso-cli">
+                    <p class="rt-resp__dica">
+                        A mensagem já está escrita, com o link que abre direto neste roteiro.
+                        Confira e mande pelo canal que vocês usam.
+                    </p>
+
+                    <label class="vz-rotulo" for="rt-aviso-msg">Mensagem</label>
+                    <textarea class="ds-input rt-resp__campo" id="rt-aviso-msg" rows="8">${esc(mensagem)}</textarea>
+
+                    <label class="vz-rotulo" for="rt-aviso-email">E-mail do cliente</label>
+                    <input class="ds-input" id="rt-aviso-email" type="email"
+                           value="${esc(cliente?.email || '')}"
+                           placeholder="para@clinica.com.br" autocomplete="off">
+                    <p class="rt-resp__dica">
+                        Fica gravado na ficha do cliente — na próxima vez já vem preenchido.
+                        ${cliente?.contato ? `Quem aprova por lá: <strong>${esc(cliente.contato)}</strong>.` : ''}
+                    </p>
+
+                    <p class="rt-resp__erro" id="rt-aviso-erro" hidden></p>
+                </div>`,
+            footer: `
+                <button class="ds-btn ds-btn--ghost" id="rt-aviso-copiar">
+                    <i data-lucide="copy"></i> Copiar
+                </button>
+                <span style="flex:1"></span>
+                <button class="ds-btn ds-btn--ghost" id="rt-aviso-fechar">Fechar</button>
+                <button class="ds-btn ds-btn--primary" id="rt-aviso-email-btn">
+                    <i data-lucide="mail"></i> Abrir e-mail
+                </button>`,
+            onMount: (painel) => {
+                injectEstilosPainel();
+                const msg = painel.querySelector('#rt-aviso-msg');
+                const campoEmail = painel.querySelector('#rt-aviso-email');
+                const erro = painel.querySelector('#rt-aviso-erro');
+                painel.querySelector('#rt-aviso-fechar').addEventListener('click', closeDrawer);
+
+                painel.querySelector('#rt-aviso-copiar').addEventListener('click', async () => {
+                    try {
+                        await navigator.clipboard.writeText(msg.value);
+                        toast('Mensagem copiada. Cole no WhatsApp.');
+                    } catch {
+                        msg.select();
+                        toast('Não consegui copiar. O texto está selecionado.');
+                    }
+                });
+
+                painel.querySelector('#rt-aviso-email-btn').addEventListener('click', async () => {
+                    const email = campoEmail.value.trim();
+                    if (!email || !email.includes('@')) {
+                        erro.textContent = 'Escreva o e-mail de quem aprova.';
+                        erro.hidden = false;
+                        campoEmail.focus();
+                        return;
+                    }
+                    erro.hidden = true;
+
+                    // Guarda na ficha antes de abrir o cliente de e-mail: a
+                    // navegação para mailto: pode tirar o foco da página, e uma
+                    // gravação disparada depois disso às vezes não acontece.
+                    if (cliente && cliente.email !== email) {
+                        try { await store.clientes.salvar({ ...cliente, email }); }
+                        catch (e) { console.error('[roteiro] falha ao gravar o e-mail:', e); }
+                    }
+
+                    const assunto = `Roteiro ajustado — ${c.titulo}`;
+                    window.location.href = `mailto:${encodeURIComponent(email)}`
+                        + `?subject=${encodeURIComponent(assunto)}`
+                        + `&body=${encodeURIComponent(msg.value)}`;
+                    closeDrawer();
+                });
+                if (window.lucide) lucide.createIcons();
+            },
+        });
+    }
+
+    /* Rola até a fala e a acende por um instante.
+
+       Só rolar não basta: quem clicou num comentário chega numa tela de sete
+       blocos parecidos e precisa de meio segundo para saber em qual deles
+       parou. O pisca responde isso sem exigir leitura. */
+    function irAteOBloco(id) {
+        const el = content.querySelector(`[data-bloco="${id}"]`);
+        if (!el) return;
+
+        /* Rola suave, e confere se rolou. `behavior: 'smooth'` é ignorado em
+           silêncio por alguns navegadores — visto aqui, num deles, sem erro
+           nenhum no console: a classe de destaque entrava e a página não saía
+           do lugar. O salto seco é pior que a animação e infinitamente melhor
+           que não ir a lugar nenhum. */
+        const rolador = el.closest('.sh-scroll') || document.scrollingElement;
+        const antes = rolador?.scrollTop ?? 0;
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        setTimeout(() => {
+            if (rolador && rolador.scrollTop === antes) el.scrollIntoView({ block: 'center' });
+        }, 350);
+
+        el.classList.remove('rt-bloco--piscando');
+        void el.offsetWidth;   // reinicia a animação quando é o mesmo bloco
+        el.classList.add('rt-bloco--piscando');
+        setTimeout(() => el.classList.remove('rt-bloco--piscando'), 1600);
     }
 
     /* ═══════════════════════════════════════════════════════════════════
@@ -393,7 +806,7 @@ export const renderRoteiro = async (container, conteudoId) => {
                     ${temRoteiro ? 'Gravar' : 'Criar roteiro'}
                 </button>`,
             onMount: (painel) => {
-                injectEstilosColar();
+                injectEstilosPainel();
                 const campo = painel.querySelector('#rt-texto');
                 const previa = painel.querySelector('#rt-previa');
                 const gravarBtn = painel.querySelector('#rt-gravar');
@@ -509,18 +922,26 @@ const medida = (blocos) => {
          + `~${duracaoTotal(blocos)} de fala (estimado)`;
 };
 
-const blocoEditavel = (b, i, total, historico = []) => {
+const blocoEditavel = (b, i, total, conversa = null) => {
     const t = tipoBloco(b.tipo);
     const usaTitulo = ['secao', 'bloco'].includes(b.tipo);
     const soTitulo = b.tipo === 'secao';
-    const comentarios = historico.filter(r => r.bloco_id === b.id);
+    const estado = conversa?.estado || null;
 
     return `
-        <div class="rt-bloco rt-bloco--${esc(b.tipo)} ${comentarios.length ? 'rt-bloco--comentado' : ''}"
+        <div class="rt-bloco rt-bloco--${esc(b.tipo)} ${estado ? `rt-bloco--fio rt-bloco--${esc(estado)}` : ''}"
              data-bloco="${esc(b.id)}">
             <div class="rt-bloco__cabeca">
                 <span class="rt-bloco__tipo"><i data-lucide="${esc(t.icone)}"></i>${esc(t.nome)}</span>
                 ${t.falado ? `<span class="rt-bloco__dur" data-duracao>${esc(duracao(segundosDeFala(b.texto)))}</span>` : ''}
+                ${/* O selo de EDITADO é sobre o texto; o de estado é sobre a
+                      conversa. São perguntas diferentes: "esta fala foi
+                      reescrita?" e "ainda devo resposta a alguém?" — e um
+                      bloco pode ter sido reescrito e continuar pendente. */''}
+                ${conversa?.editado ? `<span class="rt-selo rt-selo--edit"><i data-lucide="pencil-line"></i>editado</span>` : ''}
+                ${estado ? `<span class="rt-selo rt-selo--${esc(estadoMeta(estado).tom)}">
+                    <i data-lucide="${esc(estadoMeta(estado).icone)}"></i>${esc(estadoMeta(estado).curto)}
+                </span>` : ''}
                 <span class="rt-bloco__espaco"></span>
                 <button class="ds-icon-btn ds-icon-btn--sm" data-mover="cima" ${i === 0 ? 'disabled' : ''} aria-label="Mover para cima">
                     <i data-lucide="chevron-up"></i>
@@ -543,31 +964,117 @@ const blocoEditavel = (b, i, total, historico = []) => {
                 <textarea class="rt-bloco__texto" data-campo-bloco="texto" rows="2"
                           placeholder="${esc(t.placeholder)}">${esc(b.texto || '')}</textarea>`}
 
-            ${comentarios.map(r => `
-                <div class="rt-comentario">
-                    <div class="rt-comentario__cabeca">
-                        <i data-lucide="message-circle"></i>
-                        O cliente pediu ajuste nesta fala
-                        ${r.autor ? `· ${esc(r.autor)}` : ''}
-                        <span class="rt-comentario__data">${esc(dataBR(String(r.criado_em).slice(0, 10)))}</span>
-                    </div>
-                    <p class="rt-comentario__texto">${esc(r.texto || '')}</p>
-                    ${r.trecho && r.trecho !== b.texto ? `
-                        <!-- Só aparece quando o texto MUDOU desde o comentário. Sem
-                             isso, quem lê depois não entende a crítica: ela fala de
-                             uma frase que já foi reescrita. -->
-                        <p class="rt-comentario__antes">
-                            <i data-lucide="history"></i>
-                            Na época ele estava lendo: “${esc(r.trecho)}”
-                        </p>` : ''}
-                </div>`).join('')}
+            ${conversa ? fioHTML(b, conversa) : ''}
         </div>`;
 };
 
-/* Os estilos do painel de colar vão num <style> próprio, injetado uma vez.
-   Não podem entrar no ESTILOS da página: o painel mora no <body>, fora do
-   #app que o roteador reescreve, e o bloco da página some junto com ela. */
-function injectEstilosColar() {
+/* ═══════════════════════════════════════════════════════════════════════════
+   O FIO DA CONVERSA, DENTRO DO BLOCO
+
+   Mora aqui e não numa lista à parte. É a diferença entre "o cliente reclamou
+   de alguma coisa" e "o cliente reclamou DISTO" — e é o motivo inteiro de o
+   comentário por fala existir.
+
+   As ações ficam no fim do fio, não no menu ⋯. Responder é a continuação
+   natural de ler, e esconder a resposta atrás de um menu é o que fazia a
+   equipe ler o comentário e não ter o que fazer com ele.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const fioHTML = (b, { entradas, estado }) => {
+    const atual = b.texto || b.titulo || '';
+
+    return `
+        <div class="rt-fio">
+            ${entradas.map(r => {
+                const a = ato(r);
+                const equipe = daEquipe(r);
+                /* O trecho congelado só aparece quando difere do texto de
+                   AGORA. Igual, é ruído com cara de informação — e diferente,
+                   é a única coisa que faz a crítica continuar legível depois
+                   que a fala foi reescrita. */
+                const mudou = r.trecho && r.trecho !== atual;
+                return `
+                <div class="rt-fala rt-fala--${equipe ? 'equipe' : 'cliente'} rt-fala--${esc(a.tom)}">
+                    <div class="rt-fala__cabeca">
+                        <i data-lucide="${esc(a.icone)}"></i>
+                        ${esc(equipe ? a.rotulo : (r.tipo === 'aprovado' ? 'O cliente aprovou' : 'O cliente pediu ajuste'))}
+                        ${r.autor ? `· ${esc(r.autor)}` : ''}
+                        <span class="rt-fala__data">${esc(dataBR(String(r.criado_em).slice(0, 10)))}</span>
+                    </div>
+                    ${r.texto ? `<p class="rt-fala__texto">${esc(r.texto)}</p>` : ''}
+                    ${mudou ? `
+                        <p class="rt-fala__antes">
+                            <i data-lucide="history"></i>
+                            ${equipe ? 'Ficou assim na época:' : 'Na época ele estava lendo:'}
+                            “${esc(r.trecho)}”
+                        </p>` : ''}
+                </div>`;
+            }).join('')}
+
+            ${estado === 'fechado' ? '' : `
+                <div class="rt-fio__acoes">
+                    <button class="ds-btn ds-btn--primary ds-btn--sm" data-responder="ajustado" data-bloco-fio="${esc(b.id)}">
+                        <i data-lucide="pencil-line"></i> Ajustamos
+                    </button>
+                    <button class="ds-btn ds-btn--ghost ds-btn--sm" data-responder="resposta" data-bloco-fio="${esc(b.id)}">
+                        <i data-lucide="message-square-reply"></i> Responder
+                    </button>
+                    <button class="ds-btn ds-btn--ghost ds-btn--sm" data-encerrar="${esc(b.id)}">
+                        <i data-lucide="circle-check"></i> Encerrar
+                    </button>
+                </div>`}
+        </div>`;
+};
+
+/* O subtítulo do cartão da conversa. Diz o que está PENDENTE antes de dizer o
+   tamanho: "4 respostas" é estatística; "1 fala esperando a equipe" é tarefa. */
+const resumoDoFio = (fio, historico) => {
+    const partes = [];
+    if (fio.pendentes)   partes.push(`${fio.pendentes} esperando a equipe`);
+    if (fio.respondidas) partes.push(`${fio.respondidas} esperando o cliente`);
+    partes.push(`${historico.length} registro${historico.length > 1 ? 's' : ''} no total`);
+    return partes.join(' · ');
+};
+
+/* ── Quem está respondendo ───────────────────────────────────────────────
+   Fica no navegador de quem usa, como o nome do cliente do outro lado. É
+   conveniência, não dado do sistema: se sumir, o campo volta a vir vazio. A
+   lista de sugestões vem da cartela do Gestor (lib/gestor.js). */
+const CHAVE_AUTOR = '5k9_visualizador_autor';
+const autorPadrao = () => {
+    try { return localStorage.getItem(CHAVE_AUTOR) || ''; } catch { return ''; }
+};
+const guardarAutor = (nome) => {
+    try { if (nome) localStorage.setItem(CHAVE_AUTOR, nome); } catch { /* sem localStorage */ }
+};
+
+/**
+ * A mensagem de aviso, já escrita.
+ *
+ * Ela diz O QUE mudou, e não só "atualizamos o roteiro". Um aviso genérico
+ * obriga o cliente a reler o roteiro inteiro procurando a diferença — que é
+ * exatamente o trabalho que ele delegou ao pedir o ajuste.
+ */
+const mensagemDeAviso = (c, cliente, fio, link) => {
+    const nome = (cliente?.contato || '').split(/[(,]/)[0].trim();
+    const n = fio.respondidas;
+    return [
+        nome ? `Oi, ${nome}!` : 'Oi!',
+        '',
+        n === 1
+            ? `Mexemos no ponto que você comentou em "${c.titulo}".`
+            : `Mexemos nos ${n} pontos que você comentou em "${c.titulo}".`,
+        'Dá uma olhada e, se ficou bom, é só confirmar por lá:',
+        '',
+        link,
+        '',
+        'Qualquer coisa, comenta direto na fala que a gente ajusta de novo.',
+    ].join('\n');
+};
+
+/* Os estilos dos painéis vão num <style> próprio, injetado uma vez. Não podem
+   entrar no ESTILOS da página: o painel mora no <body>, fora do #app que o
+   roteador reescreve, e o bloco da página some junto com ela. */
+function injectEstilosPainel() {
     if (document.getElementById('roteiro-colar-styles')) return;
     const style = document.createElement('style');
     style.id = 'roteiro-colar-styles';
@@ -646,6 +1153,89 @@ function injectEstilosColar() {
             font-size: var(--text-sm); color: var(--text-primary);
             line-height: var(--leading-body);
             display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+        }
+
+        /* ── Responder e avisar ───────────────────────────────────────────── */
+        .rt-resp, .rt-aviso-cli, .rt-hist { display: flex; flex-direction: column; gap: var(--space-3); }
+        .rt-resp__campo {
+            height: auto; padding: var(--space-3) var(--space-4);
+            resize: vertical; line-height: var(--leading-body);
+            font-family: var(--font-sans);
+        }
+        /* O aviso mais importante do painel: o que se escreve aqui sai no
+           celular do cliente. Vale o destaque — a mesma tabela alimenta as
+           duas telas, e uma nota interna digitada por engano vai junto. */
+        .rt-resp__aviso {
+            display: flex; align-items: flex-start; gap: var(--space-2); margin: 0;
+            padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
+            background: var(--accent-muted); color: var(--accent);
+            font-size: var(--text-sm); font-weight: 500; line-height: var(--leading-body);
+        }
+        .rt-resp__aviso i, .rt-resp__aviso svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 2px; }
+        .rt-resp__dica { margin: 0; font-size: var(--text-xs); color: var(--text-tertiary); line-height: var(--leading-body); }
+        .rt-resp__dica strong { color: var(--text-secondary); }
+        .rt-resp__texto {
+            display: flex; flex-direction: column; gap: var(--space-2);
+            padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
+            background: rgba(255, 255, 255, 0.06); border: 1px solid var(--glass-border);
+        }
+        .rt-resp__texto p { margin: 0; font-size: var(--text-sm); color: var(--text-primary); line-height: var(--leading-body); }
+        .rt-resp__erro {
+            margin: 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm);
+            background: var(--danger-muted); font-size: var(--text-xs); color: var(--danger);
+        }
+        .rt-resp__erro[hidden] { display: none; }
+
+        /* ── Histórico ────────────────────────────────────────────────────
+           Antes e depois EMPILHADOS, não lado a lado. Duas colunas de texto
+           corrido no painel dariam trinta caracteres por linha, e comparar
+           duas frases quebradas em seis linhas cada é mais difícil que ler as
+           duas inteiras uma sob a outra. */
+        .rt-hist__estado {
+            display: inline-flex; align-items: center; gap: var(--space-2); align-self: flex-start;
+            padding: 5px var(--space-3); border-radius: var(--radius-pill);
+            font-size: var(--text-xs); font-weight: 600;
+        }
+        .rt-hist__estado i, .rt-hist__estado svg { width: 13px; height: 13px; }
+        .rt-hist__estado--atencao { background: var(--warning-muted); color: var(--warning); }
+        .rt-hist__estado--info    { background: var(--accent-muted);  color: var(--accent); }
+        .rt-hist__estado--ok      { background: var(--success-muted); color: var(--success); }
+
+        .rt-hist__diff { display: flex; flex-direction: column; gap: var(--space-2); }
+        .rt-hist__lado { display: flex; flex-direction: column; gap: var(--space-2); }
+        .rt-hist__seta { width: 16px; height: 16px; color: var(--text-disabled); align-self: center; }
+        .rt-hist__antes, .rt-hist__depois {
+            margin: 0; padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
+            font-size: var(--text-sm); line-height: var(--leading-body);
+        }
+        .rt-hist__antes {
+            background: var(--surface-3); color: var(--text-tertiary);
+            text-decoration: line-through; text-decoration-color: var(--text-disabled);
+        }
+        .rt-hist__depois { background: var(--success-muted); color: var(--text-primary); }
+        .rt-hist__igual { margin: 0; font-size: var(--text-xs); color: var(--text-tertiary); }
+
+        .rt-hist__linha { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-4); }
+        .rt-hist__item { display: flex; gap: var(--space-3); }
+        .rt-hist__item > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+        .rt-hist__marca {
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+            width: 26px; height: 26px; border-radius: 50%;
+        }
+        .rt-hist__marca i, .rt-hist__marca svg { width: 13px; height: 13px; }
+        .rt-hist__marca--atencao { background: var(--warning-muted); color: var(--warning); }
+        .rt-hist__marca--info    { background: var(--accent-muted);  color: var(--accent); }
+        .rt-hist__marca--ok      { background: var(--success-muted); color: var(--success); }
+        .rt-hist__cabeca {
+            display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;
+            font-size: var(--text-xs); font-weight: 600; color: var(--text-secondary);
+        }
+        .rt-hist__data { color: var(--text-tertiary); font-weight: 400; }
+        .rt-hist__texto { margin: 0; font-size: var(--text-sm); color: var(--text-primary); line-height: var(--leading-body); }
+        .rt-hist__trecho {
+            margin: 0; font-size: var(--text-xs); color: var(--text-tertiary);
+            font-style: italic; line-height: var(--leading-body);
+            padding-left: var(--space-3); border-left: 2px solid var(--border-subtle);
         }
     `;
     document.head.appendChild(style);
@@ -743,29 +1333,75 @@ const ESTILOS = `
     text-transform: uppercase; letter-spacing: var(--tracking-wide);
 }
 
-/* ── Comentário do cliente numa fala ─────────────────────────────────────
+/* ── A conversa dentro do bloco ──────────────────────────────────────────
    Mora DENTRO do bloco, não numa lista à parte. É a diferença entre "o cliente
    reclamou de alguma coisa" e "o cliente reclamou disto aqui" — e é o motivo
-   inteiro de o comentário por fala existir. */
-.rt-bloco--comentado { border-color: color-mix(in oklch, var(--warning) 45%, transparent); }
-.rt-comentario {
+   inteiro de o comentário por fala existir.
+
+   A COR DA BORDA É O ESTADO. De quem é a vez se lê de longe, rolando a página,
+   sem abrir nada: amarelo é dívida nossa, roxo é bola com o cliente, verde é
+   assunto encerrado. */
+.rt-bloco--pendente   { border-color: color-mix(in oklch, var(--warning) 45%, transparent); }
+.rt-bloco--respondido { border-color: color-mix(in oklch, var(--accent) 45%, transparent); }
+.rt-bloco--fechado    { border-color: color-mix(in oklch, var(--success) 35%, transparent); }
+
+/* O selo de EDITADO é sobre o texto; o de estado é sobre a conversa. Um bloco
+   pode ter sido reescrito e continuar pendente — são perguntas diferentes. */
+.rt-selo {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 2px 8px; border-radius: var(--radius-pill);
+    font-size: 10px; font-weight: 700; letter-spacing: var(--tracking-wide);
+    text-transform: uppercase; white-space: nowrap;
+}
+.rt-selo i, .rt-selo svg { width: 11px; height: 11px; }
+.rt-selo--edit    { background: var(--surface-3);     color: var(--text-secondary); }
+.rt-selo--atencao { background: var(--warning-muted); color: var(--warning); }
+.rt-selo--info    { background: var(--accent-muted);  color: var(--accent); }
+.rt-selo--ok      { background: var(--success-muted); color: var(--success); }
+
+.rt-fio { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); }
+.rt-fala {
     display: flex; flex-direction: column; gap: var(--space-2);
-    margin-top: var(--space-2); padding: var(--space-3) var(--space-4);
-    border-radius: var(--radius-sm);
-    background: color-mix(in oklch, var(--warning) 10%, transparent);
+    padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm);
 }
-.rt-comentario__cabeca {
+/* O lado de quem falou se lê pelo recuo, antes de qualquer texto: o cliente
+   encosta à esquerda, a equipe entra deslocada. É a leitura de qualquer
+   conversa, e dispensa procurar o nome. */
+.rt-fala--cliente { background: color-mix(in oklch, var(--warning) 10%, transparent); }
+.rt-fala--equipe  { background: var(--surface-3); margin-left: var(--space-5); }
+.rt-fala__cabeca {
     display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;
-    font-size: var(--text-xs); font-weight: 600; color: var(--warning);
+    font-size: var(--text-xs); font-weight: 600; color: var(--text-secondary);
 }
-.rt-comentario__cabeca i, .rt-comentario__cabeca svg { width: 13px; height: 13px; }
-.rt-comentario__data { margin-left: auto; font-weight: 400; color: var(--text-tertiary); }
-.rt-comentario__texto { margin: 0; font-size: var(--text-sm); color: var(--text-primary); line-height: var(--leading-body); }
-.rt-comentario__antes {
+.rt-fala__cabeca i, .rt-fala__cabeca svg { width: 13px; height: 13px; }
+.rt-fala--atencao .rt-fala__cabeca { color: var(--warning); }
+.rt-fala--info .rt-fala__cabeca    { color: var(--accent); }
+.rt-fala--ok .rt-fala__cabeca      { color: var(--success); }
+.rt-fala__data { margin-left: auto; font-weight: 400; color: var(--text-tertiary); }
+.rt-fala__texto { margin: 0; font-size: var(--text-sm); color: var(--text-primary); line-height: var(--leading-body); }
+.rt-fala__antes {
     display: flex; align-items: flex-start; gap: var(--space-2); margin: 0;
     font-size: var(--text-xs); color: var(--text-tertiary); font-style: italic; line-height: var(--leading-body);
 }
-.rt-comentario__antes i, .rt-comentario__antes svg { width: 12px; height: 12px; flex-shrink: 0; margin-top: 2px; }
+.rt-fala__antes i, .rt-fala__antes svg { width: 12px; height: 12px; flex-shrink: 0; margin-top: 2px; }
+
+/* As ações ficam no fim do fio, não no menu ⋯: responder é a continuação
+   natural de ler, e esconder isso atrás de um menu é o que fazia a equipe ler
+   o comentário e não ter o que fazer com ele. */
+.rt-fio__acoes { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+
+/* O pisca de quem chegou aqui clicando num comentário. Só rolar não basta:
+   a tela tem sete blocos parecidos, e sem o destaque leva meio segundo para
+   saber em qual deles a rolagem parou. */
+@keyframes rt-piscar {
+    0%, 100% { box-shadow: 0 0 0 0 transparent; }
+    25%      { box-shadow: 0 0 0 3px var(--accent); }
+    60%      { box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 30%, transparent); }
+}
+.rt-bloco--piscando { animation: rt-piscar 1.6s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+    .rt-bloco--piscando { animation: none; box-shadow: 0 0 0 3px var(--accent); }
+}
 
 /* ── Adicionar ───────────────────────────────────────────────────────── */
 .rt-adicionar { display: flex; flex-direction: column; gap: var(--space-3); }
@@ -782,18 +1418,34 @@ const ESTILOS = `
 .rt-tipo:hover { border-style: solid; border-color: var(--accent); color: var(--accent); background: var(--accent-muted); }
 .rt-tipo i, .rt-tipo svg { width: 14px; height: 14px; }
 
-/* ── Retornos ────────────────────────────────────────────────────────── */
+/* ── A conversa, em resumo ───────────────────────────────────────────────
+   O item que fala de uma fala é um BOTÃO e leva até ela. Ler "a abertura ficou
+   agressiva" aqui e ter de caçar qual bloco é a abertura era o trabalho que
+   este clique elimina. */
 .rt-retornos { display: flex; flex-direction: column; gap: var(--space-2); }
-.rt-retorno { padding: var(--space-4); border-radius: var(--radius-md); background: var(--surface-3); }
+.rt-retorno {
+    display: block; width: 100%; text-align: left;
+    padding: var(--space-4); border: 1px solid transparent; border-radius: var(--radius-md);
+    background: var(--surface-3); font-family: var(--font-sans);
+}
+.rt-retorno--ir { cursor: pointer; transition: border-color var(--dur-fast), background-color var(--dur-fast); }
+.rt-retorno--ir:hover { border-color: var(--accent-border); background: var(--surface-2); }
+.rt-retorno--ir:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
 .rt-retorno__cabeca {
     display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;
     font-size: var(--text-xs); font-weight: 600; color: var(--text-tertiary);
 }
 .rt-retorno__cabeca i, .rt-retorno__cabeca svg { width: 13px; height: 13px; }
-.rt-retorno--aprovado .rt-retorno__cabeca { color: var(--success); }
-.rt-retorno--ajuste   .rt-retorno__cabeca { color: var(--warning); }
+.rt-retorno--ok      .rt-retorno__cabeca { color: var(--success); }
+.rt-retorno--atencao .rt-retorno__cabeca { color: var(--warning); }
+.rt-retorno--info    .rt-retorno__cabeca { color: var(--accent); }
 .rt-retorno__data { margin-left: auto; font-weight: 400; }
 .rt-retorno__texto { margin: var(--space-2) 0 0; font-size: var(--text-sm); color: var(--text-secondary); line-height: var(--leading-body); }
+.rt-retorno__ir {
+    display: inline-flex; align-items: center; gap: 5px; margin-top: var(--space-2);
+    font-size: var(--text-xs); font-weight: 600; color: var(--accent);
+}
+.rt-retorno__ir i, .rt-retorno__ir svg { width: 12px; height: 12px; }
 
 @media (max-width: 720px) {
     .rt-adicionar__tipos { gap: var(--space-1); }

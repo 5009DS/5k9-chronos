@@ -104,16 +104,28 @@ export const local = {
 
         const linha = await local.salvar('retornos', {
             ...retorno,
+            // Quem entra por aqui é o cliente, como na função do banco. O lado
+            // não vem por parâmetro de propósito (ver db/migracao-conversa.sql).
+            origem: 'cliente',
             id: crypto.randomUUID(),
             criado_em: new Date().toISOString(),
         });
-        // O status do conteúdo acompanha o último retorno: é o que faz a
-        // decisão do cliente aparecer no painel sem ninguém transcrever.
-        const conteudo = visao.conteudos.find(c => c.id === retorno.conteudo_id);
-        await local.salvar('conteudos', {
-            ...conteudo,
-            status: retorno.tipo === 'aprovado' ? 'aprovado' : 'ajuste',
-        });
+
+        /* O status do conteúdo acompanha o último retorno: é o que faz a
+           decisão do cliente aparecer no painel sem ninguém transcrever.
+
+           SÓ QUANDO O RETORNO É DO CONTEÚDO INTEIRO. "Esta fala ficou boa" é o
+           fim de um assunto, não a aprovação da peça. A regra vale igual no
+           banco; está repetida aqui porque os dois adaptadores precisam
+           responder a mesma coisa ao mesmo clique — divergência entre eles
+           aparece como bug que só acontece em produção. */
+        if (!retorno.bloco_id) {
+            const conteudo = visao.conteudos.find(c => c.id === retorno.conteudo_id);
+            await local.salvar('conteudos', {
+                ...conteudo,
+                status: retorno.tipo === 'aprovado' ? 'aprovado' : 'ajuste',
+            });
+        }
         return linha;
     },
 };

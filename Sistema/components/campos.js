@@ -71,6 +71,14 @@ const campoHTML = (c, valores) => {
         case 'cor':
             controle = `<input class="cp-cor" id="${id}" name="${c.nome}" type="color" value="${esc(v || '#A855FF')}">`;
             break;
+        /* type="email" pelo teclado: no celular ele traz o @ e o ponto na
+           primeira camada. A validação do navegador não entra aqui porque o
+           formulário não é submetido — quem valida é a tela que usa o valor. */
+        case 'email':
+            controle = `<input class="ds-input" id="${id}" name="${c.nome}" type="email"
+                               placeholder="${esc(c.placeholder || '')}" value="${esc(v ?? '')}"
+                               autocomplete="email" inputmode="email">`;
+            break;
         /* Nota: não é campo, é resultado. Existe para o formulário poder
            MOSTRAR uma conta enquanto a pessoa digita — "6x de R$ 700,00" —
            sem transformar o valor derivado num campo editável. Três campos

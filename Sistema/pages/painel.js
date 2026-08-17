@@ -346,6 +346,12 @@ export function formularioCliente(cl, aoTerminar) {
             { nome: 'empresa', rotulo: 'Empresa ou marca', largura: 'metade' },
             { nome: 'contato', rotulo: 'Quem aprova', largura: 'metade',
               dica: 'Só para a equipe saber com quem falar.' },
+            /* Dois campos e não um: "Dra. Helena (marketing)" diz com quem
+               falar e não é um endereço. Tirar e-mail de texto livre com regex
+               funciona até o dia em que alguém escreve dois, ou nenhum. */
+            { nome: 'email', rotulo: 'E-mail de quem aprova', tipo: 'email', largura: 'metade',
+              placeholder: 'helena@clinica.com.br',
+              dica: 'Usado para avisar que o ajuste pedido ficou pronto.' },
             { nome: 'proposito', rotulo: 'A estratégia em uma frase', tipo: 'textarea',
               placeholder: 'Posicionar a equipe como referência em medicina esportiva na região.',
               dica: 'Aparece no topo do cronograma do cliente. Dá contexto ao que ele está vendo.' },
