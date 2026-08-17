@@ -7,7 +7,7 @@ import { lerTemas, lerRoteiros } from '../lib/importar.js';
 import { objetivosDaFase, nomeFase, classificar } from '../lib/diretorio.js';
 import { chipFase, vazioHTML } from '../lib/pecas.js';
 import { tipo as tipoBloco } from '../lib/roteiro.js';
-import { esc, hoje, segundaDa, somarDias, dataBR, diaCurto, nomeDiaCurto } from '../lib/formato.js';
+import { esc, hoje, segundaDa, somarDias, dataBR, diaCurto, nomeDiaCurto, semAcento } from '../lib/formato.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    IMPORTAR — do PDF da social mídia para o cronograma.
@@ -432,11 +432,48 @@ export const renderImportar = async (container, clienteId, modoInicial = 'temas'
             </label>`;
     };
 
+    /* ═══════════════════════════════════════════════════════════════════
+       IMPORTAR DUAS VEZES NÃO DUPLICA
+
+       O cronograma do Dr. Daniel apareceu com cada tema três vezes, no mesmo
+       dia. Não foi o leitor de PDF: rodei os dois documentos pelo parser e
+       nenhum tema sai repetido. Foi o documento importado mais de uma vez —
+       o que é o comportamento NORMAL de quem sobe um PDF, vê que faltou uma
+       fase, corrige e sobe de novo.
+
+       Adivinhar por que ele subiu três vezes não protege ninguém. O que
+       protege é a importação parar de ser cega: o mesmo tema, no mesmo
+       cliente, não entra duas vezes. A comparação é por título normalizado
+       (sem acento, sem pontuação, sem caixa) e não por data, de propósito —
+       reimportar com outra semana inicial é justamente o caso que criava as
+       cópias em datas diferentes.
+
+       Quem quiser mesmo repetir um tema noutro mês cria o conteúdo à mão. É
+       raro, e é melhor que o contrário: um cronograma com três cópias da
+       mesma pauta, que alguém precisa apagar uma a uma.
+       ═══════════════════════════════════════════════════════════════════ */
+    const chaveTitulo = (t) => semAcento(t || '').replace(/[^a-z0-9]/g, '');
+
     async function gravarTemas(e, plano) {
         const b = e.target.closest('button');
         b.disabled = true;
         b.textContent = 'Importando…';
         try {
+            const jaExistem = new Set(
+                (await store.conteudos.listar())
+                    .filter(c => c.cliente_id === clienteId)
+                    .map(c => chaveTitulo(c.titulo)));
+
+            const novos = plano.filter(p => !jaExistem.has(chaveTitulo(p.tema.titulo)));
+            const repetidos = plano.length - novos.length;
+            plano = novos;
+
+            if (!plano.length) {
+                toast('Todos estes temas já estão no cronograma deste cliente. Nada foi importado.');
+                b.disabled = false;
+                b.textContent = 'Importar';
+                return;
+            }
             /* Um por vez, sem Promise.all: o adaptador local grava a coleção
                inteira a cada salvar, e disparar oitenta em paralelo faz a
                última escrita sobrescrever as setenta e nove anteriores. */
@@ -457,7 +494,8 @@ export const renderImportar = async (container, clienteId, modoInicial = 'temas'
                     revisado: false,
                 });
             }
-            toast(`${plano.length} conteúdo(s) importado(s) como rascunho.`);
+            toast(`${plano.length} conteúdo(s) importado(s) como rascunho.`
+                + (repetidos ? ` ${repetidos} já estava(m) no cronograma e ${repetidos > 1 ? 'foram ignorados' : 'foi ignorado'}.` : ''));
             navegar(`/cliente/${clienteId}`);
         } catch (err) {
             console.error('[importar] falha ao gravar temas:', err);

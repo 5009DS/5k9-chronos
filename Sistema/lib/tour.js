@@ -158,7 +158,22 @@ export const iniciarTour = ({ cliente, irPara, aoFim }) => {
         const passar = () => {
             itens.forEach(e => e.classList.remove('tr-realce'));
             n = (n + 1) % itens.length;
-            itens[n].classList.add('tr-realce');
+            const el = itens[n];
+            el.classList.add('tr-realce');
+
+            /* O destaque sem a tela junto não serve para nada: a região é mais
+               alta que o celular, então o ciclo passava por cartões fora de
+               vista e, de fora, parecia travado num só. A tela acompanha, e o
+               recorte da cortina passa a ser o cartão da vez — o holofote anda
+               em vez de iluminar a região inteira.
+
+               Rolagem seca, sem animação: são quatro trocas em seis segundos, e
+               animar cada uma deixaria a página em movimento contínuo. */
+            const r = el.getBoundingClientRect();
+            const ideal = 96;
+            if (Math.abs(r.top - ideal) > 24) window.scrollBy(0, r.top - ideal);
+            alvoAtual = el;
+            posicionar();
         };
         passar();
         ciclo = setInterval(passar, 1500);

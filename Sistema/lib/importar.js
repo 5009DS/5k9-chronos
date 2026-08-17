@@ -49,19 +49,23 @@ const parecidoCom = (a, b) => {
 
 const detectarFase = (linha) => {
     const n = soLetras(linha);
-    const temFunil = n.includes('funil');
 
-    /* O documento do Canva costuma trazer o nome da fase com subtítulo
-       inline: "TOPO DE FUNIL – Emagrecimento e Metabolismo" (47 chars).
-       O limite original de 32 rejeitava tudo isso e o parser perdia a
-       seção inteira. 60 cobre o caso real com margem.
+    /* ── A PALAVRA "funil" TAMBÉM CHEGA CORROMPIDA ────────────────────────
+       Era a última coisa que este parser tratava como confiável, e não é. No
+       PDF da Dra. Fernanda o cabeçalho chega "Toao de Funil"; no do Dr.
+       Daniel, "Topo de Funpl". Exigir a palavra escrita certa fez o segundo
+       documento perder a fase de TOPO inteira — 21 temas — enquanto o
+       primeiro passava, por sorte de qual letra foi trocada.
 
-       Linha SEM "funil" também pode ser cabeçalho de fase: alguns
-       documentos escrevem apenas "Topo", "Meio" ou "Fundo" numa linha
-       curta. Aceitar quando a linha é curta (≤ 20 chars) evita falso
-       positivo sem perder esse caso. */
-    if (temFunil && n.length > 60) return null;
-    if (!temFunil && n.length > 20) return null;
+       Então "funil" também é comparado por semelhança, palavra a palavra. É a
+       mesma régua já usada no nome da fase, aplicada ao resto do cabeçalho.
+
+       60 caracteres e não 32: o Canva traz subtítulo na mesma linha
+       ("TOPO DE FUNIL – Emagrecimento e Metabolismo", 47 chars). */
+    if (!n || n.length > 60) return null;
+    const palavras = n.split(' ');
+    const pareceFunil = palavras.some(w => w.length >= 4 && parecidoCom(w, 'funil') >= 0.6);
+    if (!pareceFunil) return null;
 
     const primeira = n.split(' ')[0];
     let melhor = null, nota = 0;
@@ -145,13 +149,13 @@ const acharEnfeites = (linhas) => {
 
     const enfeite = new Set();
     for (const [l, n] of conta) {
+        /* TRÊS ocorrências, não duas. Baixar para duas parecia resolver o
+           cabeçalho de um documento de duas páginas e cobrava caro: no PDF da
+           Dra. Fernanda, dez temas legítimos do meio de funil sumiram de uma
+           vez, porque um documento longo repete construção de título com mais
+           frequência do que se imagina. Enfeite que aparece só duas vezes
+           incomoda; tema que some não tem conserto na tela. */
         if (n >= 3) enfeite.add(l);
-        /* Documento de duas páginas tem cabeçalho que aparece EXATAMENTE
-           duas vezes. Antes só era removido a partir de três — e o nome
-           da cliente poluía o resultado. A condição extra (curta + sem
-           pontuação final) evita remover um tema que por coincidência
-           apareceu duas vezes. */
-        else if (n >= 2 && l.length <= 50 && !/[.?!]$/.test(l)) enfeite.add(l);
         else if (l.includes('|')) enfeite.add(l);
         else if (/^[A-Za-z]{0,3}\/\d/.test(l)) enfeite.add(l);
     }
@@ -305,7 +309,7 @@ export const lerTemas = (texto) => {
            deixaram de ser numerados, qualquer linha passou a poder ser tema —
            e a continuação, que nunca chegava a ser testada, virou tema órfão. */
         const ultimo = atual.temas[atual.temas.length - 1];
-        if (!esperandoNota && ultimo && !/[.?!:…""]$/.test(ultimo.titulo)) {
+        if (!esperandoNota && ultimo && !/[.?!:…”"]$/.test(ultimo.titulo)) {
             ultimo.titulo = tirarAspas(`${ultimo.titulo} ${linha}`);
             ultimo.divergencia = conferirTema(ultimo.titulo, atual.fase);
             continue;
@@ -325,12 +329,13 @@ export const lerTemas = (texto) => {
            apoiar, qualquer linha solta viraria tema, e o fim do documento
            costuma trazer capa e página de estratégia:
 
-             · menos de 10 caracteres não é tema, é rótulo picado pela extração
-               ("Reel 1", "oln M dl oo"). O limite original de 15 rejeitava
-               temas curtos válidos como "Botox facial" (12 chars);
+             · menos de 15 caracteres não é tema, é rótulo picado pela extração
+               ("Reel 1", "oln M dl oo" — este passou a entrar como tema quando
+               o limite caiu para 10, e é exatamente o tipo de sujeira que a
+               regra existe para barrar);
              · terminar em dois-pontos é abertura de lista, não pauta
                ("…pensamos em trabalhar com o método do funil de conteúdo:"). */
-        if (titulo.length < 10 || /:$/.test(titulo)) continue;
+        if (titulo.length < 15 || /:$/.test(titulo)) continue;
 
         /* Documento escrito por gente repete bloco ao copiar e colar entre
            seções. Importar o mesmo tema duas vezes criaria dois conteúdos
