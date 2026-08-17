@@ -157,6 +157,51 @@ exclui com desfazer. Ele fecha sozinho quando o botão sai da tela — é o mesm
 comportamento dos outros menus do estúdio, e evita um popover flutuando solto
 sem relação com o que o abriu.
 
+## O tour da primeira visita
+
+Na primeira vez que o cliente abre o link, um tour de onze passos explica a tela
+— usando **o cronograma dele**, não telas de exemplo. Quem termina já viu a
+própria semana, o próprio roteiro e o botão que vai apertar.
+
+Ele sai do cronograma, entra num conteúdo, mostra o comentário por fala, a
+resposta da equipe e a aprovação. A primeira e a última tela são cheias; as
+outras destacam um pedaço da página com o resto escurecido.
+
+**Nada é gravado.** O passo que mostra "a equipe ajustou" monta um bloco falso
+no DOM, com as mesmas classes do de verdade, e o apaga ao sair — e a tela diz,
+naquele passo, que aquilo é exemplo. Um tour que criasse um retorno de mentira
+custaria uma linha no histórico que ninguém escreveu, e o histórico é a peça
+deste sistema que precisa ser confiável acima de tudo.
+
+O passo que abre o conteúdo mostra um toque animado no cartão antes de navegar:
+sem isso a troca de tela parece o sistema pulando sozinho, e a pessoa não
+aprende que é o cartão que abre o roteiro.
+
+Sair é o X no canto, ou Esc. **Ver o tour desta tela**, no fim da legenda,
+reabre quando alguém quiser.
+
+### Por que localStorage, e não IP
+
+O pedido era mostrar uma vez por pessoa. IP não identifica pessoa: uma clínica
+inteira sai pelo mesmo endereço — o tour sumiria para a segunda pessoa, que
+nunca o viu — e o IP de celular muda sozinho ao trocar de torre, o que traria o
+tour de volta para quem já viu. Errado nas duas direções. E o navegador não
+entrega o IP ao JavaScript: só o servidor o enxerga, e este sistema não tem
+servidor.
+
+Identificação de aparelho de verdade é impressão digital de navegador: dá
+trabalho, funciona mal e coleta dado pessoal sem consentimento para resolver
+"não mostrar um aviso duas vezes".
+
+Então é uma marca no navegador, por token de cliente. O limite é honesto: quem
+abrir noutro aparelho vê de novo, e quem limpar o navegador também. O custo de
+errar é ver uma explicação repetida, com o botão de fechar no primeiro passo.
+
+Duas condições para ele rodar: existir pelo menos um conteúdo **com roteiro** —
+sem blocos, metade dos passos não teria o que apontar — e a visita começar pelo
+cronograma. Quem chega por um link direto de roteiro veio revisar aquilo, e não
+é hora de ser interrompido; o tour espera a próxima visita.
+
 ## O cliente comenta a fala, não só o conteúdo
 
 Na tela do cliente, **tocar numa fala** a seleciona e abre o campo de comentário

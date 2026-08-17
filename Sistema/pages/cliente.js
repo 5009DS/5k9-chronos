@@ -12,6 +12,7 @@ import {
 import { openDrawer, closeDrawer } from '../components/drawer.js';
 import { toast } from '../components/toast.js';
 import { conversas, estadoMeta, ato, daEquipe, novidadesPara } from '../lib/conversa.js';
+import { iniciarTour, tourVisto, marcarTourVisto } from '../lib/tour.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    A TELA DO CLIENTE — /c/<token> e /c/<token>/<conteúdo>
@@ -128,11 +129,64 @@ const desenharCronograma = (container, token, visao) => {
         container.querySelector('#cl-proximo').addEventListener('click', () => {
             mesVisto = somarMeses(mesVisto, 1); desenhar();
         });
+        container.querySelector('#cl-tour')?.addEventListener('click', () => abrirTour(container, token, visao));
         ligarTema(container);
         if (window.lucide) lucide.createIcons();
     };
 
     desenhar();
+
+    /* Na primeira visita, o tour começa sozinho. Depois disso, só pelo link no
+       rodapé — nada abre por cima de quem já sabe usar a tela. */
+    if (!tourVisto(token)) abrirTour(container, token, visao);
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   O TOUR
+
+   `tourRodando` existe porque o tour NAVEGA: ele redesenha a tela do cliente
+   para levar a pessoa até um roteiro, e cada redesenho volta a passar por
+   aqui. Sem a trava, o passo que abre um conteúdo dispararia um segundo tour
+   por cima do primeiro.
+
+   O exemplo é escolhido, não sorteado: um conteúdo que tenha roteiro — sem
+   blocos, metade dos passos não teria o que apontar — e de preferência um que
+   esteja esperando resposta, para o passo do "Aprovar" mostrar o botão no
+   estado em que a pessoa vai encontrá-lo.
+
+   Sem nenhum conteúdo com roteiro, o tour não roda e não fica marcado como
+   visto: ele espera a próxima visita, quando houver o que mostrar.
+   ═══════════════════════════════════════════════════════════════════════════ */
+let tourRodando = false;
+
+const abrirTour = (container, token, visao) => {
+    if (tourRodando) return;
+
+    const comRoteiro = visao.conteudos.filter(c =>
+        visao.blocos.some(b => b.conteudo_id === c.id));
+    const exemplo = comRoteiro.find(c => c.status === 'em_revisao')
+                 || comRoteiro.find(c => c.status === 'ajuste')
+                 || comRoteiro[0];
+    if (!exemplo) return;
+
+    tourRodando = true;
+    iniciarTour({
+        cliente: visao.cliente,
+        conteudoId: exemplo.id,
+        /* Navega pelo ROTEADOR, e não chamando renderCliente direto. Desenhar
+           na mão deixaria o endereço mostrando o cronograma enquanto a tela
+           mostra um roteiro — e quem fechasse o tour ali e recarregasse a
+           página cairia noutro lugar. O caminho tem de acompanhar a tela. */
+        irPara: async (conteudoId) => {
+            navegar(conteudoId ? `/c/${token}/${conteudoId}` : `/c/${token}`);
+            // Um quadro para o desenho assentar antes de o tour medir o alvo.
+            await new Promise(r => requestAnimationFrame(() => setTimeout(r, 120)));
+        },
+        aoFim: () => {
+            tourRodando = false;
+            marcarTourVisto(token);
+        },
+    });
 };
 
 const semanaHTML = ({ segunda, conteudos }, token) => {
@@ -760,6 +814,12 @@ const legenda = () => `
                     <span><strong>${nome} de funil.</strong> ${texto}</span>
                 </div>`).join('')}
         </div>
+        <!-- Rever o tour precisa existir em algum lugar: ele roda uma vez só, e
+             quem fechou no primeiro passo — ou abriu o link noutro aparelho —
+             não teria como voltar. Discreto de propósito: é para quem procura. -->
+        <button class="cl-tour-link" id="cl-tour">
+            <i data-lucide="compass"></i> Ver o tour desta tela
+        </button>
     </section>`;
 
 function ligarTema(container) {
@@ -869,6 +929,17 @@ function injectStyles() {
         .cl-legenda__intro strong { color: var(--text-primary); }
         .cl-legenda__linhas { display: flex; flex-direction: column; gap: var(--space-3); }
         .cl-legenda__linha { display: flex; align-items: flex-start; gap: var(--space-3); font-size: var(--text-sm); color: var(--text-tertiary); line-height: var(--leading-body); }
+        .cl-tour-link {
+            display: inline-flex; align-items: center; gap: var(--space-2);
+            align-self: flex-start; min-height: 40px; padding: 0 var(--space-3);
+            margin-top: var(--space-2);
+            border: 1px solid var(--border-subtle); border-radius: var(--radius-pill);
+            background: transparent; color: var(--text-tertiary);
+            font-family: var(--font-sans); font-size: var(--text-xs); font-weight: 600;
+            cursor: pointer;
+        }
+        .cl-tour-link:hover { border-color: var(--accent-border); color: var(--accent); }
+        .cl-tour-link i, .cl-tour-link svg { width: 14px; height: 14px; }
         .cl-legenda__linha .vz-ponto { margin-top: 7px; }
         .cl-legenda__linha strong { color: var(--text-primary); }
 
