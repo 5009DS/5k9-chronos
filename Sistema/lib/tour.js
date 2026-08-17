@@ -137,6 +137,32 @@ export const iniciarTour = ({ cliente, irPara, aoFim }) => {
     let i = 0;
     let tela = 'cronograma';
     let alvoAtual = null;
+    let ciclo = null;
+
+    /* ── O passeio pelos cartões ──────────────────────────────────────────
+       A região da estratégia tem quatro ou cinco cartões, e o passo fala de
+       todos de uma vez. Destacar um por vez, em ciclo, mostra QUAIS são sem
+       precisar de quatro passos — a leitura acompanha o destaque em vez de
+       procurar sozinha o que o texto está descrevendo. */
+    const pararRealce = () => {
+        clearInterval(ciclo);
+        ciclo = null;
+        document.querySelectorAll('.tr-realce').forEach(e => e.classList.remove('tr-realce'));
+    };
+
+    const realcarEmCiclo = (seletor) => {
+        pararRealce();
+        const itens = [...document.querySelectorAll(seletor)].filter(e => e.offsetHeight > 20);
+        if (itens.length < 2) return;
+        let n = -1;
+        const passar = () => {
+            itens.forEach(e => e.classList.remove('tr-realce'));
+            n = (n + 1) % itens.length;
+            itens[n].classList.add('tr-realce');
+        };
+        passar();
+        ciclo = setInterval(passar, 1500);
+    };
 
     // ── Os passos ────────────────────────────────────────────────────────
     const TODOS = [
@@ -186,6 +212,7 @@ export const iniciarTour = ({ cliente, irPara, aoFim }) => {
             tela: 'conteudo',
             alvo: () => document.querySelector('.cl-estrategia') || document.querySelector('.cl-ficha'),
             titulo: 'Por que este conteúdo existe',
+            antes: () => realcarEmCiclo('.cl-estrategia > *'),
             texto: 'Esta parte é escrita pelo sistema, não por nós: ele cruza o papel no funil '
                  + 'com o objetivo da peça e explica o que ela precisa provocar, o que evitar e '
                  + 'como medir depois de publicada. É a resposta para "por que estamos gravando '
@@ -208,7 +235,14 @@ export const iniciarTour = ({ cliente, irPara, aoFim }) => {
                  + 'e envie. Chega para a equipe já apontando a frase exata.',
             antes: () => {
                 const fala = document.querySelector('.cl-fala');
-                if (fala && !document.querySelector('.cl-comentario')) fala.click();
+                if (fala && !document.querySelector('.cl-comentario')) {
+                    fala.click();
+                    /* O campo recebe foco sozinho ao abrir — é o certo quando
+                       foi a pessoa que tocou. Aqui quem tocou foi o tour, e o
+                       teclado do celular subindo por conta própria come metade
+                       da tela justamente no passo que explica a tela. */
+                    document.activeElement?.blur?.();
+                }
             },
             alvoDepoisDoAntes: () => {
                 const fala = document.querySelector('.cl-fala');
@@ -266,6 +300,7 @@ export const iniciarTour = ({ cliente, irPara, aoFim }) => {
 
     // ── Motor ────────────────────────────────────────────────────────────
     const sair = () => {
+        pararRealce();
         limparFalso();
         fecharComentario();
         window.removeEventListener('resize', posicionar);
@@ -290,6 +325,11 @@ export const iniciarTour = ({ cliente, irPara, aoFim }) => {
     };
 
     async function mostrar() {
+      /* Try/catch em volta do passo inteiro: um passo que estoura no meio
+         deixava o tour parado no card anterior, sem erro visível — a pessoa
+         aperta "Próximo" e nada acontece. Agora ele registra e segue. */
+      try {
+        pararRealce();
         const p = passos[i];
 
         if (p.tela !== tela && p.tela !== 'cheia') {
@@ -312,12 +352,21 @@ export const iniciarTour = ({ cliente, irPara, aoFim }) => {
            esperado, e `behavior: 'smooth'` já foi visto sendo ignorado em
            silêncio por navegador — com o alvo fora da tela, o foco assentaria
            no lugar errado. */
-        /* Alvo mais alto que a tela vai para o TOPO, não para o centro:
-           centralizado, ele começaria acima da janela e o destaque abriria no
-           meio de uma frase. */
-        const alto = (primeiro?.getBoundingClientRect().height || 0) > window.innerHeight - 220;
-        primeiro?.scrollIntoView({ block: alto ? 'start' : 'center' });
+        /* O alvo sobe para PERTO DO TOPO, nunca para o centro. Centralizado,
+           ele dividia a tela com o card — e no celular, onde o card ocupa
+           metade da altura, a metade de baixo do alvo ficava atrás dele. Com o
+           alvo em cima e o card embaixo, os dois cabem. Elemento fixo (a barra
+           de ação) não rola: rolar por ele moveria a página inteira à toa. */
+        if (primeiro && getComputedStyle(primeiro).position !== 'fixed') {
+            window.scrollBy(0, primeiro.getBoundingClientRect().top - 72);
+        }
         requestAnimationFrame(posicionar);
+      } catch (e) {
+        console.error('[tour] passo', i + 1, 'falhou:', e);
+        if (i >= passos.length - 1) return sair();
+        i++;
+        return mostrar();
+      }
     }
 
     function desenharCard(p) {
@@ -376,7 +425,9 @@ export const iniciarTour = ({ cliente, irPara, aoFim }) => {
            destaque cortado na altura do que cabe. Um buraco que começa acima e
            termina abaixo da janela não destaca nada: some a cortina e o passo
            vira uma página normal com um balão em cima. */
-        const limite = window.innerHeight - 200;
+        // Reserva a altura real do card, e não um número fixo: no celular ele
+        // passa de 300px, e 200 deixava o recorte crescer por baixo dele.
+        const limite = window.innerHeight - (card.offsetHeight || 240) - 40;
         const base = Math.min(
             Math.max(...caixas.map(r => r.bottom)) + folga,
             topo + limite,
@@ -572,6 +623,16 @@ function injetarEstilos() {
         }
         .tr-ponto.is-visto { background: var(--accent-border); }
         .tr-ponto.is-atual { width: 18px; border-radius: var(--radius-pill); background: var(--accent); }
+
+        /* O cartão da vez, no passeio pela estratégia. Outline e não borda:
+           não muda o tamanho do elemento, então nada se mexe a cada troca. */
+        .tr-realce {
+            outline: 2px solid var(--accent);
+            outline-offset: 3px;
+            border-radius: var(--radius-md);
+            transition: outline-color .35s var(--ease-out, ease);
+        }
+        @media (prefers-reduced-motion: reduce) { .tr-realce { transition: none; } }
 
         /* O toque simulado. Sem ele, a mudança de tela parece o sistema
            pulando sozinho — e a pessoa não aprende que foi o cartão que abre. */

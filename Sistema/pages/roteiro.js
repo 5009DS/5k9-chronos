@@ -68,6 +68,23 @@ export const renderRoteiro = async (container, conteudoId) => {
        cliente usa. Duas leituras do mesmo histórico acabariam discordando, e o
        sistema perderia a única coisa que ele oferece: um lugar onde os dois
        lados olham o mesmo estado. */
+    /* ── Limpeza de quem já ficou órfão ──────────────────────────────────
+       A regra "sem roteiro, sem conversa" passou a valer na hora de excluir.
+       Ela não alcança o que foi apagado ANTES dela existir: conteúdos que
+       ficaram sem bloco nenhum e continuaram com "aprovado por você" e com o
+       histórico inteiro pendurado.
+
+       Então a regra também se aplica na abertura: um conteúdo sem roteiro não
+       pode ter conversa nem estado vindo do cliente, tenha isso acontecido
+       hoje ou no mês passado. Roda uma vez por conteúdo — depois da limpeza a
+       condição não se repete. */
+    if (!blocos.length && (historico.length || ['aprovado', 'ajuste', 'em_revisao'].includes(c.status))) {
+        for (const r of historico) await store.retornos.excluir(r.id);
+        if (c.status !== 'rascunho') await store.conteudos.salvar({ ...c, status: 'rascunho' });
+        toast('Este conteúdo estava sem roteiro: a conversa e o estado antigos saíram junto.');
+        return renderRoteiro(container, conteudoId);
+    }
+
     const fio = conversas(historico);
 
     /* ── Seleção múltipla ───────────────────────────────────────────────

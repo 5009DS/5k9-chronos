@@ -179,8 +179,11 @@ const abrirTour = (container, token, visao) => {
             } else {
                 desenharCronograma(container, token, visao);
             }
-            // Um quadro para o desenho assentar antes de o tour medir o alvo.
-            await new Promise(r => requestAnimationFrame(() => setTimeout(r, 120)));
+            /* Um respiro para o desenho assentar antes de o tour medir o alvo.
+               setTimeout puro, e não requestAnimationFrame: rAF fica SUSPENSO
+               em aba de segundo plano, e o tour parava no passo anterior sem
+               erro nenhum — a pessoa aperta "Próximo" e nada acontece. */
+            await new Promise(r => setTimeout(r, 140));
         },
         aoFim: () => {
             tourRodando = false;
