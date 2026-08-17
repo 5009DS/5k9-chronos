@@ -12,7 +12,7 @@ import {
 import { openDrawer, closeDrawer } from '../components/drawer.js';
 import { toast } from '../components/toast.js';
 import { conversas, estadoMeta, ato, daEquipe, novidadesPara } from '../lib/conversa.js';
-import { iniciarTour, tourVisto, marcarTourVisto } from '../lib/tour.js';
+import { iniciarTour, tourVisto, marcarTourVisto, MODELO } from '../lib/tour.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    A TELA DO CLIENTE — /c/<token> e /c/<token>/<conteúdo>
@@ -162,34 +162,32 @@ let tourRodando = false;
 const abrirTour = (container, token, visao) => {
     if (tourRodando) return;
 
-    const comRoteiro = (visao.conteudos || []).filter(c =>
-        (visao.blocos || []).some(b => b.conteudo_id === c.id));
-    /* Sem exemplo o tour AINDA roda, só sem os passos de dentro do roteiro
-       (lib/tour.js corta a lista). Antes ele desistia em silêncio, e o botão
-       "Ver o tour desta tela" não fazia nada — que é o mesmo que estar
-       quebrado, para quem está do outro lado. */
-    const exemplo = comRoteiro.find(c => c.status === 'em_revisao')
-                 || comRoteiro.find(c => c.status === 'ajuste')
-                 || comRoteiro[0]
-                 || null;
-
     tourRodando = true;
     try {
     iniciarTour({
         cliente: visao.cliente,
-        conteudoId: exemplo?.id || null,
-        /* Navega pelo ROTEADOR, e não chamando renderCliente direto. Desenhar
-           na mão deixaria o endereço mostrando o cronograma enquanto a tela
-           mostra um roteiro — e quem fechasse o tour ali e recarregasse a
-           página cairia noutro lugar. O caminho tem de acompanhar a tela. */
-        irPara: async (conteudoId) => {
-            navegar(conteudoId ? `/c/${token}/${conteudoId}` : `/c/${token}`);
+        /* A tela de roteiro do tour é desenhada com o conteúdo MODELO, pelos
+           mesmos componentes da tela real — não é maquete, é a tela de
+           verdade com outro dado dentro. E o endereço NÃO muda: não existe
+           rota para um conteúdo que não está no banco, e um /c/token/tour-modelo
+           no histórico do navegador daria "conteúdo não encontrado" na primeira
+           vez que alguém apertasse voltar. */
+        irPara: async (destino) => {
+            if (destino === 'modelo') {
+                desenharConteudo(container, token, visaoModelo(visao), MODELO.conteudo.id);
+                marcarModelo(container);
+            } else {
+                desenharCronograma(container, token, visao);
+            }
             // Um quadro para o desenho assentar antes de o tour medir o alvo.
             await new Promise(r => requestAnimationFrame(() => setTimeout(r, 120)));
         },
         aoFim: () => {
             tourRodando = false;
             marcarTourVisto(token);
+            // Sair no meio do modelo não pode deixar a pessoa numa tela que
+            // não é dela: a última coisa que o tour faz é devolver o cronograma.
+            desenharCronograma(container, token, visao);
         },
     });
     } catch (e) {
@@ -199,6 +197,29 @@ const abrirTour = (container, token, visao) => {
         tourRodando = false;
         toast('Não consegui abrir o tour agora. O cronograma continua funcionando normalmente.');
     }
+};
+
+/* A visão que o tour usa: o cliente de verdade — o nome no cabeçalho é o dele —
+   com o conteúdo modelo no lugar do cronograma. Sem retornos: a conversa que o
+   tour mostra é montada na hora, no passo em que ela é explicada. */
+const visaoModelo = (visao) => ({
+    cliente: visao.cliente,
+    conteudos: [MODELO.conteudo],
+    blocos: MODELO.blocos,
+    retornos: [],
+});
+
+/* A faixa que impede o mal-entendido. Sem ela, alguém sai do tour convencido de
+   que tem um conteúdo sobre flacidez na agenda — e a primeira pergunta ao time
+   é "onde foi parar aquele reels?". */
+const marcarModelo = (container) => {
+    container.querySelector('.cl-corpo')?.insertAdjacentHTML('afterbegin', `
+        <p class="cl-modelo" data-tour="modelo">
+            <i data-lucide="flask-conical"></i>
+            <span><strong>Este é um exemplo do tour.</strong> Ele não está no seu cronograma —
+            serve só para mostrar como um roteiro aparece aqui.</span>
+        </p>`);
+    if (window.lucide) lucide.createIcons();
 };
 
 const semanaHTML = ({ segunda, conteudos }, token) => {
@@ -1088,6 +1109,15 @@ function injectStyles() {
             font-size: var(--text-sm); font-weight: 500; line-height: var(--leading-body);
         }
         .cl-novidade i, .cl-novidade svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 2px; }
+
+        /* A faixa de "isto é exemplo", na tela do modelo do tour. */
+        .cl-modelo {
+            display: flex; align-items: flex-start; gap: var(--space-2); margin: 0;
+            padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
+            background: var(--warning-muted); color: var(--warning);
+            font-size: var(--text-sm); line-height: var(--leading-body);
+        }
+        .cl-modelo i, .cl-modelo svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 2px; }
 
         .cl-retorno {
             padding: var(--space-4); border-radius: var(--radius-md);

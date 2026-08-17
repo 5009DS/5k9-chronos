@@ -159,9 +159,9 @@ sem relação com o que o abriu.
 
 ## O tour da primeira visita
 
-Na primeira vez que o cliente abre o link, um tour de onze passos explica a tela
-— usando **o cronograma dele**, não telas de exemplo. Quem termina já viu a
-própria semana, o próprio roteiro e o botão que vai apertar.
+Na primeira vez que o cliente abre o link, um tour de onze passos explica a
+tela. O cronograma que aparece por trás é **o dele** — é a agenda dele que ele
+precisa aprender a ler. O roteiro é um **modelo**, montado na memória.
 
 Ele sai do cronograma, entra num conteúdo, mostra o comentário por fala, a
 resposta da equipe e a aprovação. A primeira e a última tela são cheias; as
@@ -197,10 +197,30 @@ Então é uma marca no navegador, por token de cliente. O limite é honesto: que
 abrir noutro aparelho vê de novo, e quem limpar o navegador também. O custo de
 errar é ver uma explicação repetida, com o botão de fechar no primeiro passo.
 
-Sem nenhum conteúdo com roteiro, os passos que moram dentro de um roteiro saem
-da lista e o tour roda com o que dá para mostrar — cinco passos em vez de onze.
-Ele desistia em silêncio nesse caso, e o resultado era o pior possível: apertar
-"Ver o tour desta tela" não fazia nada, sem erro e sem pista.
+### Por que o roteiro é um modelo
+
+A primeira versão abria um conteúdo real do cliente. Era sedutor — "veja o seu,
+não um exemplo" — e errado por dois motivos.
+
+Quebrava: cliente novo, ou cliente cujo único roteiro acabou de ser apagado, não
+tinha o que mostrar, e o tour desistia calado. Apertar "Ver o tour desta tela"
+não fazia nada, sem erro e sem pista.
+
+E, pior, deixava a explicação refém do estado do dado. O passo do comentário
+depende de haver fala; o da resposta, de haver conversa; o do "Aprovar", de o
+conteúdo estar aguardando. Cada cliente veria uma versão diferente do tour, e
+algumas veriam uma versão sem sentido.
+
+O modelo — o roteiro de flacidez na face, com o tema e a classificação que
+combinam com ele — **não existe no banco**, não pertence a cliente nenhum e não
+entra em cronograma. É desenhado pelos mesmos componentes da tela real: não é
+maquete, é a tela de verdade com outro dado dentro. Uma faixa no topo diz que
+aquilo é exemplo, para ninguém sair do tour procurando o reels de flacidez na
+própria agenda.
+
+O endereço não muda enquanto o modelo está aberto: não há rota para um conteúdo
+que não está no banco, e deixá-la no histórico daria "conteúdo não encontrado"
+no primeiro toque em voltar. Sair no meio devolve o cronograma.
 
 O início automático espera a visita começar pelo cronograma: quem chega por um
 link direto de roteiro veio revisar aquilo, e não é hora de ser interrompido.

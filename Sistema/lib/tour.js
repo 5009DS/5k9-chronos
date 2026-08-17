@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    O TOUR DA TELA DO CLIENTE
 
-   Roda uma vez, na primeira visita, e explica o sistema com a tela do próprio
-   cliente por trás — não com desenhos de exemplo. Quem termina o tour já viu
-   o cronograma dele, o roteiro dele e o botão que ele vai apertar.
+   Roda uma vez, na primeira visita. O cronograma que aparece por trás é o
+   DELE — é a agenda dele que ele precisa aprender a ler. O roteiro é um
+   MODELO, pelo motivo explicado logo abaixo.
 
    ── O QUE ELE NUNCA FAZ ───────────────────────────────────────────────────
    NÃO GRAVA NADA. O passo que mostra "a equipe ajustou" monta um bloco falso
@@ -33,6 +33,65 @@
    explicação repetida, e o botão de fechar está no primeiro passo.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   O CONTEÚDO MODELO
+
+   O tour usava um conteúdo REAL do cliente para mostrar a tela de roteiro. Era
+   sedutor — "veja o seu, não um exemplo" — e errado por dois motivos.
+
+   O primeiro é que quebrava. Cliente novo, ou cliente cujo único roteiro
+   acabou de ser apagado, não tinha o que mostrar, e o tour desistia calado.
+
+   O segundo é pior e não teria conserto: a explicação ficava refém do estado
+   do dado. O passo do comentário depende de haver fala; o passo da resposta,
+   de haver conversa; o do "Aprovar", de estar aguardando resposta. Com o
+   conteúdo real, cada cliente veria uma versão diferente do tour, e algumas
+   veriam uma versão sem sentido — "é assim que a resposta chega" apontando
+   para uma fala que ninguém comentou.
+
+   Então o tour tem o próprio conteúdo. Ele NÃO existe no banco, não pertence
+   a cliente nenhum e não entra em cronograma: é montado na memória, desenhado
+   pelos MESMOS componentes da tela de verdade, e desaparece quando o tour
+   fecha. A tela mostra, em cima, que aquilo é exemplo.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+export const MODELO = {
+    conteudo: {
+        id: 'tour-modelo',
+        titulo: 'Flacidez na face depois do emagrecimento',
+        tema: 'Por que o rosto muda quando o peso cai, e o que dá para fazer a respeito.',
+        fase: 'meio',
+        objetivo: 'educacao',
+        formato: 'Reels',
+        canal: 'Instagram',
+        status: 'em_revisao',
+        intencao: 'Explicar a causa antes de falar em tratamento, para a consulta chegar '
+                + 'como consequência do entendimento e não como oferta.',
+        data: new Date().toISOString().slice(0, 10),
+    },
+    /* A tipagem segue as mesmas três regras do parser (lib/importar.js): a
+       primeira fala é gancho, a última é chamada para ação porque pede algo, e
+       "Isso é mais comum do que parece." é frase curta — cabe em 58
+       caracteres, não tem vírgula e termina em ponto. */
+    blocos: [
+        ['gancho', 'Você emagreceu e percebeu que seu rosto ficou mais "caído" ou com aspecto mais envelhecido?'],
+        ['frase',  'Isso é mais comum do que parece.'],
+        ['fala',   'Quando perdemos peso, não eliminamos apenas gordura corporal. Também ocorre uma redução dos compartimentos de gordura da face, que são importantes para sustentar e dar volume ao rosto.'],
+        ['fala',   'Dependendo da idade, da qualidade da pele, da genética e da velocidade do emagrecimento, essa perda de volume pode deixar a flacidez mais evidente.'],
+        ['fala',   'Mas isso não significa que você precisa escolher entre emagrecer ou ter um rosto bonito.'],
+        ['fala',   'Hoje existem tratamentos dermatológicos capazes de estimular colágeno, melhorar a firmeza da pele e restaurar pontos estratégicos de sustentação facial.'],
+        ['fala',   'O mais importante é entender que cada rosto envelhece e responde de uma forma diferente.'],
+        ['fala',   'Por isso, a avaliação individualizada é fundamental para definir o melhor plano de tratamento.'],
+        ['cta',    'Eu sou a Dra. Laiz Lourenço, médica dermatologista do Instituto Dr. Tigre e te aguardo pra uma avaliação!'],
+    ].map(([tipo, texto], i) => ({
+        id: `tour-b${i}`,
+        conteudo_id: 'tour-modelo',
+        tipo,
+        texto,
+        ordem: (i + 1) * 10,
+    })),
+};
+
 const CHAVE = '5k9_visualizador_tour';
 
 export const tourVisto = (token) => {
@@ -56,11 +115,10 @@ const saudar = (cliente) => {
 /**
  * @param {object}   opcoes
  * @param {object}   opcoes.cliente
- * @param {string}   opcoes.conteudoId   conteúdo usado como exemplo
- * @param {Function} opcoes.irPara       (conteudoId|null) => Promise, redesenha a tela
- * @param {Function} opcoes.aoFim        chamada no fim e no fechar
+ * @param {Function} opcoes.irPara  ('modelo'|null) => Promise, redesenha a tela
+ * @param {Function} opcoes.aoFim   chamada no fim e no fechar
  */
-export const iniciarTour = ({ cliente, conteudoId, irPara, aoFim }) => {
+export const iniciarTour = ({ cliente, irPara, aoFim }) => {
     injetarEstilos();
 
     const camada = document.createElement('div');
@@ -115,8 +173,7 @@ export const iniciarTour = ({ cliente, conteudoId, irPara, aoFim }) => {
             texto: 'Dia da publicação, papel no funil, formato — reels, carrossel, story — e em '
                  + 'que pé está: esperando você, aprovado ou com ajuste pedido. Tocar no cartão '
                  + 'abre o roteiro.',
-            botao: 'Abrir este conteúdo',
-            abreConteudo: true,
+            botao: 'Ver um roteiro',
             // O clique é simulado: a pessoa precisa VER que foi o toque no
             // cartão que abriu a próxima tela, senão a navegação parece um
             // salto do sistema e não uma ação dela.
@@ -202,19 +259,10 @@ export const iniciarTour = ({ cliente, conteudoId, irPara, aoFim }) => {
         },
     ];
 
-    /* Sem conteúdo com roteiro, os passos que moram dentro de um roteiro saem
-       da lista — e o tour continua, com o que dá para mostrar.
-
-       Antes ele simplesmente não abria nesse caso, e o resultado era o pior
-       possível: apertar "Ver o tour desta tela" não fazia nada, sem erro, sem
-       aviso, sem pista. Um cliente novo, ou um cliente cujo único roteiro
-       acabou de ser apagado, caía exatamente nisso. */
-    const passos = TODOS
-        .filter(p => p.tela !== 'conteudo' || !!conteudoId)
-        // Sem os passos de dentro do roteiro, o passo do cartão não abre coisa
-        // nenhuma — e um botão escrito "Abrir este conteúdo" que leva à tela de
-        // despedida é pior que a falta do tour.
-        .map(p => (p.abreConteudo && !conteudoId ? { ...p, botao: undefined, depois: undefined } : p));
+    /* Nenhum passo depende do dado do cliente: os de dentro do roteiro rodam
+       sobre o conteúdo modelo, que existe sempre. O tour tem o mesmo tamanho
+       para todo mundo. */
+    const passos = TODOS;
 
     // ── Motor ────────────────────────────────────────────────────────────
     const sair = () => {
@@ -246,7 +294,7 @@ export const iniciarTour = ({ cliente, conteudoId, irPara, aoFim }) => {
 
         if (p.tela !== tela && p.tela !== 'cheia') {
             card.classList.add('is-indo');
-            await irPara(p.tela === 'conteudo' ? conteudoId : null);
+            await irPara(p.tela === 'conteudo' ? 'modelo' : null);
             tela = p.tela;
             card.classList.remove('is-indo');
         }
@@ -418,7 +466,10 @@ function montarFioFalso(cliente) {
 }
 
 function limparFalso() {
-    document.querySelectorAll('[data-tour]').forEach(e => e.remove());
+    /* `[data-tour="fio"]`, e não `[data-tour]` inteiro: a faixa de "isto é um
+       exemplo" também é do tour e precisa continuar na tela enquanto o modelo
+       estiver aberto. Ela sai junto com o modelo, no redesenho do fim. */
+    document.querySelectorAll('[data-tour="fio"]').forEach(e => e.remove());
     document.querySelectorAll('[data-tour-classe]').forEach(e => {
         e.classList.remove('cl-fala--conversa', 'cl-fala--respondido');
         e.removeAttribute('data-tour-classe');
