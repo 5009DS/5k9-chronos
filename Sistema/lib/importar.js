@@ -749,3 +749,133 @@ export const lerRoteiroUnico = (texto) => {
     tipar(limpos);
     return { titulo, blocos: limpos };
 };
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CRONOGRAMA JÁ MONTADO
+
+   O documento de temas é matéria-prima: o sistema é que decide em que dia cada
+   um cai. Este é o caso oposto — a social media já montou o mês, com data,
+   fase e formato definidos, e trazer isso para cá reescrevendo linha por linha
+   no formulário é o tipo de trabalho que existe só porque o sistema não sabe
+   ler.
+
+   ── O FORMATO É O QUE ELA JÁ USA ──────────────────────────────────────────
+   Nenhum modelo para preencher, nenhuma coluna obrigatória em ordem fixa. Uma
+   linha por conteúdo, com os campos separados por | ; tab ou hífen:
+
+       24/08 | Fundo | Quem deveria procurar um nutrólogo? | Reels
+       26/08 - meio - Por que o peso volta depois da dieta? - Carrossel
+       2026-08-28  topo  Você não come tanto assim
+
+   Cada pedaço é reconhecido pelo QUE ELE É, não pela posição: data é o que
+   tem cara de data, fase é a palavra que parece topo/meio/fundo, formato é o
+   que está na lista de formatos, e o que sobra — o pedaço mais longo — é o
+   título. Colar uma planilha com as colunas em outra ordem funciona igual.
+
+   O que falta não impede a leitura: linha sem fase entra sem fase e o sistema
+   sugere uma pelo classificador; linha sem data entra na fila para ser
+   distribuída. A tela mostra os dois casos antes de gravar.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const FORMATOS = ['reels', 'reel', 'carrossel', 'carousel', 'story', 'stories',
+    'post', 'feed', 'video', 'live', 'shorts', 'tiktok'];
+
+/* Data em três escritas: 24/08, 24/08/2026 e 2026-08-24. Sem ano, vale o ano
+   corrente — cronograma se monta para o mês que vem, não para 1998. */
+const lerData = (pedaco) => {
+    const t = pedaco.trim();
+    let m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+
+    m = t.match(/^(\d{1,2})[\/.](\d{1,2})(?:[\/.](\d{2,4}))?$/);
+    if (!m) return null;
+    let ano = m[3] ? Number(m[3]) : new Date().getFullYear();
+    if (ano < 100) ano += 2000;
+    return `${ano}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+};
+
+const lerFaseSolta = (pedaco) => {
+    const n = soLetras(pedaco);
+    if (!n || n.length > 24) return null;
+    const primeira = n.split(' ')[0];
+    for (const id of ['topo', 'meio', 'fundo']) {
+        if (parecidoCom(primeira, id) >= 0.75) return id;
+    }
+    return null;
+};
+
+const lerFormato = (pedaco) => {
+    const n = soLetras(pedaco);
+    if (!n || n.length > 20) return null;
+    const achado = FORMATOS.find(f => n.startsWith(f));
+    if (!achado) return null;
+    // Devolve o que a pessoa escreveu, não o normalizado: "Reels 2" é
+    // informação dela, e o sistema não tem por que apagar o "2".
+    return pedaco.trim();
+};
+
+/**
+ * @returns {{itens: object[], avisos: string[]}}
+ */
+export const lerCronograma = (texto) => {
+    const avisos = [];
+    const itens = [];
+
+    for (const bruta of String(texto || '').split(/\r?\n/)) {
+        const linha = bruta.trim();
+        if (!linha) continue;
+
+        /* Separadores, em ordem de confiança: | ; tab e depois o hífen. O
+           hífen vem por último porque ele também mora DENTRO de título
+           ("pós-operatório") — só vale cercado de espaço. */
+        let partes = linha.split(/\s*[|;\t]\s*/);
+        if (partes.length === 1) partes = linha.split(/\s{2,}/);
+        if (partes.length === 1) partes = linha.split(/\s+[-–—]\s+/);
+        partes = partes.map(x => x.trim()).filter(Boolean);
+        if (!partes.length) continue;
+
+        const item = { data: null, fase: null, formato: null, titulo: '' };
+        const sobra = [];
+
+        for (const parte of partes) {
+            if (!item.data)    { const d = lerData(parte);    if (d) { item.data = d; continue; } }
+            if (!item.fase)    { const f = lerFaseSolta(parte); if (f) { item.fase = f; continue; } }
+            if (!item.formato) { const f = lerFormato(parte);  if (f) { item.formato = f; continue; } }
+            sobra.push(parte);
+        }
+
+        // O título é o pedaço mais longo do que sobrou: numa planilha colada,
+        // as outras colunas costumam ser rótulos curtos ("Instagram", "OK").
+        item.titulo = tirarAspas(sobra.sort((a, b) => b.length - a.length)[0] || '');
+
+        // Linha de cabeçalho de planilha não é conteúdo.
+        if (/^(data|dia|fase|t[íi]tulo|tema|formato|canal)$/i.test(item.titulo)) continue;
+        if (item.titulo.length < 8) continue;
+
+        itens.push(item);
+    }
+
+    // Mesma dedupe do documento de temas: gente copia e cola linha.
+    const vistos = new Set();
+    const unicos = itens.filter(i => {
+        const k = soLetras(i.titulo);
+        if (vistos.has(k)) return false;
+        vistos.add(k);
+        return true;
+    });
+    if (unicos.length < itens.length) {
+        avisos.push(`${itens.length - unicos.length} linha(s) repetida(s) foram descartadas.`);
+    }
+
+    const semData = unicos.filter(i => !i.data).length;
+    const semFase = unicos.filter(i => !i.fase).length;
+    if (semData) avisos.push(`${semData} linha(s) sem data reconhecida — escolha a data delas abaixo.`);
+    if (semFase) avisos.push(`${semFase} linha(s) sem fase — o classificador sugeriu uma, confira.`);
+    if (!unicos.length) {
+        avisos.push('Não reconheci nenhuma linha. Cada conteúdo precisa de uma linha, '
+                  + 'com os campos separados por | ; tabulação ou hífen com espaços.');
+    }
+
+    return { itens: unicos, avisos };
+};

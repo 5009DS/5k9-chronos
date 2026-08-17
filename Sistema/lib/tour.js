@@ -457,6 +457,22 @@ export const iniciarTour = ({ cliente, irPara, aoFim }) => {
         foco.style.width = `${dir - esq}px`;
         foco.style.height = `${base - topo}px`;
 
+        /* ── NO CELULAR, O CARD MORA NO RODAPÉ ───────────────────────────
+           Ele acompanhava o alvo, e no passo que passeia pelos cartões da
+           estratégia isso virava um pêndulo: a cada 1,5s o destaque subia ou
+           descia e o card ia junto, saltando de cima para baixo da tela. O
+           que a pessoa precisa ler fica parado; o que ela precisa ver é que
+           se move. Na tela grande há espaço para o balão apontar, e ele
+           continua apontando. */
+        const estreito = window.innerWidth < 720;
+        if (estreito) {
+            const larguraM = window.innerWidth - 24;
+            card.style.width = larguraM + "px";
+            card.style.left = "12px";
+            card.style.top = Math.max(12, window.innerHeight - (card.offsetHeight || 240) - 12) + "px";
+            return;
+        }
+
         // O card vai abaixo do alvo; se não couber, acima; se não couber em
         // lugar nenhum, encosta no rodapé — nunca sai da tela.
         const largura = Math.min(360, window.innerWidth - 24);

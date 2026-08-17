@@ -3,7 +3,7 @@ import { renderShell } from '../components/pageshell.js';
 import { toast } from '../components/toast.js';
 import { navegar } from '../lib/rotas.js';
 import { textoDoPDF, ehPDF } from '../lib/pdf.js';
-import { lerTemas, lerRoteiros } from '../lib/importar.js';
+import { lerTemas, lerRoteiros, lerCronograma } from '../lib/importar.js';
 import { objetivosDaFase, nomeFase, classificar } from '../lib/diretorio.js';
 import { chipFase, vazioHTML } from '../lib/pecas.js';
 import { tipo as tipoBloco } from '../lib/roteiro.js';
@@ -37,6 +37,11 @@ const MODOS = {
         rotulo: 'Temas',
         titulo: 'Importar temas',
         dica: 'O documento com as seções TOPO / MEIO / FUNDO DE FUNIL e a lista de temas de cada uma.',
+    },
+    cronograma: {
+        rotulo: 'Cronograma pronto',
+        titulo: 'Subir cronograma montado',
+        dica: 'O mês já fechado pela social media: uma linha por conteúdo, com data, fase, título e formato.',
     },
     roteiros: {
         rotulo: 'Roteiros',
@@ -212,10 +217,20 @@ export const renderImportar = async (container, clienteId, modoInicial = 'temas'
     }
 
     function processar() {
-        leitura = modo === 'temas' ? lerTemas(texto) : lerRoteiros(texto, conteudos);
+        leitura = modo === 'temas' ? lerTemas(texto)
+                : modo === 'cronograma' ? lerCronograma(texto)
+                : lerRoteiros(texto, conteudos);
         selecao = new Set();
 
-        if (modo === 'temas') {
+        if (modo === 'cronograma') {
+            /* Tudo marcado, ao contrário do documento de temas. Lá o material
+               é uma lista de possibilidades e escolher faz parte; aqui o mês
+               já foi decidido por alguém — desmarcar é a exceção. */
+            leitura.itens.forEach((it, i) => {
+                if (!it.fase) it.fase = classificar(it.titulo)?.fase || null;
+                selecao.add(String(i));
+            });
+        } else if (modo === 'temas') {
             // Padrão: quatro semanas, ou seja, os quatro primeiros temas de
             // cada fase. Marcar os oitenta de uma vez encheria oito meses de
             // cronograma num clique — e desmarcar setenta é mais trabalho que
@@ -823,7 +838,147 @@ export const renderImportar = async (container, clienteId, modoInicial = 'temas'
     // ─────────────────────────────────────────────────────────────────────
     function desenharRevisao() {
         if (modo === 'temas') desenharRevisaoTemas();
+        else if (modo === 'cronograma') desenharRevisaoCronograma();
         else desenharRevisaoRoteiros();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // REVISÃO — CRONOGRAMA PRONTO
+    // ═══════════════════════════════════════════════════════════════════
+
+    function desenharRevisaoCronograma() {
+        const alvo = content.querySelector('#im-revisao');
+        const itens = leitura.itens || [];
+        const marcados = itens.filter((_, i) => selecao.has(String(i)));
+
+        alvo.innerHTML = `
+            ${leitura.avisos.length ? `
+                <article class="ds-card vz-secao">
+                    ${leitura.avisos.map(a => `<p class="im-aviso"><i data-lucide="triangle-alert"></i> ${esc(a)}</p>`).join('')}
+                </article>` : ''}
+
+            ${itens.length ? `
+                <article class="ds-card vz-secao">
+                    <div class="vz-secao__cabeca">
+                        <div>
+                            <h2 class="ds-card-title">O que eu entendi</h2>
+                            <span class="ds-card-sub">${itens.length} linha(s) · ${marcados.length} marcada(s) para importar</span>
+                        </div>
+                        <div class="im-atalhos">
+                            <button class="im-atalho" data-crono-todos>Marcar tudo</button>
+                            <button class="im-atalho" data-crono-nenhum>Nada</button>
+                        </div>
+                    </div>
+
+                    <div class="im-crono">
+                        ${itens.map((it, i) => `
+                            <label class="im-crono__linha ${selecao.has(String(i)) ? 'is-marcada' : ''}">
+                                <input type="checkbox" data-crono="${i}" ${selecao.has(String(i)) ? 'checked' : ''}>
+                                <span class="im-crono__data">${it.data ? esc(dataBR(it.data)) : '<em>sem data</em>'}</span>
+                                ${chipFase(it.fase)}
+                                <span class="im-crono__titulo">${esc(it.titulo)}</span>
+                                <span class="im-crono__formato">${esc(it.formato || '—')}</span>
+                            </label>`).join('')}
+                    </div>
+
+                    <div class="im-quando">
+                        <label class="im-campo">
+                            <span>Data para as linhas sem data</span>
+                            <input class="ds-input" type="date" id="im-crono-inicio" value="${esc(inicioSemana)}">
+                        </label>
+                        <p class="im-quando__nota">
+                            Quem tem data no documento mantém a dela. O resto entra a partir desta semana,
+                            no dia que a fase pede — fundo na segunda, meio na quarta, topo na sexta.
+                        </p>
+                    </div>
+
+                    <div class="im-rodape">
+                        <button class="ds-btn ds-btn--primary" id="im-gravar-crono" ${marcados.length ? '' : 'disabled'}>
+                            <i data-lucide="calendar-plus"></i> Importar ${marcados.length}
+                        </button>
+                    </div>
+                </article>` : ''}`;
+
+        alvo.querySelectorAll('[data-crono]').forEach(cx =>
+            cx.addEventListener('change', () => {
+                const k = cx.dataset.crono;
+                if (cx.checked) selecao.add(k); else selecao.delete(k);
+                desenharRevisaoCronograma();
+            }));
+        alvo.querySelector('[data-crono-todos]')?.addEventListener('click', () => {
+            selecao = new Set(itens.map((_, i) => String(i)));
+            desenharRevisaoCronograma();
+        });
+        alvo.querySelector('[data-crono-nenhum]')?.addEventListener('click', () => {
+            selecao = new Set();
+            desenharRevisaoCronograma();
+        });
+        alvo.querySelector('#im-crono-inicio')?.addEventListener('change', (e) => {
+            inicioSemana = segundaDa(e.target.value);
+            desenharRevisaoCronograma();
+        });
+        alvo.querySelector('#im-gravar-crono')?.addEventListener('click', (e) => gravarCronograma(e, marcados));
+        if (window.lucide) lucide.createIcons();
+    }
+
+    async function gravarCronograma(e, itens) {
+        const b = e.target.closest('button');
+        b.disabled = true;
+        b.textContent = 'Importando…';
+        try {
+            const jaExistem = new Set(
+                (await store.conteudos.listar())
+                    .filter(c => c.cliente_id === clienteId)
+                    .map(c => chaveTitulo(c.titulo)));
+
+            const dias = { fundo: 0, meio: 2, topo: 4 };
+            const novos = itens.filter(it => !jaExistem.has(chaveTitulo(it.titulo)));
+            const repetidos = itens.length - novos.length;
+
+            if (!novos.length) {
+                toast('Todos estes títulos já estão no cronograma deste cliente. Nada foi importado.');
+                b.disabled = false;
+                b.textContent = 'Importar';
+                return;
+            }
+
+            // A fila das linhas sem data anda por semana, uma por fase — a
+            // mesma distribuição do Funil Invertido usada na outra importação.
+            const fila = { fundo: 0, meio: 0, topo: 0 };
+
+            for (const it of novos) {
+                let data = it.data;
+                if (!data) {
+                    const fase = it.fase || 'meio';
+                    data = somarDias(inicioSemana, fila[fase] * 7 + dias[fase]);
+                    fila[fase]++;
+                }
+                await store.conteudos.salvar({
+                    cliente_id: clienteId,
+                    titulo: it.titulo,
+                    tema: null,
+                    fase: it.fase || null,
+                    objetivo: null,
+                    formato: it.formato || null,
+                    canal: null,
+                    data,
+                    data_original: data,
+                    status: 'rascunho',
+                    intencao: null,
+                    nota: null,
+                    revisado: false,
+                });
+            }
+
+            toast(`${novos.length} conteúdo(s) importado(s) como rascunho.`
+                + (repetidos ? ` ${repetidos} já estava(m) no cronograma.` : ''));
+            navegar(`/cliente/${clienteId}`);
+        } catch (err) {
+            console.error('[importar] falha ao gravar cronograma:', err);
+            toast('Não foi possível importar. Nada foi perdido — tente de novo.');
+            b.disabled = false;
+            b.textContent = `Importar ${itens.length}`;
+        }
     }
 
     blocosExistentes = await store.blocos.listar();
@@ -878,6 +1033,28 @@ const ESTILOS = `
 .im-quando__nota { margin: 0; font-size: var(--text-xs); color: var(--text-tertiary); line-height: var(--leading-body); max-width: 48ch; }
 
 .im-atalhos { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+/* ── Cronograma pronto ────────────────────────────────────────────────
+   Uma linha por conteúdo, na ordem em que a pessoa colou. Grade e não
+   tabela: as colunas de data e formato se ajustam ao conteúdo e o título fica com o
+   espaço que sobra — que é o campo que precisa ser lido. */
+.im-crono { display: flex; flex-direction: column; gap: var(--space-1); }
+.im-crono__linha {
+    display: grid; grid-template-columns: auto auto auto 1fr auto;
+    align-items: center; gap: var(--space-3);
+    padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm);
+    cursor: pointer; font-size: var(--text-sm);
+}
+.im-crono__linha:hover { background: var(--surface-3); }
+.im-crono__linha.is-marcada { background: var(--accent-muted); }
+.im-crono__linha input { width: 18px; height: 18px; accent-color: var(--accent); }
+.im-crono__data { font-size: var(--text-xs); color: var(--text-tertiary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.im-crono__titulo { color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.im-crono__formato { font-size: var(--text-xs); color: var(--text-tertiary); white-space: nowrap; }
+@media (max-width: 720px) {
+    .im-crono__linha { grid-template-columns: auto 1fr; row-gap: 2px; }
+    .im-crono__titulo { grid-column: 1 / -1; white-space: normal; }
+}
+
 .im-atalho {
     height: 30px; padding: 0 var(--space-4);
     border: 1px solid var(--border-default); border-radius: var(--radius-pill);
