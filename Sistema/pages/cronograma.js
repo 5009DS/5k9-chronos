@@ -21,6 +21,7 @@ import {
     leitura, conferir, noDiaCerto, classificar,
 } from '../lib/diretorio.js';
 import { chipFase, chipStatus, seloDeslocado, vazioHTML, STATUS } from '../lib/pecas.js';
+import { chipEtiqueta, injectEstilosEtiqueta } from '../lib/etiquetas.js';
 import { ativarArraste } from '../lib/arrastar.js';
 import { timeSalvo } from '../lib/gestor.js';
 
@@ -112,6 +113,7 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
     });
 
     container.insertAdjacentHTML('beforeend', ESTILOS);
+    injectEstilosEtiqueta();
 
     const recarregar = () => renderCronograma(container, clienteId, mes);
 
@@ -343,7 +345,7 @@ const cartaoHTML = (c, todos) => {
                 </div>
                 ${(c.etiquetas || []).length ? `
                     <div class="cr-etiquetas">
-                        ${c.etiquetas.map(e => `<span class="cr-etiqueta">${esc(e)}</span>`).join('')}
+                        ${c.etiquetas.map(chipEtiqueta).join('')}
                     </div>` : ''}
                 ${seloDeslocado(desl)}
             </div>
@@ -1049,12 +1051,6 @@ const ESTILOS = `
     font-size: 11px; font-weight: 700; line-height: 18px; text-align: center;
 }
 .cr-etiquetas { display: flex; flex-wrap: wrap; gap: 5px; margin-top: var(--space-2); }
-.cr-etiqueta {
-    padding: 1px 8px; border-radius: var(--radius-pill);
-    border: 1px dashed var(--border-default);
-    font-size: 10px; font-weight: 600; letter-spacing: var(--tracking-wide);
-    text-transform: uppercase; color: var(--text-tertiary); white-space: nowrap;
-}
 .cr-dia--alerta { color: var(--warning) !important; }
 
 .cr-liberar {

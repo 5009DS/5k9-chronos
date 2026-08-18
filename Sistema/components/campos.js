@@ -1,5 +1,6 @@
 import { openDrawer, closeDrawer } from './drawer.js';
 import { esc } from '../lib/formato.js';
+import { ETIQUETAS, chipEtiqueta, injectEstilosEtiqueta } from '../lib/etiquetas.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    FORMULÁRIO EM PAINEL LATERAL
@@ -79,13 +80,32 @@ const campoHTML = (c, valores) => {
 
            Separadas por vírgula porque é como se escreve uma lista à mão. */
         case 'etiquetas': {
-            const atuais = Array.isArray(v) ? v.join(', ') : (v || '');
-            controle = `<input class="ds-input" id="${id}" name="${c.nome}" type="text"
-                               list="${id}-lista" placeholder="${esc(c.placeholder || '')}"
-                               value="${esc(atuais)}" autocomplete="off">
-                        <datalist id="${id}-lista">
-                            ${(c.sugestoes || []).map(x => `<option value="${esc(x)}"></option>`).join('')}
-                        </datalist>`;
+            const lista = Array.isArray(v) ? v : (v ? [v] : []);
+            const marcada = (nome) => lista.some(x =>
+                x.toLowerCase().trim() === nome.toLowerCase().trim());
+
+            /* As etiquetas do fluxo aparecem como BOTÕES, na ordem em que as
+               coisas acontecem — escrever, aprovar, gravar, editar, publicar.
+               Uma lista de sugestões escondida atrás do cursor não explica o
+               processo; oito chips lado a lado explicam.
+
+               O campo de texto continua embaixo e continua mandando: é ele que
+               é lido na hora de salvar, e é por ele que entra qualquer etiqueta
+               que este estúdio invente amanhã. */
+            const extras = (c.sugestoes || []).filter(x =>
+                !ETIQUETAS.some(e => e.nome.toLowerCase() === String(x).toLowerCase()));
+
+            controle = `
+                <div class="cp-etiquetas">
+                    <div class="cp-etiquetas__chips" data-chips-de="${c.nome}">
+                        ${[...ETIQUETAS.map(e => e.nome), ...extras].map(nome => `
+                            <button type="button" class="vz-etiqueta--botao ${marcada(nome) ? 'is-marcada' : ''}"
+                                    data-chip="${esc(nome)}">${chipEtiqueta(nome)}</button>`).join('')}
+                    </div>
+                    <input class="ds-input" id="${id}" name="${c.nome}" type="text"
+                           placeholder="${esc(c.placeholder || '')}"
+                           value="${esc(lista.join(', '))}" autocomplete="off">
+                </div>`;
             break;
         }
         /* type="email" pelo teclado: no celular ele traz o @ e o ponto na
@@ -116,6 +136,40 @@ const campoHTML = (c, valores) => {
             ${controle}
             ${dica}
         </div>`;
+};
+
+/* Os chips e o campo de texto são a MESMA lista, vista de dois jeitos. Clicar
+   num chip escreve ou apaga a palavra no campo; o campo continua sendo a fonte,
+   porque é dele que `colher` lê. Duas fontes divergiriam no primeiro caso em
+   que alguém digitasse à mão o que já tinha clicado. */
+const ligarChips = (painel) => {
+    painel.querySelectorAll('[data-chips-de]').forEach(caixa => {
+        const campo = painel.querySelector(`[name="${caixa.dataset.chipsDe}"]`);
+        if (!campo) return;
+
+        const ler = () => campo.value.split(',').map(x => x.trim()).filter(Boolean);
+        const igual = (a, b) => a.toLowerCase() === b.toLowerCase();
+
+        const repintar = () => {
+            const atuais = ler();
+            caixa.querySelectorAll('[data-chip]').forEach(b =>
+                b.classList.toggle('is-marcada', atuais.some(x => igual(x, b.dataset.chip))));
+        };
+
+        caixa.addEventListener('click', (e) => {
+            const b = e.target.closest('[data-chip]');
+            if (!b) return;
+            const nome = b.dataset.chip;
+            const atuais = ler();
+            const novas = atuais.some(x => igual(x, nome))
+                ? atuais.filter(x => !igual(x, nome))
+                : [...atuais, nome];
+            campo.value = novas.join(', ');
+            repintar();
+        });
+
+        campo.addEventListener('input', repintar);
+    });
 };
 
 /** Lê o painel e devolve os valores já no tipo certo. */
@@ -165,6 +219,8 @@ export const abrirFormulario = ({
         title: titulo, subtitle: subtitulo, body: corpo, footer: rodape,
         onMount: (painel) => {
             injectStyles();
+            injectEstilosEtiqueta();
+            ligarChips(painel);
             const erro = painel.querySelector('#cp-erro');
             const botao = painel.querySelector('#cp-salvar');
 
@@ -263,7 +319,12 @@ function injectStyles() {
 
         .cp-area { height: auto; padding: var(--space-3) var(--space-4); resize: vertical; line-height: var(--leading-body); font-family: var(--font-sans); }
 
-        .cp-check-bloco { grid-column: span 2; display: flex; flex-direction: column; gap: var(--space-2); }
+        /* O campo de etiquetas: os chips do fluxo em cima, o texto livre embaixo.
+   Os dois são a mesma lista — clicar escreve, escrever acende. */
+.cp-etiquetas { display: flex; flex-direction: column; gap: var(--space-2); }
+.cp-etiquetas__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.cp-etiquetas__chips button { padding: 0; border: none; background: none; line-height: 0; }
+.cp-check-bloco { grid-column: span 2; display: flex; flex-direction: column; gap: var(--space-2); }
         .cp-check-bloco[hidden] { display: none; }
         .cp-check {
             display: flex; align-items: center; gap: var(--space-3);

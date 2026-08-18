@@ -158,6 +158,38 @@ sistema não interpreta. Texto livre, sem cadastro, sem ordem, sem transição
 válida. "a gravar", "gravado", "aguardando data", "esperando imagem do
 cliente" — o que precisar, no dia em que precisar, sem passar por código.
 
+### O vocabulário de produção
+
+Oito etiquetas se repetem em todo cliente, e elas ganharam ícone e cor — do
+mesmo tamanho e peso do chip de status, porque respondem a uma pergunta tão
+frequente quanto:
+
+| Etiqueta | Diz que |
+|---|---|
+| roteiro em aprovação | a médica está lendo |
+| roteiro aprovado | liberado para gravar |
+| a gravar | ainda não foi para a câmera |
+| gravado | material bruto na mão |
+| em edição | na mesa de corte |
+| aguardando data | pronto, sem dia definido |
+| aguardando material | falta algo que vem do cliente |
+| refazer | não ficou bom, volta ao começo |
+
+No formulário elas aparecem como botões, **na ordem em que as coisas
+acontecem** — é essa ordem que transforma uma lista de palavras numa explicação
+do processo. Clicar escreve no campo de texto logo abaixo; digitar no campo
+acende o chip. São a mesma lista vista de dois jeitos, e o campo continua sendo
+a fonte: é dele que o sistema lê na hora de salvar.
+
+O tom diz de quem é a vez, não o que a etiqueta é: amarelo é trabalho nosso
+parado, azul é trabalho andando, verde é etapa vencida, roxo é espera por
+terceiro, vermelho é problema.
+
+**Esse mapa serve para desenhar, nunca para decidir.** Nenhuma regra do sistema
+pergunta se um conteúdo está "gravado" — se um dia perguntar, vira status, com
+migração e tela, e não uma linha no vocabulário. Etiqueta fora da lista
+funciona igual, só sai com o desenho neutro.
+
 Não há tela de cadastro porque não há cadastro: **as etiquetas que existem são
 as que estão em uso**. O campo sugere as já usadas naquele cliente, ordenadas
 por frequência, para evitar "a gravar" e "A Gravar" convivendo. Quando ninguém

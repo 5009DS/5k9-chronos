@@ -5,6 +5,7 @@ import { toast } from '../components/toast.js';
 import { navegar } from '../lib/rotas.js';
 import { ativarArraste } from '../lib/arrastar.js';
 import { nomeFase, noDiaCerto } from '../lib/diretorio.js';
+import { chipEtiqueta, injectEstilosEtiqueta } from '../lib/etiquetas.js';
 import { chipFase, chipStatus, seloDeslocado, vazioHTML } from '../lib/pecas.js';
 import {
     porData, leituraDeslocamento, deslocado, moverPara, fixarPosicao, DIAS_DA_FASE,
@@ -103,6 +104,7 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
     });
 
     container.insertAdjacentHTML('beforeend', ESTILOS);
+    injectEstilosEtiqueta();
 
     // Leva o mês junto: o redesenho depois de uma troca precisa voltar para
     // onde a pessoa estava, não para o mês corrente.
@@ -265,6 +267,7 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
                     <h3 class="qd-cartao__titulo">${esc(c.titulo)}</h3>
                     <div class="qd-cartao__pe">
                         ${chipStatus(c.status)}
+                        ${(c.etiquetas || []).map(chipEtiqueta).join('')}
                         ${seloDeslocado(l)}
                     </div>
                 </div>
