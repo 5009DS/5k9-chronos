@@ -196,9 +196,23 @@ por frequência, para evitar "a gravar" e "A Gravar" convivendo. Quando ninguém
 mais usa uma, ela some sozinha — que é o comportamento certo para um
 vocabulário que muda.
 
-O cliente não recebe etiqueta nenhuma: o recorte é feito na função do banco,
-não na interface. De passagem, a `nota` interna do conteúdo, que ia inteira
-para o navegador dele desde sempre, passou a ser recortada no mesmo lugar.
+### O que o cliente vê
+
+As **sete de produção** aparecem no cronograma dele e no topo do roteiro: é a
+pergunta que ele faz por WhatsApp — "já gravou?" — respondida na tela feita
+para respondê-la.
+
+"refazer" fica de fora: é crítica nossa ao nosso próprio trabalho. E **etiqueta
+livre nunca sai** — não por desconfiança do texto, mas porque o campo livre é
+exatamente onde mora o recado interno, e um recurso que às vezes vaza é pior
+que um que nunca vaza.
+
+O recorte acontece na função do banco, não na interface: filtrar na tela
+deixaria a etiqueta interna viajando no JSON, e "a tela não desenha" é uma
+garantia que dura até a próxima tela. A lista existe duplicada em
+`lib/etiquetas.js` e no SQL — duplicação é o preço de o recorte ser real, e
+quem manda é o SQL. De passagem, a `nota` interna do conteúdo, que ia inteira
+para o navegador do cliente desde sempre, saiu no mesmo lugar.
 
 ## O roteiro
 

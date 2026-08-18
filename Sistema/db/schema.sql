@@ -277,7 +277,20 @@ as $$
         -- iam inteiras para o navegador do cliente. Mesmo motivo do recorte da
         -- nota do cadastro, logo abaixo.
         'conteudos', coalesce((
-            select jsonb_agg(to_jsonb(i) - 'nota' - 'etiquetas' - 'banco_em') from itens i), '[]'::jsonb),
+            select jsonb_agg(
+                (to_jsonb(i) - 'nota' - 'banco_em')
+                -- Só as etiquetas de PRODUÇÃO passam. O texto livre é recado da
+                -- equipe para a equipe e fica deste lado. A mesma lista existe
+                -- em lib/etiquetas.js; quem manda é esta.
+                -- Ver db/migracao-etiquetas-cliente.sql.
+                || jsonb_build_object('etiquetas', coalesce(to_jsonb(array(
+                       select e from unnest(coalesce(i.etiquetas, '{}')) e
+                        where lower(trim(e)) = any (array[
+                            'roteiro em aprovação', 'roteiro aprovado', 'a gravar',
+                            'gravado', 'em edição', 'aguardando data', 'aguardando material'
+                        ])
+                   )), '[]'::jsonb))
+            ) from itens i), '[]'::jsonb),
         'blocos', coalesce((
             select jsonb_agg(to_jsonb(b))
               from vz_blocos b where b.conteudo_id in (select id from itens)), '[]'::jsonb),

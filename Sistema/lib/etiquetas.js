@@ -25,20 +25,32 @@ import { esc, semAcento } from './formato.js';
    transforma uma lista de palavras numa explicação do processo.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* `publica` decide se o CLIENTE vê. Sete das oito dizem em que pé está a
+   produção — é informação que ele quer e que hoje ele pede por WhatsApp.
+   "refazer" fica de fora: é crítica nossa ao nosso próprio trabalho, e o
+   cliente lendo isso no cronograma dele não ajuda ninguém.
+
+   Etiqueta que a equipe inventar NUNCA sai. Não por desconfiança do texto,
+   mas porque o campo livre é exatamente onde mora o recado interno — e um
+   recurso que às vezes vaza é pior que um que nunca vaza.
+
+   O recorte de verdade acontece no banco (db/migracao-etiquetas-cliente.sql).
+   Esta marcação existe para a interna e a pública concordarem; se as duas
+   discordarem, quem manda é o banco, e é ele que precisa ser corrigido. */
 export const ETIQUETAS = [
-    { nome: 'roteiro em aprovação', icone: 'file-clock',    tom: 'espera',
+    { nome: 'roteiro em aprovação', publica: true, icone: 'file-clock',    tom: 'espera',
       dica: 'A médica está lendo o roteiro.' },
-    { nome: 'roteiro aprovado',     icone: 'file-check',    tom: 'ok',
+    { nome: 'roteiro aprovado', publica: true,     icone: 'file-check',    tom: 'ok',
       dica: 'Liberado para gravar.' },
-    { nome: 'a gravar',             icone: 'video',         tom: 'atencao',
+    { nome: 'a gravar', publica: true,             icone: 'video',         tom: 'atencao',
       dica: 'Ainda não foi para a câmera.' },
-    { nome: 'gravado',              icone: 'circle-check',  tom: 'ok',
+    { nome: 'gravado', publica: true,              icone: 'circle-check',  tom: 'ok',
       dica: 'Material bruto na mão.' },
-    { nome: 'em edição',            icone: 'scissors',      tom: 'info',
+    { nome: 'em edição', publica: true,            icone: 'scissors',      tom: 'info',
       dica: 'Na mesa de corte.' },
-    { nome: 'aguardando data',      icone: 'calendar-clock', tom: 'espera',
+    { nome: 'aguardando data', publica: true,      icone: 'calendar-clock', tom: 'espera',
       dica: 'Pronto, sem dia definido.' },
-    { nome: 'aguardando material',  icone: 'image',          tom: 'espera',
+    { nome: 'aguardando material', publica: true,  icone: 'image',          tom: 'espera',
       dica: 'Falta algo que vem do cliente.' },
     { nome: 'refazer',              icone: 'rotate-ccw',     tom: 'risco',
       dica: 'Não ficou bom, volta para o começo.' },
@@ -54,6 +66,10 @@ const MAPA = new Map(ETIQUETAS.map(e => [chave(e.nome), e]));
 /** O desenho de uma etiqueta. Devolve o neutro quando ela é da casa. */
 export const etiquetaMeta = (nome) =>
     MAPA.get(chave(nome)) || { nome, icone: 'tag', tom: 'neutro', dica: '' };
+
+/** As que o cliente pode ver. Desconhecida some — é a regra, não a exceção. */
+export const etiquetasPublicas = (lista) =>
+    (lista || []).filter(nome => etiquetaMeta(nome).publica);
 
 export const chipEtiqueta = (nome) => {
     const m = etiquetaMeta(nome);

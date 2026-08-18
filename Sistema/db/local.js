@@ -13,6 +13,8 @@
    Configurações oferece exportar em JSON.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+import { etiquetasPublicas } from '../lib/etiquetas.js';
+
 const CHAVE = (colecao) => `5k9_visualizador_${colecao}`;
 
 const ler = (colecao) => {
@@ -101,8 +103,17 @@ export const local = {
             (c.token === token || (c.apelido && c.apelido === token)) && c.ativo !== false);
         if (!cliente) return null;
 
+        /* O mesmo recorte da função do banco, inclusive as etiquetas: nota
+           interna fora, etiqueta de produção dentro, texto livre fora. Os dois
+           adaptadores precisam mostrar a mesma coisa ao cliente — divergência
+           aqui vira "no meu está diferente" numa reunião. */
         const conteudos = ler('conteudos')
-            .filter(c => c.cliente_id === cliente.id && c.status !== 'rascunho');
+            .filter(c => c.cliente_id === cliente.id
+                      && c.status !== 'rascunho'
+                      && !c.banco_em)
+            .map(({ nota, banco_em, ...c }) => ({
+                ...c, etiquetas: etiquetasPublicas(c.etiquetas),
+            }));
         const ids = new Set(conteudos.map(c => c.id));
 
         return {

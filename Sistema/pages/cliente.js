@@ -13,6 +13,7 @@ import { openDrawer, closeDrawer } from '../components/drawer.js';
 import { toast } from '../components/toast.js';
 import { conversas, estadoMeta, ato, daEquipe, novidadesPara } from '../lib/conversa.js';
 import { iniciarTour, tourVisto, marcarTourVisto, MODELO } from '../lib/tour.js';
+import { chipEtiqueta, etiquetasPublicas, injectEstilosEtiqueta } from '../lib/etiquetas.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    A TELA DO CLIENTE — /c/<token> e /c/<token>/<conteúdo>
@@ -41,6 +42,7 @@ import { iniciarTour, tourVisto, marcarTourVisto, MODELO } from '../lib/tour.js'
 
 export const renderCliente = async (container, token, conteudoId) => {
     injectStyles();
+    injectEstilosEtiqueta();
     container.innerHTML = `<div class="cl-carregando">Carregando…</div>`;
 
     let visao;
@@ -279,6 +281,15 @@ const cartaoConteudo = (c, token, comRoteiro) => {
                     ${c.formato ? `<span>${esc(c.formato)}</span>` : ''}
                     ${comRoteiro?.has(c.id) ? estadoCurto(c) : ''}
                 </div>
+                ${/* Em que pé está a produção. Sai do banco já recortado: só as
+                      etiquetas de produção chegam aqui, e o texto livre que a
+                      equipe escreve para si mesma nunca sai do lado de lá
+                      (db/migracao-etiquetas-cliente.sql). O filtro repetido
+                      aqui é cinto de segurança, não a trava. */''}
+                ${etiquetasPublicas(c.etiquetas).length ? `
+                    <div class="cl-etiquetas">
+                        ${etiquetasPublicas(c.etiquetas).map(chipEtiqueta).join('')}
+                    </div>` : ''}
             </div>
             <i class="cl-seta" data-lucide="chevron-right"></i>
         </a>`;
@@ -342,6 +353,10 @@ const desenharConteudo = (container, token, visao, conteudoId) => {
                         ${c.formato ? ` · ${esc(c.formato)}` : ''}
                         ${meus.length ? ` · ${esc(duracaoTotal(meus))} de fala (estimado)` : ''}
                     </p>
+                    ${etiquetasPublicas(c.etiquetas).length ? `
+                        <div class="cl-etiquetas">
+                            ${etiquetasPublicas(c.etiquetas).map(chipEtiqueta).join('')}
+                        </div>` : ''}
                     ${c.tema ? `<p class="cl-tema">${esc(c.tema)}</p>` : ''}
                 </section>
 
@@ -1130,6 +1145,8 @@ function injectStyles() {
         .cl-novidade i, .cl-novidade svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 2px; }
 
         /* A faixa de "isto é exemplo", na tela do modelo do tour. */
+        .cl-etiquetas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--space-2); }
+
         .cl-modelo {
             display: flex; align-items: flex-start; gap: var(--space-2); margin: 0;
             padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
