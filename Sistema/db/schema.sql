@@ -123,6 +123,10 @@ create table if not exists vz_conteudos (
     -- dele vira regra em código; etiqueta é da equipe e muda sem migração.
     -- Ver db/migracao-etiquetas.sql. NÃO sai na resposta do link público.
     etiquetas   text[],
+    -- Quando o conteúdo saiu do cronograma para o banco de temas. Nulo é o
+    -- normal. A `data` continua ali: é ela que permite devolver o conteúdo ao
+    -- lugar de onde saiu. Ver db/migracao-banco-temas.sql.
+    banco_em    timestamptz,
     -- Marcação manual de revisão jurídica. O sistema já avisa sozinho quando a
     -- fase ou o objetivo pedem atenção (CFM 2.336/2023); esta coluna é a
     -- confirmação humana de que a revisão aconteceu.
@@ -263,6 +267,9 @@ as $$
         select co.* from vz_conteudos co
           join c on co.cliente_id = c.id
          where co.status <> 'rascunho'
+           -- O banco de temas é gaveta da equipe: conteúdo guardado não está
+           -- programado, e mostrá-lo com data viraria promessa que ninguém fez.
+           and co.banco_em is null
     )
     select case when not exists (select 1 from c) then null else jsonb_build_object(
         'cliente', (select to_jsonb(c) - 'nota' from c),
@@ -270,7 +277,7 @@ as $$
         -- iam inteiras para o navegador do cliente. Mesmo motivo do recorte da
         -- nota do cadastro, logo abaixo.
         'conteudos', coalesce((
-            select jsonb_agg(to_jsonb(i) - 'nota' - 'etiquetas') from itens i), '[]'::jsonb),
+            select jsonb_agg(to_jsonb(i) - 'nota' - 'etiquetas' - 'banco_em') from itens i), '[]'::jsonb),
         'blocos', coalesce((
             select jsonb_agg(to_jsonb(b))
               from vz_blocos b where b.conteudo_id in (select id from itens)), '[]'::jsonb),

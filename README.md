@@ -115,6 +115,30 @@ antigo, de discordar quando for o caso. Palpite que sobrescreve decisão humana
 
 E continua sem chutar: sem sinal no texto, o campo fica vazio esperando gente.
 
+## Banco de temas
+
+Conteúdo novo entra em datas que já têm conteúdo. A saída era apagar o que
+estava lá — e apagar perde o título, o tema, a fase e o roteiro que já tinham
+sido escritos. **Tirar da frente não é a mesma coisa que jogar fora.**
+
+O ícone de caixa no cartão manda a demanda para o banco. Ela sai do cronograma,
+do quadro e da tela do cliente, e continua existindo inteira: roteiro,
+conversa, classificação, tudo. O contador ao lado do rótulo diz quantas estão
+lá, no cronograma e no quadro.
+
+Devolver pede uma data, e o palpite é a data de onde ela saiu — na maioria das
+vezes é ela mesma, porque a demanda foi guardada quando a nova ocupou aquele
+dia. A ordem do banco é a de quem saiu por último: é pilha, não arquivo.
+
+**Não virou status**, pelo mesmo motivo das etiquetas. Estar no banco não é um
+passo da conversa com o cliente — é a ausência dela. Uma demanda vai para o
+banco vindo de rascunho ou de aprovado, e volta para o estado em que estava;
+isso não cabe numa máquina de estados linear.
+
+A coluna é `banco_em` e guarda **quando** saiu, não um sim/não: ordenar pela
+saída é a leitura natural de uma pilha, e "está lá desde março" é informação
+que ninguém pensa em guardar antes de precisar dela.
+
 ## Etiquetas
 
 O fluxo real hoje é: cria-se a demanda, escreve-se o roteiro, manda-se para a

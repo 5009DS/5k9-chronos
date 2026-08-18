@@ -1,4 +1,5 @@
 import { store } from '../store.js';
+import { abrirBancoDeTemas } from './cronograma.js';
 import { renderShell } from '../components/pageshell.js';
 import { toast } from '../components/toast.js';
 import { navegar } from '../lib/rotas.js';
@@ -57,7 +58,13 @@ const vagaDoDia = (iso) => VAGAS.find(v => v.dias.includes(indiceDia(iso))) || V
  *   movimento, e ela perdia o lugar no meio do trabalho.
  */
 export const renderQuadro = async (container, clienteId, mesInicial = null) => {
-    const { cliente, conteudos } = await store.doCliente(clienteId);
+    const { cliente, conteudos: todos } = await store.doCliente(clienteId);
+
+    // O banco de temas sai das contas do quadro pelo mesmo motivo que sai das
+    // do cronograma: conteúdo guardado não ocupa vaga (ver cronograma.js).
+    const conteudos = todos.filter(c => !c.banco_em);
+    const noBanco = todos.filter(c => c.banco_em)
+        .sort((a, b) => String(b.banco_em).localeCompare(String(a.banco_em)));
 
     if (!cliente) {
         const { content } = renderShell(container, {
@@ -85,9 +92,14 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
         ],
         title: 'Quadro do mês',
         subtitle: 'Arraste para mover ou trocar. No toque, segure o conteúdo por um instante antes de arrastar.',
-        actions: `<a class="ds-btn ds-btn--ghost" href="/cliente/${esc(clienteId)}">
-                      <i data-lucide="list"></i> Ver em lista
-                  </a>`,
+        actions: `
+            <button class="ds-btn ds-btn--ghost" id="qd-banco">
+                <i data-lucide="archive"></i> Banco de temas
+                ${noBanco.length ? `<span class="cr-conta">${noBanco.length}</span>` : ''}
+            </button>
+            <a class="ds-btn ds-btn--ghost" href="/cliente/${esc(clienteId)}">
+                <i data-lucide="list"></i> Ver em lista
+            </a>`,
     });
 
     container.insertAdjacentHTML('beforeend', ESTILOS);
@@ -95,6 +107,9 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
     // Leva o mês junto: o redesenho depois de uma troca precisa voltar para
     // onde a pessoa estava, não para o mês corrente.
     const recarregar = () => renderQuadro(container, clienteId, mes);
+
+    document.getElementById('qd-banco')?.addEventListener('click',
+        () => abrirBancoDeTemas(cliente, noBanco, recarregar));
 
     // ── Movimento ────────────────────────────────────────────────────────
     /**
@@ -258,6 +273,10 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
                             title="${escolhido ? 'Cancelar seleção' : 'Selecionar para trocar de lugar'}">
                         <i data-lucide="${escolhido ? 'x' : 'arrow-left-right'}"></i>
                     </button>
+                    <button class="ds-icon-btn ds-icon-btn--sm" data-guardar="${esc(c.id)}"
+                            title="Mandar para o banco de temas">
+                        <i data-lucide="archive"></i>
+                    </button>
                     <button class="ds-icon-btn ds-icon-btn--sm" data-abrir="${esc(c.id)}" title="Abrir o roteiro">
                         <i data-lucide="chevron-right"></i>
                     </button>
@@ -344,6 +363,22 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
             }));
 
         content.querySelector('#qd-cancelar')?.addEventListener('click', () => { selecionado = null; desenhar(); });
+
+        content.querySelectorAll('[data-guardar]').forEach(b =>
+            b.addEventListener('click', async () => {
+                const alvo = conteudos.find(x => x.id === b.dataset.guardar);
+                if (!alvo) return;
+                b.disabled = true;
+                await store.conteudos.salvar({ ...alvo, banco_em: new Date().toISOString() });
+                toast(`"${alvo.titulo}" foi para o banco de temas.`, {
+                    label: 'Desfazer',
+                    onClick: async () => {
+                        await store.conteudos.salvar({ ...alvo, banco_em: null });
+                        recarregar();
+                    },
+                });
+                recarregar();
+            }));
 
         content.querySelectorAll('[data-trocar]').forEach(b =>
             b.addEventListener('click', () => {

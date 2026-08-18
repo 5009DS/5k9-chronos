@@ -10,7 +10,7 @@ import { navegar } from '../lib/rotas.js';
 import { marcarAtivo } from '../lib/ui.js';
 import {
     esc, mesExtenso, somarMeses, chaveMes, semanaCurta, semanaAtual,
-    nomeDiaCurto, diaCurto, hoje, indiceDia,
+    nomeDiaCurto, diaCurto, hoje, indiceDia, dataBR,
 } from '../lib/formato.js';
 import {
     mesEmSemanas, cobertura, alertasDaSemana, porData, proximo,
@@ -47,7 +47,19 @@ const FILTROS = [
 ];
 
 export const renderCronograma = async (container, clienteId, mesInicial = null) => {
-    const { cliente, conteudos } = await store.doCliente(clienteId);
+    const { cliente, conteudos: todos } = await store.doCliente(clienteId);
+
+    /* ── O BANCO DE TEMAS ────────────────────────────────────────────────
+       Conteúdo guardado continua existindo com tudo — título, fase, roteiro,
+       conversa — e sai das contas do cronograma. É a diferença entre tirar da
+       frente e jogar fora: quando a demanda nova ocupa a data de uma antiga, a
+       antiga não precisa ser apagada para dar lugar.
+
+       A separação acontece aqui, uma vez, e o resto da tela nem sabe que o
+       banco existe. */
+    const conteudos = todos.filter(c => !c.banco_em);
+    const noBanco = todos.filter(c => c.banco_em)
+        .sort((a, b) => String(b.banco_em).localeCompare(String(a.banco_em)));
 
     if (!cliente) {
         const { content } = renderShell(container, {
@@ -87,6 +99,10 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
             <a class="ds-btn ds-btn--ghost" href="/c/${esc(cliente.apelido || cliente.token)}" target="_blank" rel="noopener">
                 <i data-lucide="external-link"></i> Ver como o cliente vê
             </a>
+            <button class="ds-btn ds-btn--ghost" id="cr-banco">
+                <i data-lucide="archive"></i> Banco de temas
+                ${noBanco.length ? `<span class="cr-conta">${noBanco.length}</span>` : ''}
+            </button>
             <button class="ds-btn ds-btn--ghost cr-perigo" id="cr-apagar">
                 <i data-lucide="trash-2"></i> Apagar cronograma
             </button>
@@ -165,6 +181,31 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
         content.querySelector('#cr-novo-vazio')?.addEventListener('click',
             () => formularioConteudo(null, cliente, mes, recarregar, etiquetasEmUso));
 
+        /* O ícone de guardar mora DENTRO do cartão, que é um botão que abre o
+           roteiro. Sem parar a propagação, guardar abriria o roteiro do que
+           acabou de sair da tela. */
+        content.querySelectorAll('[data-guardar]').forEach(el => {
+            const guardar = async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const alvo = conteudos.find(x => x.id === el.dataset.guardar);
+                if (!alvo) return;
+                await store.conteudos.salvar({ ...alvo, banco_em: new Date().toISOString() });
+                toast(`"${alvo.titulo}" foi para o banco de temas.`, {
+                    label: 'Desfazer',
+                    onClick: async () => {
+                        await store.conteudos.salvar({ ...alvo, banco_em: null });
+                        recarregar();
+                    },
+                });
+                recarregar();
+            };
+            el.addEventListener('click', guardar);
+            el.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') guardar(e);
+            });
+        });
+
         content.querySelectorAll('[data-conteudo]').forEach(el =>
             el.addEventListener('click', () => navegar(`/conteudo/${el.dataset.conteudo}`)));
 
@@ -216,6 +257,9 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
 
     document.getElementById('cr-link').addEventListener('click',
         () => abrirLinkDoCliente(cliente, recarregar));
+
+    document.getElementById('cr-banco').addEventListener('click',
+        () => abrirBancoDeTemas(cliente, noBanco, recarregar));
 
     document.getElementById('cr-apagar').addEventListener('click',
         () => abrirApagarCronograma(cliente, conteudos, mes, recarregar));
@@ -303,6 +347,10 @@ const cartaoHTML = (c, todos) => {
                     </div>` : ''}
                 ${seloDeslocado(desl)}
             </div>
+            <span class="cr-guardar" role="button" tabindex="0" data-guardar="${esc(c.id)}"
+                  title="Mandar para o banco de temas" aria-label="Mandar para o banco de temas">
+                <i data-lucide="archive"></i>
+            </span>
             <i class="cr-seta" data-lucide="chevron-right"></i>
         </button>`;
 };
@@ -666,6 +714,102 @@ function injectEstilosLink() {
  *      da fase escolhida COM CONFIANÇA, avisa e mostra os sinais que
  *      encontrou. Discordar dele é normal; discordar sem saber, não.
  */
+/* ═══════════════════════════════════════════════════════════════════════════
+   O BANCO DE TEMAS
+
+   A gaveta do que existe e ainda não tem lugar. Um conteúdo vai para lá
+   inteiro — título, fase, objetivo, roteiro, conversa — e volta inteiro.
+
+   Voltar pede uma data, e o palpite é a data de onde ele saiu. Na maioria das
+   vezes é ela mesma: o conteúdo foi guardado porque a demanda nova ocupou
+   aquele dia, e ele volta assim que o dia seguinte abre.
+
+   A ordem é a de quem saiu por último. Banco de temas é pilha, não arquivo:
+   o que foi guardado ontem é o que alguém está procurando hoje.
+   ═══════════════════════════════════════════════════════════════════════════ */
+export function abrirBancoDeTemas(cliente, noBanco, aoTerminar) {
+    openDrawer({
+        title: 'Banco de temas',
+        subtitle: `${cliente.nome} · ${noBanco.length} guardado${noBanco.length === 1 ? '' : 's'}`,
+        body: noBanco.length ? `
+            <div class="cr-banco">
+                <p class="cr-banco__dica">
+                    Estes conteúdos existem inteiros — com roteiro e histórico — e não aparecem
+                    no cronograma nem para o cliente. Devolva quando houver dia para eles.
+                </p>
+                ${noBanco.map(c => `
+                    <div class="cr-banco__item" data-item="${esc(c.id)}">
+                        <span class="vz-fita vz-fita--${esc(c.fase || '')}"></span>
+                        <div class="cr-banco__corpo">
+                            <div class="cr-banco__topo">
+                                ${chipFase(c.fase, { curto: true })}
+                                ${chipStatus(c.status)}
+                                <span class="cr-banco__desde">guardado em ${esc(dataBR(String(c.banco_em).slice(0, 10)))}</span>
+                            </div>
+                            <h4 class="cr-banco__titulo">${esc(c.titulo)}</h4>
+                            <div class="cr-banco__volta">
+                                <input class="ds-input" type="date" data-data="${esc(c.id)}" value="${esc(c.data)}">
+                                <button class="ds-btn ds-btn--ghost ds-btn--sm" data-voltar="${esc(c.id)}">
+                                    <i data-lucide="corner-up-left"></i> Devolver
+                                </button>
+                            </div>
+                        </div>
+                    </div>`).join('')}
+            </div>` : `
+            <div class="cr-banco">
+                ${vazioHTML('archive', 'O banco está vazio',
+                    'Quando uma demanda precisar sair do cronograma sem ser apagada, '
+                  + 'use o ícone de caixa no cartão dela. Ela fica aqui, inteira, esperando data.')}
+            </div>`,
+        footer: `
+            <span style="flex:1"></span>
+            <button class="ds-btn ds-btn--ghost" id="cr-banco-fechar">Fechar</button>`,
+        onMount: (painel) => {
+            injectEstilosBanco();
+            painel.querySelector('#cr-banco-fechar').addEventListener('click', closeDrawer);
+
+            painel.querySelectorAll('[data-voltar]').forEach(b =>
+                b.addEventListener('click', async () => {
+                    const id = b.dataset.voltar;
+                    const c = noBanco.find(x => x.id === id);
+                    const data = painel.querySelector(`[data-data="${id}"]`)?.value || c.data;
+                    b.disabled = true;
+                    /* data_original acompanha: devolver é decisão deliberada
+                       sobre onde o conteúdo vai ficar, e não remanejamento —
+                       o selo de "saiu do lugar" falaria de uma mudança que
+                       ninguém fez. */
+                    await store.conteudos.salvar({ ...c, banco_em: null, data, data_original: data });
+                    closeDrawer();
+                    toast(`"${c.titulo}" voltou para ${dataBR(data)}.`);
+                    aoTerminar();
+                }));
+            if (window.lucide) lucide.createIcons();
+        },
+    });
+}
+
+function injectEstilosBanco() {
+    if (document.getElementById('cronograma-banco-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'cronograma-banco-styles';
+    style.textContent = `
+        .cr-banco { display: flex; flex-direction: column; gap: var(--space-3); }
+        .cr-banco__dica { margin: 0; font-size: var(--text-xs); color: var(--text-tertiary); line-height: var(--leading-body); }
+        .cr-banco__item {
+            display: flex; gap: var(--space-3); overflow: hidden;
+            border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+            background: var(--surface-2);
+        }
+        .cr-banco__corpo { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3) var(--space-4) var(--space-4) 0; min-width: 0; flex: 1; }
+        .cr-banco__topo { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+        .cr-banco__desde { font-size: var(--text-xs); color: var(--text-tertiary); }
+        .cr-banco__titulo { margin: 0; font-size: var(--text-sm); font-weight: 600; color: var(--text-primary); line-height: var(--leading-snug); }
+        .cr-banco__volta { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+        .cr-banco__volta .ds-input { width: auto; }
+    `;
+    document.head.appendChild(style);
+}
+
 export function formularioConteudo(c, cliente, mesSugerido, aoTerminar, etiquetasEmUso = []) {
     const opcoesFase = [
         { valor: '', rotulo: '— escolha a fase —' },
@@ -882,6 +1026,28 @@ const ESTILOS = `
    Discretas de propósito: são recado interno, e competir em peso com a
    fase e o status — que dizem coisas que o cliente vê — trocaria a
    hierarquia do cartão. */
+/* O ícone de guardar aparece no cartão e some quando o dedo sai. Discreto
+   porque é ação ocasional; presente porque procurar em menu uma ação de um
+   clique é o que faz ninguém usar. Em toque não há hover, então ele fica. */
+.cr-guardar {
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    width: 30px; height: 30px; border-radius: var(--radius-sm);
+    color: var(--text-disabled); cursor: pointer; opacity: 0;
+    transition: opacity var(--dur-fast), color var(--dur-fast), background-color var(--dur-fast);
+}
+.cr-guardar i, .cr-guardar svg { width: 15px; height: 15px; }
+.vz-conteudo:hover .cr-guardar { opacity: 1; }
+.cr-guardar:hover { background: var(--surface-3); color: var(--text-primary); }
+.cr-guardar:focus-visible { opacity: 1; outline: 2px solid var(--border-focus); outline-offset: 2px; }
+@media (hover: none) { .cr-guardar { opacity: 1; } }
+
+/* O contador ao lado do rótulo, e não um ponto: quantos há muda a decisão
+   de abrir. Some quando é zero — um contador em zero só ocupa espaço. */
+.cr-conta {
+    min-width: 18px; padding: 0 5px; border-radius: var(--radius-pill);
+    background: var(--accent); color: var(--accent-contrast, #fff);
+    font-size: 11px; font-weight: 700; line-height: 18px; text-align: center;
+}
 .cr-etiquetas { display: flex; flex-wrap: wrap; gap: 5px; margin-top: var(--space-2); }
 .cr-etiqueta {
     padding: 1px 8px; border-radius: var(--radius-pill);
