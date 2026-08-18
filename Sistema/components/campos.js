@@ -71,6 +71,23 @@ const campoHTML = (c, valores) => {
         case 'cor':
             controle = `<input class="cp-cor" id="${id}" name="${c.nome}" type="color" value="${esc(v || '#A855FF')}">`;
             break;
+        /* ── Etiquetas ────────────────────────────────────────────────────
+           Um campo de texto com as etiquetas já em uso oferecidas na lista.
+           Não é um seletor de opções fixas de propósito: o vocabulário é da
+           equipe e muda sozinho — a lista existe para evitar "a gravar" e
+           "A Gravar" convivendo, não para limitar o que dá para escrever.
+
+           Separadas por vírgula porque é como se escreve uma lista à mão. */
+        case 'etiquetas': {
+            const atuais = Array.isArray(v) ? v.join(', ') : (v || '');
+            controle = `<input class="ds-input" id="${id}" name="${c.nome}" type="text"
+                               list="${id}-lista" placeholder="${esc(c.placeholder || '')}"
+                               value="${esc(atuais)}" autocomplete="off">
+                        <datalist id="${id}-lista">
+                            ${(c.sugestoes || []).map(x => `<option value="${esc(x)}"></option>`).join('')}
+                        </datalist>`;
+            break;
+        }
         /* type="email" pelo teclado: no celular ele traz o @ e o ponto na
            primeira camada. A validação do navegador não entra aqui porque o
            formulário não é submetido — quem valida é a tela que usa o valor. */
@@ -108,6 +125,12 @@ const colher = (painel, campos) => {
         const el = painel.querySelector(`[name="${c.nome}"]`);
         if (!el) return;
         if (c.tipo === 'checkbox') dados[c.nome] = el.checked;
+        /* Vira lista, sem vazio e sem repetido. Array vazio e não null: a
+           coluna é text[] e `[]` é "sem etiqueta nenhuma", que é o que
+           apagar o campo quer dizer. */
+        else if (c.tipo === 'etiquetas') {
+            dados[c.nome] = [...new Set(el.value.split(',').map(x => x.trim()).filter(Boolean))];
+        }
         else {
             const bruto = el.value.trim();
             // '' vira null: no Postgres string vazia não é ausência, e um

@@ -18,7 +18,7 @@ import {
 } from '../lib/cronograma.js';
 import {
     listarFases, listarObjetivos, objetivosDaFase, objetivo, nomeFase,
-    leitura, conferir, noDiaCerto,
+    leitura, conferir, noDiaCerto, classificar,
 } from '../lib/diretorio.js';
 import { chipFase, chipStatus, seloDeslocado, vazioHTML, STATUS } from '../lib/pecas.js';
 import { ativarArraste } from '../lib/arrastar.js';
@@ -99,6 +99,17 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
 
     const recarregar = () => renderCronograma(container, clienteId, mes);
 
+    /* O vocabulário de etiquetas não é cadastrado: ele É o que está em uso.
+       Ordenado por frequência, para a etiqueta do dia a dia aparecer primeiro
+       na lista de sugestões em vez da que alguém usou uma vez em março. */
+    const etiquetasEmUso = (() => {
+        const conta = new Map();
+        for (const x of conteudos) {
+            for (const e of x.etiquetas || []) conta.set(e, (conta.get(e) || 0) + 1);
+        }
+        return [...conta.entries()].sort((a, b) => b[1] - a[1]).map(([e]) => e);
+    })();
+
     const desenhar = () => {
         const semanas = mesEmSemanas(conteudos, mes);
         const doMes = conteudos.filter(c => chaveMes(c.data) === mes);
@@ -152,7 +163,7 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
         });
 
         content.querySelector('#cr-novo-vazio')?.addEventListener('click',
-            () => formularioConteudo(null, cliente, mes, recarregar));
+            () => formularioConteudo(null, cliente, mes, recarregar, etiquetasEmUso));
 
         content.querySelectorAll('[data-conteudo]').forEach(el =>
             el.addEventListener('click', () => navegar(`/conteudo/${el.dataset.conteudo}`)));
@@ -210,7 +221,7 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
         () => abrirApagarCronograma(cliente, conteudos, mes, recarregar));
 
     document.getElementById('cr-novo').addEventListener('click',
-        () => formularioConteudo(null, cliente, mes, recarregar));
+        () => formularioConteudo(null, cliente, mes, recarregar, etiquetasEmUso));
 
     desenhar();
 };
@@ -286,6 +297,10 @@ const cartaoHTML = (c, todos) => {
                     ${c.responsavel ? `<span>${esc(c.responsavel)}</span>` : ''}
                     ${c.revisado ? '<span>revisado</span>' : ''}
                 </div>
+                ${(c.etiquetas || []).length ? `
+                    <div class="cr-etiquetas">
+                        ${c.etiquetas.map(e => `<span class="cr-etiqueta">${esc(e)}</span>`).join('')}
+                    </div>` : ''}
                 ${seloDeslocado(desl)}
             </div>
             <i class="cr-seta" data-lucide="chevron-right"></i>
@@ -651,7 +666,7 @@ function injectEstilosLink() {
  *      da fase escolhida COM CONFIANÇA, avisa e mostra os sinais que
  *      encontrou. Discordar dele é normal; discordar sem saber, não.
  */
-export function formularioConteudo(c, cliente, mesSugerido, aoTerminar) {
+export function formularioConteudo(c, cliente, mesSugerido, aoTerminar, etiquetasEmUso = []) {
     const opcoesFase = [
         { valor: '', rotulo: '— escolha a fase —' },
         ...listarFases().map(f => ({ valor: f.id, rotulo: `${nomeFase(f.id)} — ${f.posicao_cronograma}` })),
@@ -707,6 +722,17 @@ export function formularioConteudo(c, cliente, mesSugerido, aoTerminar) {
             { nome: 'revisado', tipo: 'checkbox', rotulo: 'Conformidade revisada',
               dica: 'Marque depois da conferência jurídica. O cliente vê essa confirmação.' },
 
+            /* Etiqueta é o estado INTERNO que o sistema não interpreta — "a
+               gravar", "aguardando data". Fica separada de `status`, que é a
+               conversa com o cliente: cada valor de status vira regra em
+               código, e este campo existe justamente para o fluxo poder mudar
+               sem passar por migração. Ver db/migracao-etiquetas.sql. */
+            { nome: 'etiquetas', rotulo: 'Etiquetas', tipo: 'etiquetas',
+              sugestoes: etiquetasEmUso,
+              placeholder: 'a gravar, aguardando data',
+              dica: 'Separe por vírgula. Só a equipe vê. Escreva a que precisar — '
+                  + 'a lista se monta sozinha com as que já estão em uso.' },
+
             { nome: 'nota', rotulo: 'Anotação interna', tipo: 'textarea',
               dica: 'Só a equipe vê.' },
         ],
@@ -731,6 +757,20 @@ export function formularioConteudo(c, cliente, mesSugerido, aoTerminar) {
                     .join('');
             };
 
+            /* ── A FASE SE PREENCHE SOZINHA ───────────────────────────────
+               O classificador já existia e só servia para DISCORDAR depois que
+               alguém escolhia. Escrevendo o título, ele agora escolhe — e diz
+               por quê, com as palavras que encontrou.
+
+               Só enquanto ninguém escolheu à mão: no instante em que a pessoa
+               mexe no seletor, o automático se cala e não volta. Palpite que
+               sobrescreve decisão humana é a maneira mais rápida de fazer
+               alguém desligar o recurso inteiro.
+
+               E continua sem chutar: sem sinal no texto, `classificar` devolve
+               null e o campo fica vazio esperando gente. */
+            let faseAutomatica = !c?.fase;
+
             const atualizar = () => {
                 const v = lerValores();
 
@@ -744,8 +784,27 @@ export function formularioConteudo(c, cliente, mesSugerido, aoTerminar) {
                     notaLeitura.hidden = true;
                 }
 
-                // 2. A conferência do classificador
                 const texto = [v.titulo, v.tema].filter(Boolean).join('. ');
+
+                // 2. A fase, quando ninguém escolheu
+                if (faseAutomatica) {
+                    const palpite = classificar(texto);
+                    if (palpite && palpite.fase !== selFase.value) {
+                        selFase.value = palpite.fase;
+                        repintarObjetivos();
+                    }
+                    if (palpite) {
+                        notaSugestao.hidden = false;
+                        notaSugestao.classList.remove('cp-viva--erro');
+                        notaSugestao.innerHTML =
+                            `<b>Fase sugerida: ${esc(nomeFase(palpite.fase))}.</b> `
+                            + `Pelo título — ${esc(palpite.termos.slice(0, 4).join(', '))}. `
+                            + 'Troque no seletor se discordar.';
+                        return;
+                    }
+                }
+
+                // 3. A conferência do classificador, quando a escolha é humana
                 const divergencia = conferir(v.fase, texto);
                 if (divergencia) {
                     notaSugestao.hidden = false;
@@ -758,7 +817,11 @@ export function formularioConteudo(c, cliente, mesSugerido, aoTerminar) {
                 }
             };
 
-            selFase.addEventListener('change', () => { repintarObjetivos(); atualizar(); });
+            selFase.addEventListener('change', () => {
+                faseAutomatica = false;
+                repintarObjetivos();
+                atualizar();
+            });
             selObj.addEventListener('change', atualizar);
             painel.querySelector('[name="titulo"]').addEventListener('input', atualizar);
             painel.querySelector('[name="tema"]').addEventListener('input', atualizar);
@@ -815,6 +878,17 @@ const ESTILOS = `
 .cr-alerta i, .cr-alerta svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 2px; }
 .cr-alerta--info { background: var(--info-muted); color: var(--info); }
 
+/* ── Etiquetas ─────────────────────────────────────────────────────────
+   Discretas de propósito: são recado interno, e competir em peso com a
+   fase e o status — que dizem coisas que o cliente vê — trocaria a
+   hierarquia do cartão. */
+.cr-etiquetas { display: flex; flex-wrap: wrap; gap: 5px; margin-top: var(--space-2); }
+.cr-etiqueta {
+    padding: 1px 8px; border-radius: var(--radius-pill);
+    border: 1px dashed var(--border-default);
+    font-size: 10px; font-weight: 600; letter-spacing: var(--tracking-wide);
+    text-transform: uppercase; color: var(--text-tertiary); white-space: nowrap;
+}
 .cr-dia--alerta { color: var(--warning) !important; }
 
 .cr-liberar {

@@ -101,6 +101,49 @@ Acerta os onze exemplos de referência de `03-exemplos-classificados.md`,
 inclusive os dois casos híbridos. O testador vive em `/diretorio` — use-o para
 calibrar a taxonomia com temas reais antes de confiar nela.
 
+## A fase se preenche sozinha
+
+O classificador já existia e só servia para DISCORDAR: alguém escolhia a fase e
+ele avisava quando o texto dizia outra coisa. Agora ele escolhe primeiro —
+escrevendo o título, a fase aparece preenchida, com as palavras que levaram
+àquele palpite escritas embaixo.
+
+Só enquanto ninguém escolheu à mão. No instante em que a pessoa mexe no
+seletor, o automático se cala e não volta; dali em diante ele volta ao papel
+antigo, de discordar quando for o caso. Palpite que sobrescreve decisão humana
+é a maneira mais rápida de fazer alguém desligar o recurso inteiro.
+
+E continua sem chutar: sem sinal no texto, o campo fica vazio esperando gente.
+
+## Etiquetas
+
+O fluxo real hoje é: cria-se a demanda, escreve-se o roteiro, manda-se para a
+médica aprovar e **só depois** se define o dia em que aquilo vai ao ar.
+
+A saída óbvia seria acrescentar "a gravar" e "aguardando data" ao `status`.
+Seria errado. Todo valor de `status` vira regra em código — o cliente vê ou
+não vê, o cartão pinta de tal cor, a função do banco move para tal estado — e
+mudar a dinâmica passaria a exigir migração, deploy e revisão das telas.
+
+`status` continua sendo o que sempre foi: **a conversa com o cliente**
+(rascunho → em revisão → aprovado/ajuste → publicado). São cinco porque a tela
+pública depende de cada um.
+
+**Etiqueta é a outra metade**: o estado interno, que só a equipe vê e que o
+sistema não interpreta. Texto livre, sem cadastro, sem ordem, sem transição
+válida. "a gravar", "gravado", "aguardando data", "esperando imagem do
+cliente" — o que precisar, no dia em que precisar, sem passar por código.
+
+Não há tela de cadastro porque não há cadastro: **as etiquetas que existem são
+as que estão em uso**. O campo sugere as já usadas naquele cliente, ordenadas
+por frequência, para evitar "a gravar" e "A Gravar" convivendo. Quando ninguém
+mais usa uma, ela some sozinha — que é o comportamento certo para um
+vocabulário que muda.
+
+O cliente não recebe etiqueta nenhuma: o recorte é feito na função do banco,
+não na interface. De passagem, a `nota` interna do conteúdo, que ia inteira
+para o navegador dele desde sempre, passou a ser recortada no mesmo lugar.
+
 ## O roteiro
 
 O recorte é livre: **seção**, **fala**, **frase curta**, **bloco livre**,

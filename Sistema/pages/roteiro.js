@@ -1147,7 +1147,8 @@ export const renderRoteiro = async (container, conteudoId) => {
        só — fora do que desenhar() reescreve. Ligar aqui, e não em
        ligarEventos(), evita empilhar um listener a cada redesenho. */
     document.getElementById('rt-editar').addEventListener('click', () =>
-        formularioConteudo(c, cliente, c.data.slice(0, 7), recarregar));
+        formularioConteudo(c, cliente, c.data.slice(0, 7), recarregar,
+            [...new Set(conteudos.flatMap(x => x.etiquetas || []))]));
 
     desenhar();
 };

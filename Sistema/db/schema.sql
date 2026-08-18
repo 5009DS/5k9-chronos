@@ -117,6 +117,12 @@ create table if not exists vz_conteudos (
     -- histórico deve continuar dizendo quem fez depois que a pessoa sair.
     responsavel text,
     nota        text,
+    -- Estado INTERNO, livre, que o sistema não interpreta: "a gravar",
+    -- "aguardando data", "esperando imagem do cliente". Texto livre e sem
+    -- cadastro de propósito — `status` é a conversa com o cliente e cada valor
+    -- dele vira regra em código; etiqueta é da equipe e muda sem migração.
+    -- Ver db/migracao-etiquetas.sql. NÃO sai na resposta do link público.
+    etiquetas   text[],
     -- Marcação manual de revisão jurídica. O sistema já avisa sozinho quando a
     -- fase ou o objetivo pedem atenção (CFM 2.336/2023); esta coluna é a
     -- confirmação humana de que a revisão aconteceu.
@@ -260,7 +266,11 @@ as $$
     )
     select case when not exists (select 1 from c) then null else jsonb_build_object(
         'cliente', (select to_jsonb(c) - 'nota' from c),
-        'conteudos', coalesce((select jsonb_agg(to_jsonb(i)) from itens i), '[]'::jsonb),
+        -- `- 'nota' - 'etiquetas'`: as duas são anotação interna do estúdio e
+        -- iam inteiras para o navegador do cliente. Mesmo motivo do recorte da
+        -- nota do cadastro, logo abaixo.
+        'conteudos', coalesce((
+            select jsonb_agg(to_jsonb(i) - 'nota' - 'etiquetas') from itens i), '[]'::jsonb),
         'blocos', coalesce((
             select jsonb_agg(to_jsonb(b))
               from vz_blocos b where b.conteudo_id in (select id from itens)), '[]'::jsonb),
