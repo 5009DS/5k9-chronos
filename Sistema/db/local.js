@@ -13,7 +13,7 @@
    Configurações oferece exportar em JSON.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { etiquetasPublicas } from '../lib/etiquetas.js';
+import { etiquetasPublicas, ajusteTravado } from '../lib/etiquetas.js';
 
 const CHAVE = (colecao) => `5k9_visualizador_${colecao}`;
 
@@ -134,6 +134,16 @@ export const local = {
         if (!visao) throw new Error('Este link não está mais válido.');
         if (!visao.conteudos.some(c => c.id === retorno.conteudo_id)) {
             throw new Error('Este conteúdo não pertence a este cronograma.');
+        }
+
+        /* A mesma trava da função do banco: gravado fecha o pedido de
+           MUDANÇA, e aprovar continua valendo. Repetida aqui porque os dois
+           adaptadores precisam recusar o mesmo clique — a prévia existe para
+           mostrar o que o cliente vive. */
+        const alvo = ler('conteudos').find(c => c.id === retorno.conteudo_id);
+        if (retorno.tipo === 'ajuste' && ajusteTravado(alvo?.etiquetas)) {
+            throw new Error('Este conteúdo já foi gravado — o roteiro não muda mais. '
+                          + 'Fale com a equipe se precisar de algo.');
         }
 
         const linha = await local.salvar('retornos', {

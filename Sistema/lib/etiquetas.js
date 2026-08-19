@@ -44,7 +44,20 @@ export const ETIQUETAS = [
       dica: 'Liberado para gravar.' },
     { nome: 'a gravar', publica: true,             icone: 'video',         tom: 'atencao',
       dica: 'Ainda não foi para a câmera.' },
-    { nome: 'gravado', publica: true,              icone: 'circle-check',  tom: 'ok',
+    /* Esta é a ÚNICA etiqueta do arquivo que DECIDE algo, e a exceção está
+       registrada de propósito. O resto do vocabulário serve para desenhar;
+       esta faz o cliente perder o botão de pedir ajuste.
+
+       O motivo é físico, não organizacional: depois de gravado, mudar uma
+       fala custa uma diária de estúdio. Deixar o botão ali é convidar para
+       um pedido que a equipe vai ter de recusar — e recusar depois é pior
+       que não oferecer.
+
+       Está declarado como DADO, num lugar só, em vez de espalhado em
+       condições pelas telas. E a trava de verdade mora no banco: a função
+       pública recusa o pedido mesmo que alguém a chame direto
+       (db/migracao-gravado.sql). */
+    { nome: 'gravado', publica: true, travaAjuste: true, icone: 'circle-check',  tom: 'ok',
       dica: 'Material bruto na mão.' },
     { nome: 'em edição', publica: true,            icone: 'scissors',      tom: 'info',
       dica: 'Na mesa de corte.' },
@@ -70,6 +83,10 @@ export const etiquetaMeta = (nome) =>
 /** As que o cliente pode ver. Desconhecida some — é a regra, não a exceção. */
 export const etiquetasPublicas = (lista) =>
     (lista || []).filter(nome => etiquetaMeta(nome).publica);
+
+/** O conteúdo já foi gravado? Então o roteiro dele virou passado. */
+export const ajusteTravado = (lista) =>
+    (lista || []).some(nome => etiquetaMeta(nome).travaAjuste);
 
 export const chipEtiqueta = (nome) => {
     const m = etiquetaMeta(nome);

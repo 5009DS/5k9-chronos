@@ -13,7 +13,7 @@ import { openDrawer, closeDrawer } from '../components/drawer.js';
 import { toast } from '../components/toast.js';
 import { conversas, estadoMeta, ato, daEquipe, novidadesPara } from '../lib/conversa.js';
 import { iniciarTour, tourVisto, marcarTourVisto, MODELO } from '../lib/tour.js';
-import { chipEtiqueta, etiquetasPublicas, injectEstilosEtiqueta } from '../lib/etiquetas.js';
+import { chipEtiqueta, etiquetasPublicas, injectEstilosEtiqueta, ajusteTravado } from '../lib/etiquetas.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    A TELA DO CLIENTE — /c/<token> e /c/<token>/<conteúdo>
@@ -267,7 +267,8 @@ const semanaHTML = ({ segunda, conteudos }, token, comRoteiro) => {
 const cartaoConteudo = (c, token, comRoteiro) => {
     const o = objetivo(c.objetivo);
     return `
-        <a class="vz-conteudo" href="/c/${esc(token)}/${esc(c.id)}">
+        <a class="vz-conteudo ${ajusteTravado(c.etiquetas) ? 'cl-gravado' : ''}"
+           href="/c/${esc(token)}/${esc(c.id)}">
             <span class="vz-fita vz-fita--${esc(c.fase || '')}"></span>
             <div class="vz-conteudo__corpo">
                 <div class="vz-conteudo__topo">
@@ -327,13 +328,20 @@ const desenharConteudo = (container, token, visao, conteudoId) => {
     /* Sem roteiro não há o que aprovar nem o que comentar — e não há conversa
        para mostrar, mesmo que o banco ainda guarde a de um texto apagado. */
     const semRoteiro = meus.length === 0;
-    const podeResponder = !semRoteiro && ['em_revisao', 'aprovado', 'ajuste'].includes(c.status);
+    /* Gravado encerra a conversa sobre o roteiro. O texto continua inteiro na
+       tela — ele é o registro do que foi combinado, e o cliente vai querer
+       relê-lo — mas em segundo plano, porque não é mais coisa a decidir. As
+       etiquetas ficam em primeiro: são elas que explicam por que o resto
+       esmaeceu. */
+    const gravado = ajusteTravado(c.etiquetas);
+    const podeResponder = !semRoteiro && !gravado
+        && ['em_revisao', 'aprovado', 'ajuste'].includes(c.status);
     /* Lido ANTES de marcar a visita: marcar primeiro apagaria a novidade no
        instante em que ela deveria aparecer. */
     const novidades = novidadesPara(historico, ultimaVisita(c.id));
 
     container.innerHTML = `
-        <div class="cl cl--roteiro">
+        <div class="cl cl--roteiro ${gravado ? 'cl--gravado' : ''}">
             <header class="cl-topo-roteiro">
                 <a class="cl-voltar" href="/c/${esc(token)}">
                     <i data-lucide="arrow-left"></i> Cronograma
@@ -419,7 +427,7 @@ const desenharConteudo = (container, token, visao, conteudoId) => {
                 <div class="cl-espaco-barra"></div>
             </main>
 
-            ${podeResponder ? barraAcao(c) : ''}
+            ${gravado ? seloGravado() : podeResponder ? barraAcao(c) : ''}
         </div>`;
 
     if (podeResponder) {
@@ -726,6 +734,20 @@ const historicoHTML = (historico) => `
             </div>`;
         }).join('')}
     </section>`;
+
+/* Ocupa o lugar da barra de ação, e não é botão: não há o que apertar. O
+   verde vem do --success do design system, num gradiente próprio — o de
+   violeta é o da ação principal, e aqui não há ação. */
+const seloGravado = () => `
+    <div class="cl-barra cl-barra--gravado">
+        <div class="cl-selo">
+            <i data-lucide="circle-check-big"></i>
+            <span>
+                <strong>Conteúdo aprovado</strong>
+                Já foi gravado — o roteiro fica aqui como registro do que combinamos.
+            </span>
+        </div>
+    </div>`;
 
 const barraAcao = (c) => `
     <div class="cl-barra">
@@ -1145,6 +1167,55 @@ function injectStyles() {
         .cl-novidade i, .cl-novidade svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 2px; }
 
         /* A faixa de "isto é exemplo", na tela do modelo do tour. */
+        /* ── GRAVADO ──────────────────────────────────────────────────────
+           O conteúdo esmaece, as etiquetas não. A opacidade é aplicada nos
+           FILHOS, um a um, e nunca no contêiner: a propriedade opacity cria um grupo de
+           composição, e dentro de um grupo a 45% não existe filho a 100% —
+           as etiquetas apagariam junto e o cartão perderia justamente a
+           informação que explica por que ele está apagado. */
+        .cl-gravado .vz-conteudo__topo,
+        .cl-gravado .vz-conteudo__titulo,
+        .cl-gravado .vz-conteudo__previa,
+        .cl-gravado .vz-conteudo__pe,
+        .cl-gravado .vz-fita,
+        .cl-gravado .cl-seta { opacity: 0.42; }
+
+        .cl--gravado .cl-titulo,
+        .cl--gravado .cl-quando,
+        .cl--gravado .cl-tema,
+        .cl--gravado .cl-ficha__chips,
+        .cl--gravado .cl-estrategia,
+        .cl--gravado .cl-roteiro,
+        .cl--gravado .cl-historico { opacity: 0.55; }
+        /* Ao tocar, volta ao normal: quem foi ler o roteiro quer lê-lo. O
+           esmaecido diz "não é aqui que você decide", não "não leia". */
+        .cl--gravado .cl-roteiro:hover,
+        .cl--gravado .cl-roteiro:focus-within { opacity: 1; }
+
+        /* O selo no lugar da barra. Verde do design system, num gradiente
+           próprio: o violeta é a cor da ação principal, e aqui não há ação. */
+        /* Dupla classe: .cl-barra é declarada DEPOIS neste mesmo bloco, e com
+           especificidade igual a última regra vence — o gradiente sumia sob o
+           vidro da barra normal. */
+        .cl-barra.cl-barra--gravado {
+            background: linear-gradient(120deg,
+                color-mix(in oklch, var(--success) 26%, var(--surface-1)) 0%,
+                color-mix(in oklch, var(--success) 13%, var(--surface-1)) 55%,
+                color-mix(in oklch, var(--success) 32%, var(--surface-1)) 100%);
+            border-top: 1px solid color-mix(in oklch, var(--success) 45%, transparent);
+            -webkit-backdrop-filter: none; backdrop-filter: none;
+        }
+        .cl-selo {
+            display: flex; align-items: center; gap: var(--space-3);
+            color: var(--success);
+        }
+        .cl-selo i, .cl-selo svg { width: 22px; height: 22px; flex-shrink: 0; }
+        .cl-selo span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .cl-selo strong { font-size: var(--text-body); font-weight: 600; }
+        .cl-selo span span, .cl-selo span {
+            font-size: var(--text-xs); line-height: var(--leading-body);
+            color: color-mix(in oklch, var(--success) 70%, var(--text-secondary));
+        }
         .cl-etiquetas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--space-2); }
 
         .cl-modelo {

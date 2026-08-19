@@ -196,6 +196,31 @@ por frequência, para evitar "a gravar" e "A Gravar" convivendo. Quando ninguém
 mais usa uma, ela some sozinha — que é o comportamento certo para um
 vocabulário que muda.
 
+### "Gravado" fecha o assunto
+
+Depois que a peça foi gravada, mudar uma fala custa uma diária de estúdio. Na
+tela do cliente, marcar **gravado** faz três coisas:
+
+- o conteúdo **esmaece** — no cartão do cronograma e na página do roteiro — e
+  **as etiquetas ficam em 100%**, porque são elas que explicam por que o resto
+  apagou;
+- o botão de pedir ajuste **some**, e a barra vira um selo verde: *Conteúdo
+  aprovado — já foi gravado, o roteiro fica aqui como registro do que
+  combinamos*;
+- o roteiro **continua inteiro e legível** (e volta a 100% ao tocar nele). O
+  esmaecido diz "não é aqui que você decide", não "não leia" — o texto é o
+  registro do que foi combinado, e é para isso que ele continua na tela.
+
+**A trava é no banco.** A função pública recusa o pedido de ajuste com uma
+mensagem escrita para o cliente ler; esconder o botão seria decoração, já que
+quem tem o link e o console chama a função direto. **Aprovar continua valendo**
+— "concordo" nunca precisa ser barrado; o que a gravação fecha é o pedido de
+mudança.
+
+Esta é a **única** etiqueta que decide alguma coisa, e a exceção está declarada
+como dado (`travaAjuste`) num lugar só, em vez de espalhada em condições pelas
+telas.
+
 ### O que o cliente vê
 
 As **sete de produção** aparecem no cronograma dele e no topo do roteiro: é a

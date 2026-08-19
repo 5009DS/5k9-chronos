@@ -345,10 +345,22 @@ begin
      where co.id = p_conteudo
        and (cl.token = p_token or cl.apelido = p_token)
        and cl.ativo is true
-       and co.status <> 'rascunho';
+       and co.status <> 'rascunho'
+       and co.banco_em is null;
 
     if v_id is null then
         raise exception 'Este link não está mais válido para este conteúdo.';
+    end if;
+
+    -- Gravado fecha o pedido de MUDANÇA; aprovar continua valendo, porque
+    -- "concordo" nunca precisa ser barrado. Esconder o botão na tela é
+    -- decoração — quem tem o link e o console chama a função direto. Ver
+    -- db/migracao-gravado.sql.
+    if p_tipo = 'ajuste' and exists (
+        select 1 from vz_conteudos co, unnest(coalesce(co.etiquetas, '{}')) e
+         where co.id = v_id and lower(trim(e)) = 'gravado'
+    ) then
+        raise exception 'Este conteúdo já foi gravado — o roteiro não muda mais. Fale com a equipe se precisar de algo.';
     end if;
 
     -- `to_jsonb(vz_retornos.*)` e não `to_jsonb(vz_retornos)`: a segunda forma
