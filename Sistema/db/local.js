@@ -13,7 +13,7 @@
    Configurações oferece exportar em JSON.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { etiquetasPublicas, ajusteTravado } from '../lib/etiquetas.js';
+import { etiquetasPublicas, ajusteTravado, etiquetasAoAprovar } from '../lib/etiquetas.js';
 
 const CHAVE = (colecao) => `5k9_visualizador_${colecao}`;
 
@@ -164,10 +164,15 @@ export const local = {
            responder a mesma coisa ao mesmo clique — divergência entre eles
            aparece como bug que só acontece em produção. */
         if (!retorno.bloco_id) {
-            const conteudo = visao.conteudos.find(c => c.id === retorno.conteudo_id);
+            /* `alvo` e não o conteúdo da visão: a visão já saiu recortada para
+               o cliente, sem nota e só com as etiquetas públicas — gravar a
+               partir dela apagaria as internas. */
             await local.salvar('conteudos', {
-                ...conteudo,
+                ...alvo,
                 status: retorno.tipo === 'aprovado' ? 'aprovado' : 'ajuste',
+                etiquetas: retorno.tipo === 'aprovado'
+                    ? etiquetasAoAprovar(alvo?.etiquetas)
+                    : alvo?.etiquetas,
             });
         }
         return linha;

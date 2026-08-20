@@ -240,6 +240,24 @@ Esta é a **única** etiqueta que decide alguma coisa, e a exceção está decla
 como dado (`travaAjuste`) num lugar só, em vez de espalhada em condições pelas
 telas.
 
+### A aprovação empurra a produção
+
+Quando o cliente aprova, duas coisas passam a ser verdade no mesmo instante: o
+roteiro está aprovado e a peça entrou na fila de gravação. Então a aprovação
+mexe nas etiquetas sozinha — tira **roteiro em aprovação**, põe **roteiro
+aprovado** e **a gravar**.
+
+Sem isso, alguém teria de abrir a ficha e escrever as duas à mão, que é o tipo
+de tarefa que ninguém lembra de fazer na sexta à noite — e o quadro passa a
+semana dizendo "roteiro em aprovação" numa peça já liberada.
+
+O que ela **não** faz: não encosta em peça já **gravada** (aprovar um assunto
+pendente depois da gravação é legítimo, e devolver "a gravar" ali mandaria
+gravar de novo o que está pronto); não apaga nenhuma outra etiqueta —
+"aguardando material" continua valendo depois da aprovação; e só vale para a
+aprovação do conteúdo inteiro, porque encerrar a conversa de uma fala não
+aprova roteiro nenhum.
+
 ### O que o cliente vê
 
 As **sete de produção** aparecem no cronograma dele e no topo do roteiro: é a

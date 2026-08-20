@@ -88,6 +88,40 @@ export const etiquetasPublicas = (lista) =>
 export const ajusteTravado = (lista) =>
     (lista || []).some(nome => etiquetaMeta(nome).travaAjuste);
 
+/* ── O QUE A APROVAÇÃO DO CLIENTE MUDA ────────────────────────────────────
+   Quando ele aprova, duas coisas passam a ser verdade no mesmo instante: o
+   roteiro está aprovado e a peça entrou na fila de gravação. Alguém teria de
+   escrever as duas etiquetas à mão — e é o tipo de tarefa que ninguém lembra
+   de fazer na sexta à noite, deixando o quadro dizer "roteiro em aprovação"
+   numa peça já liberada.
+
+   Tira o que deixou de valer, põe o que passou a valer, e não encosta em mais
+   nada: "aguardando material" continua verdade depois da aprovação, e apagar
+   o que a equipe escreveu seria trocar o trabalho dela por um palpite nosso.
+
+   Peça já GRAVADA fica intocada — aprovar um assunto pendente depois da
+   gravação é legítimo, e devolver "a gravar" ali mandaria a equipe gravar de
+   novo o que já está pronto.
+
+   A regra também vive no banco (db/migracao-aprovado-etiquetas.sql), que é
+   quem decide de fato. Aqui ela existe para o adaptador local responder
+   igual. */
+const SAI_AO_APROVAR = ['roteiro em aprovação'];
+const ENTRA_AO_APROVAR = ['roteiro aprovado', 'a gravar'];
+
+export const etiquetasAoAprovar = (lista) => {
+    const atuais = lista || [];
+    if (ajusteTravado(atuais)) return atuais;
+
+    const chaveDe = (x) => String(x).toLowerCase().trim();
+    const fora = new Set(SAI_AO_APROVAR.map(chaveDe));
+    const ficam = atuais.filter(e => !fora.has(chaveDe(e)));
+    const faltam = ENTRA_AO_APROVAR.filter(n =>
+        !ficam.some(e => chaveDe(e) === chaveDe(n)));
+
+    return [...ficam, ...faltam];
+};
+
 export const chipEtiqueta = (nome) => {
     const m = etiquetaMeta(nome);
     return `<span class="vz-etiqueta vz-etiqueta--${esc(m.tom)}"${m.dica ? ` title="${esc(m.dica)}"` : ''}>

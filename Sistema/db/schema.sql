@@ -388,7 +388,26 @@ begin
     -- cronograma da equipe não pode passar a dizer "aprovado" por causa disso.
     if v_bloco is null then
         update vz_conteudos
-           set status = case when p_tipo = 'aprovado' then 'aprovado' else 'ajuste' end
+           set status = case when p_tipo = 'aprovado' then 'aprovado' else 'ajuste' end,
+               -- A aprovação empurra a produção: tira "roteiro em aprovação",
+               -- põe "roteiro aprovado" e "a gravar". Nunca numa peça já
+               -- gravada — devolver "a gravar" ali mandaria gravar de novo o
+               -- que está pronto. Ver db/migracao-aprovado-etiquetas.sql.
+               etiquetas = case
+                   when p_tipo = 'aprovado' and not exists (
+                       select 1 from unnest(coalesce(etiquetas, '{}')) g
+                        where lower(trim(g)) = 'gravado'
+                   ) then (
+                       select array(
+                           select distinct x from unnest(
+                               array(select e from unnest(coalesce(etiquetas, '{}')) e
+                                      where lower(trim(e)) <> 'roteiro em aprovação')
+                               || array['roteiro aprovado', 'a gravar']
+                           ) x
+                       )
+                   )
+                   else etiquetas
+               end
          where id = v_id;
     end if;
 
