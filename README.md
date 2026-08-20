@@ -273,6 +273,29 @@ O sistema estima a duração de fala enquanto se digita (150 palavras/minuto, e 
 tela diz que é estimativa) e avisa quando há dois CTAs, quando falta gancho ou
 quando um bloco passa de 45 segundos.
 
+### Teleprompter
+
+O roteiro existe para ser falado, e só podia ser lido numa tela de trabalho —
+com campos de edição, menus e a barra do navegador em volta. **Teleprompter**,
+no topo da seção, abre o texto em tela cheia, preto, rolando sozinho.
+
+A velocidade tem **duas formas de ser dita, e elas são a mesma conta**:
+palavras por minuto, para quem já sabe o ritmo em que fala, e tempo total, para
+quem tem um limite ("o reels tem 45 segundos"). Mexer numa recalcula a outra na
+hora, e as duas ficam na tela ao mesmo tempo.
+
+A rolagem sai de `altura ÷ duração`, e não de pixels por segundo: assim o
+mesmo roteiro sobe no mesmo tempo em qualquer tela, sem recalibrar a cada
+aparelho. Tem contagem regressiva de 3 segundos (quem aperta o play é quem vai
+falar, e precisa voltar para a frente da câmera), linha de leitura a 38% da
+altura, tamanho de letra ajustável, espelhamento para prompter de vidro e wake
+lock para a tela não apagar no meio da gravação.
+
+Espaço pausa, ↑ e ↓ mudam a velocidade, R volta ao início, Esc sai.
+
+Seção e orientação de gravação aparecem, em desenho de instrução: quem está na
+frente da câmera usa as duas para se situar, mas não as fala.
+
 ### Colar o roteiro inteiro
 
 Montar bloco a bloco é bom para ESCREVER e péssimo para RECEBER. A roteirista

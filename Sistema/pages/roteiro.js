@@ -9,6 +9,7 @@ import { objetivo, classificar, nomeFase } from '../lib/diretorio.js';
 import { retornosDe } from '../lib/cronograma.js';
 import { timeSalvo } from '../lib/gestor.js';
 import { linkDoCliente } from '../lib/apelido.js';
+import { abrirTeleprompter } from '../lib/teleprompter.js';
 import {
     conversas, estadoMeta, ato, daEquipe, textoOriginal, entradaDaEquipe,
 } from '../lib/conversa.js';
@@ -216,6 +217,10 @@ export const renderRoteiro = async (container, conteudoId) => {
                         <span class="ds-card-sub" id="rt-medida">${esc(medida(blocos))}</span>
                     </div>
                     <div class="rt-acoes-topo">
+                        ${blocos.length ? `
+                            <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-prompter">
+                                <i data-lucide="captions"></i> Teleprompter
+                            </button>` : ''}
                         <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-colar">
                             <i data-lucide="clipboard-paste"></i> Colar roteiro
                         </button>
@@ -333,6 +338,11 @@ export const renderRoteiro = async (container, conteudoId) => {
                 },
             });
             recarregar();
+        });
+
+        content.querySelector('#rt-prompter')?.addEventListener('click', () => {
+            const { erro } = abrirTeleprompter(c, blocos);
+            if (erro) toast(erro);
         });
 
         content.querySelector('#rt-avisar')?.addEventListener('click', abrirAviso);
