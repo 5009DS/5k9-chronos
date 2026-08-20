@@ -308,10 +308,15 @@ hora, e as duas ficam na tela ao mesmo tempo.
 
 A rolagem sai de `altura ÷ duração`, e não de pixels por segundo: assim o
 mesmo roteiro sobe no mesmo tempo em qualquer tela, sem recalibrar a cada
-aparelho. Tem contagem regressiva de 3 segundos (quem aperta o play é quem vai
-falar, e precisa voltar para a frente da câmera), linha de leitura a 38% da
-altura, tamanho de letra ajustável, espelhamento para prompter de vidro e wake
-lock para a tela não apagar no meio da gravação.
+aparelho. Tem linha de leitura a 38% da altura, tamanho de letra ajustável e
+wake lock para a tela não apagar no meio da gravação. Rolar com o dedo durante
+a leitura vale: quem se perdeu volta duas linhas e continua de onde parou.
+
+**A posição vive em número quebrado**, e o `scrollTop` só a recebe. Somar
+direto no `scrollTop` parece igual e não é: a 150 palavras por minuto o avanço
+é de 0,6 pixel por quadro, o navegador arredonda para zero e o texto nunca sai
+do lugar. Só andava em velocidade alta — que foi exatamente como eu testei da
+primeira vez.
 
 Espaço pausa, ↑ e ↓ mudam a velocidade, R volta ao início, Esc sai.
 

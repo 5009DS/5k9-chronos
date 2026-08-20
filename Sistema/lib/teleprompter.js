@@ -72,6 +72,13 @@ export const abrirTeleprompter = (conteudo, todosBlocos) => {
     let rodando = false;
     let ultimo = 0;
     let quadro = null;
+    /* A POSIÇÃO VIVE AQUI, em número quebrado, e o scrollTop só a recebe.
+       Somar direto no scrollTop parece igual e não é: a 150 palavras por
+       minuto o avanço é de 0,6 pixel por quadro, o navegador arredonda para
+       zero e o texto NUNCA sai do lugar. Só andava em velocidade alta, que foi
+       exatamente como eu testei — o erro estava no teste antes de estar no
+       código. */
+    let posicao = 0;
     let trava = null;   // wake lock, quando o navegador tiver
 
     const duracao = () => (palavras / ppm) * 60;
@@ -96,14 +103,12 @@ export const abrirTeleprompter = (conteudo, todosBlocos) => {
             </div>
         </div>
 
-        <div class="tp-contagem" id="tp-contagem" hidden></div>
-
         <div class="tp-controles">
             <div class="tp-progresso"><span id="tp-barra"></span></div>
 
             <div class="tp-linha-controles">
                 <button class="tp-btn tp-btn--principal" id="tp-play">
-                    <i data-lucide="play"></i> <span>Começar</span>
+                    <i data-lucide="play"></i> <span>Rolar</span>
                 </button>
                 <button class="tp-btn" id="tp-reiniciar" title="Voltar ao início (R)">
                     <i data-lucide="rotate-ccw"></i>
@@ -124,9 +129,6 @@ export const abrirTeleprompter = (conteudo, todosBlocos) => {
                 <div class="tp-extras">
                     <button class="tp-btn" data-fonte="-1" title="Diminuir a letra">A−</button>
                     <button class="tp-btn" data-fonte="1" title="Aumentar a letra">A+</button>
-                    <button class="tp-btn" id="tp-espelho" title="Espelhar, para prompter de vidro">
-                        <i data-lucide="flip-horizontal"></i>
-                    </button>
                 </div>
             </div>
         </div>`;
@@ -142,7 +144,6 @@ export const abrirTeleprompter = (conteudo, todosBlocos) => {
     const campoTempo = camada.querySelector('#tp-tempo');
     const restante = camada.querySelector('#tp-restante');
     const barra = camada.querySelector('#tp-barra');
-    const contagem = camada.querySelector('#tp-contagem');
 
     let fonte = 34;
     const aplicarFonte = () => { texto.style.fontSize = `${fonte}px`; };
@@ -165,10 +166,11 @@ export const abrirTeleprompter = (conteudo, todosBlocos) => {
         const dt = (agora - ultimo) / 1000;
         ultimo = agora;
 
-        palco.scrollTop += (rolagemMax() / duracao()) * dt;
+        posicao += (rolagemMax() / duracao()) * dt;
+        palco.scrollTop = posicao;
         atualizarNumeros();
 
-        if (palco.scrollTop >= rolagemMax() - 1) return pausar(true);
+        if (posicao >= rolagemMax() - 1) return pausar(true);
         quadro = requestAnimationFrame(passo);
     };
 
@@ -198,28 +200,15 @@ export const abrirTeleprompter = (conteudo, todosBlocos) => {
         if (window.lucide) lucide.createIcons();
     }
 
-    /* Três segundos antes de começar. Não é enfeite: quem aperta o play é a
-       mesma pessoa que vai falar, e ela precisa do tempo de voltar para a
-       frente da câmera. */
-    const contagemRegressiva = () => new Promise(resolve => {
-        let n = 3;
-        contagem.hidden = false;
-        contagem.textContent = n;
-        const t = setInterval(() => {
-            n--;
-            if (n === 0) {
-                clearInterval(t);
-                contagem.hidden = true;
-                return resolve();
-            }
-            contagem.textContent = n;
-        }, 1000);
-    });
+    function voltarAoInicio() {
+        posicao = 0;
+        palco.scrollTop = 0;
+        atualizarNumeros();
+    }
 
-    const alternar = async () => {
+    const alternar = () => {
         if (rodando) return pausar();
-        if (palco.scrollTop >= rolagemMax() - 1) palco.scrollTop = 0;
-        if (palco.scrollTop === 0) await contagemRegressiva();
+        if (posicao >= rolagemMax() - 1) voltarAoInicio();
         iniciar();
     };
 
@@ -243,15 +232,12 @@ export const abrirTeleprompter = (conteudo, todosBlocos) => {
         if (e.key === ' ') { e.preventDefault(); return alternar(); }
         if (e.key === 'ArrowUp')   { e.preventDefault(); return mudarPpm(ppm + 5); }
         if (e.key === 'ArrowDown') { e.preventDefault(); return mudarPpm(ppm - 5); }
-        if (e.key.toLowerCase() === 'r') { palco.scrollTop = 0; atualizarNumeros(); }
+        if (e.key.toLowerCase() === 'r') voltarAoInicio();
     }
 
     play.addEventListener('click', alternar);
     camada.querySelector('[data-tp-sair]').addEventListener('click', sair);
-    camada.querySelector('#tp-reiniciar').addEventListener('click', () => {
-        palco.scrollTop = 0;
-        atualizarNumeros();
-    });
+    camada.querySelector('#tp-reiniciar').addEventListener('click', voltarAoInicio);
 
     campoPpm.addEventListener('change', () => mudarPpm(Number(campoPpm.value) || PALAVRAS_POR_MINUTO));
     campoTempo.addEventListener('change', () => {
@@ -269,14 +255,14 @@ export const abrirTeleprompter = (conteudo, todosBlocos) => {
             atualizarNumeros();
         }));
 
-    camada.querySelector('#tp-espelho').addEventListener('click', (e) => {
-        texto.classList.toggle('is-espelhado');
-        e.currentTarget.classList.toggle('is-ativo');
+    /* Rolar com o dedo é correção legítima: quem se perdeu volta duas linhas
+       e continua. A posição interna passa a ser a de quem corrigiu — sem isto,
+       o próximo quadro puxaria o texto de volta para onde o motor achava que
+       estava. */
+    palco.addEventListener('scroll', () => {
+        if (Math.abs(palco.scrollTop - posicao) > 2) posicao = palco.scrollTop;
+        atualizarNumeros();
     });
-
-    /* Rolar com o dedo durante a leitura é correção legítima, e os números
-       precisam acompanhar quem corrigiu. */
-    palco.addEventListener('scroll', atualizarNumeros);
     document.addEventListener('keydown', aoTeclado);
 
     atualizarNumeros();
@@ -331,7 +317,6 @@ function injetarEstilos() {
             font-size: 34px; line-height: 1.45; font-weight: 500;
             text-align: center;
         }
-        .tp-texto.is-espelhado { transform: scaleX(-1); }
 
         .tp-fala { margin: 0 0 0.9em; }
         .tp-fala--gancho { color: #C9A9FF; }
@@ -365,14 +350,6 @@ function injetarEstilos() {
         .tp-linha::before { left: 0;  border-left-color: rgba(201, 169, 255, 0.8); }
         .tp-linha::after  { right: 0; border-right-color: rgba(201, 169, 255, 0.8); }
 
-        .tp-contagem {
-            position: absolute; inset: 0; display: flex;
-            align-items: center; justify-content: center;
-            font-size: 22vh; font-weight: 700; color: rgba(201, 169, 255, 0.9);
-            pointer-events: none;
-        }
-        .tp-contagem[hidden] { display: none; }
-
         .tp-controles {
             border-top: 1px solid rgba(255, 255, 255, 0.12);
             padding: var(--space-3) var(--space-4);
@@ -397,7 +374,6 @@ function injetarEstilos() {
         .tp-btn--principal { min-width: 130px; background: #A855FF; border-color: transparent; }
         .tp-btn--principal:hover { background: #B96BFF; }
         .tp-btn--x { min-height: 34px; padding: 0 10px; }
-        .tp-btn.is-ativo { background: #A855FF; border-color: transparent; }
 
         .tp-campo { display: flex; flex-direction: column; gap: 3px; }
         .tp-campo span { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255, 255, 255, 0.5); }
