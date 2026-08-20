@@ -812,7 +812,11 @@ function injectEstilosBanco() {
     document.head.appendChild(style);
 }
 
-export function formularioConteudo(c, cliente, mesSugerido, aoTerminar, etiquetasEmUso = []) {
+/* `textoDoRoteiro` é opcional e muda a qualidade do palpite: um título como
+   "O que avaliar antes de começar" não tem sinal nenhum, e as nove falas
+   abaixo dele têm todos. Quem abre a ficha pela tela do roteiro passa o texto;
+   quem cria um conteúdo do zero ainda não tem o que passar. */
+export function formularioConteudo(c, cliente, mesSugerido, aoTerminar, etiquetasEmUso = [], textoDoRoteiro = '') {
     const opcoesFase = [
         { valor: '', rotulo: '— escolha a fase —' },
         ...listarFases().map(f => ({ valor: f.id, rotulo: `${nomeFase(f.id)} — ${f.posicao_cronograma}` })),
@@ -930,7 +934,7 @@ export function formularioConteudo(c, cliente, mesSugerido, aoTerminar, etiqueta
                     notaLeitura.hidden = true;
                 }
 
-                const texto = [v.titulo, v.tema].filter(Boolean).join('. ');
+                const texto = [v.titulo, v.tema, textoDoRoteiro].filter(Boolean).join('. ');
 
                 // 2. A fase, quando ninguém escolheu
                 if (faseAutomatica) {

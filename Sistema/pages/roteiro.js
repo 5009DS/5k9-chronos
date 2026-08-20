@@ -5,7 +5,7 @@ import { openDrawer, closeDrawer } from '../components/drawer.js';
 import { lerRoteiroUnico } from '../lib/importar.js';
 import { toast } from '../components/toast.js';
 import { esc, dataBR, quandoRelativo, nomeDia, duracao, segundosDeFala } from '../lib/formato.js';
-import { objetivo } from '../lib/diretorio.js';
+import { objetivo, classificar, nomeFase } from '../lib/diretorio.js';
 import { retornosDe } from '../lib/cronograma.js';
 import { timeSalvo } from '../lib/gestor.js';
 import { linkDoCliente } from '../lib/apelido.js';
@@ -151,6 +151,7 @@ export const renderRoteiro = async (container, conteudoId) => {
                     </div>` : ''}
                 ${cartaoLeitura(c.fase, c.objetivo)}
                 ${avisosHTML(c.fase, c.objetivo)}
+                ${sugestaoDeFase(c, blocos)}
                 ${explicacaoObjetivo(c.fase, c.objetivo)}
                 ${c.nota ? `<p class="rt-interna"><i data-lucide="lock"></i> ${esc(c.nota)}</p>` : ''}
             </article>
@@ -317,6 +318,21 @@ export const renderRoteiro = async (container, conteudoId) => {
             } catch {
                 toast('Não foi possível copiar. Selecione o texto na tela.');
             }
+        });
+
+        content.querySelector('#rt-aplicar-fase')?.addEventListener('click', async (e) => {
+            const b = e.target.closest('button');
+            b.disabled = true;
+            const anterior = c.fase;
+            await store.conteudos.salvar({ ...c, fase: b.dataset.fase });
+            toast(`Fase: ${nomeFase(b.dataset.fase)}.`, {
+                label: 'Desfazer',
+                onClick: async () => {
+                    await store.conteudos.salvar({ ...c, fase: anterior });
+                    recarregar();
+                },
+            });
+            recarregar();
         });
 
         content.querySelector('#rt-avisar')?.addEventListener('click', abrirAviso);
@@ -1148,12 +1164,53 @@ export const renderRoteiro = async (container, conteudoId) => {
        ligarEventos(), evita empilhar um listener a cada redesenho. */
     document.getElementById('rt-editar').addEventListener('click', () =>
         formularioConteudo(c, cliente, c.data.slice(0, 7), recarregar,
-            [...new Set(conteudos.flatMap(x => x.etiquetas || []))]));
+            [...new Set(conteudos.flatMap(x => x.etiquetas || []))],
+            paraTexto(c, blocos)));
 
     desenhar();
 };
 
 // ─────────────────────────────────────────────────────────────────────────
+
+/* ═══════════════════════════════════════════════════════════════════════
+   A FASE, LIDA DO ROTEIRO INTEIRO
+
+   O formulário já classificava pelo título. Aqui há muito mais texto: nove
+   falas escritas para convencer alguém, que é exatamente onde os sinais de
+   fase moram. Um título como "O que avaliar antes de começar" não diz nada;
+   a fala "agende sua avaliação" diz tudo.
+
+   Dois casos, e um silêncio:
+     · sem fase   → sugere, e um clique aplica;
+     · com fase   → só fala se DISCORDAR, e nunca com confiança baixa;
+     · sem sinal  → não aparece. Um cartão que sempre tem palpite ensina a
+                    ignorar o cartão.
+   ═══════════════════════════════════════════════════════════════════════ */
+const sugestaoDeFase = (c, blocos) => {
+    const texto = [c.titulo, c.tema, paraTexto(c, blocos)].filter(Boolean).join('. ');
+    const s = classificar(texto);
+    if (!s) return '';
+    if (c.fase && (s.fase === c.fase || s.confianca === 'baixa')) return '';
+
+    const termos = s.termos.slice(0, 5).join(', ');
+    return `
+        <div class="vz-leitura ${c.fase ? 'vz-leitura--atencao' : ''}">
+            <div class="vz-leitura__cabeca">
+                <i data-lucide="${c.fase ? 'triangle-alert' : 'wand-sparkles'}"></i>
+                ${c.fase ? 'O roteiro discorda da fase' : 'Fase sugerida pelo roteiro'}
+            </div>
+            <p class="vz-leitura__texto">
+                <strong>${esc(nomeFase(s.fase))}.</strong>
+                ${c.fase
+                    ? `A ficha diz ${esc(nomeFase(c.fase).toLowerCase())}, mas o texto tem mais sinais de ${esc(nomeFase(s.fase).toLowerCase())}`
+                    : 'Lido do título e do roteiro'}${termos ? ` — ${esc(termos)}` : ''}.
+                ${s.regra ? `<em>${esc(s.regra)}</em>` : ''}
+            </p>
+            <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-aplicar-fase" data-fase="${esc(s.fase)}">
+                <i data-lucide="check"></i> ${c.fase ? `Trocar para ${esc(nomeFase(s.fase).toLowerCase())}` : `Marcar como ${esc(nomeFase(s.fase).toLowerCase())}`}
+            </button>
+        </div>`;
+};
 
 const medida = (blocos) => {
     if (!blocos.length) return 'Nenhum bloco ainda';

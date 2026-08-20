@@ -115,6 +115,25 @@ antigo, de discordar quando for o caso. Palpite que sobrescreve decisão humana
 
 E continua sem chutar: sem sinal no texto, o campo fica vazio esperando gente.
 
+### E o roteiro conta como prova
+
+O título é pouco texto. "O que avaliar antes de começar" não tem sinal nenhum
+de fase — e as nove falas abaixo dele têm todos, porque foram escritas para
+convencer alguém, que é onde os sinais moram.
+
+Então, na tela do roteiro, a leitura passa a incluir **o roteiro inteiro**. Um
+cartão aparece com o palpite e um botão que aplica:
+
+- **sem fase** — "Fase sugerida pelo roteiro: meio de funil. Lido do título e
+  do roteiro — diagnóstico, causa, passo a passo, avaliação";
+- **com fase que não bate** — "O roteiro discorda da fase: a ficha diz topo,
+  mas o texto tem mais sinais de meio", em amarelo, e o botão troca;
+- **sem sinal, ou com confiança baixa** — nada aparece. Um cartão que sempre
+  tem palpite ensina a ignorar o cartão.
+
+Aplicar tem desfazer, e o formulário de ficha aberto por essa tela recebe o
+mesmo texto: o palpite dele passa a ser o mesmo que o da página.
+
 ## Banco de temas
 
 Conteúdo novo entra em datas que já têm conteúdo. A saída era apagar o que
