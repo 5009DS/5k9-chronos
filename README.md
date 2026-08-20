@@ -438,10 +438,17 @@ Depois de aprovar, o botão continuava na tela escrito "Aprovado", sem fazer
 nada ao ser tocado. Botão morto ensina que os botões desta tela podem não
 responder — e esta tela tem só dois.
 
-Agora ele vira um selo verde, *Aprovado por você*. **"Pedir ajuste" fica**:
-aprovar não é irreversível enquanto a peça não foi gravada, e reler no dia
-seguinte e notar algo é exatamente o que a ferramenta quer que aconteça. Quem
-fecha de vez é a gravação.
+Agora a barra inteira vira uma mensagem: *Roteiro aprovado — você já aprovou.
+Agora é conferir o texto final; se algo ainda precisar mudar, toque na fala.*
+
+**Sem botões.** "Pedir ajuste" ao lado do selo era um convite a desfazer o que
+a pessoa acabou de decidir e, no celular, disputava espaço com a única
+informação que importa naquele momento.
+
+Mudar de ideia continua possível, por um caminho melhor: **tocar na fala**.
+Quem relê e vê algo errado sabe qual frase está errada, e o pedido chega
+apontando para ela em vez de vir solto sobre o conteúdo inteiro. Quem fecha de
+vez é a gravação.
 
 ## O cliente comenta a fala, não só o conteúdo
 

@@ -438,7 +438,9 @@ const desenharConteudo = (container, token, visao, conteudoId) => {
                 <div class="cl-espaco-barra"></div>
             </main>
 
-            ${gravado ? seloGravado() : podeResponder ? barraAcao(c) : ''}
+            ${gravado ? seloGravado()
+              : c.status === 'aprovado' ? seloAprovado()
+              : podeResponder ? barraAcao(c) : ''}
         </div>`;
 
     if (podeResponder) {
@@ -750,44 +752,46 @@ const historicoHTML = (historico) => `
         }).join('')}
     </section>`;
 
-/* Ocupa o lugar da barra de ação, e não é botão: não há o que apertar. O
-   verde vem do --success do design system, num gradiente próprio — o de
-   violeta é o da ação principal, e aqui não há ação. */
-const seloGravado = () => `
+/* Ocupa o lugar da barra de ação, e não é botão: não há o que apertar. O verde
+   vem do --success do design system, num gradiente próprio — o violeta é o da
+   ação principal, e aqui não há ação a tomar.
+
+   Dois desfechos usam a mesma peça, com textos diferentes: aprovado e gravado.
+   O segundo é definitivo, o primeiro não — e é o texto que diz isso. */
+const seloBarra = (titulo, texto) => `
     <div class="cl-barra cl-barra--gravado">
         <div class="cl-selo">
             <i data-lucide="circle-check-big"></i>
             <span>
-                <strong>Conteúdo aprovado</strong>
-                Já foi gravado — o roteiro fica aqui como registro do que combinamos.
+                <strong>${titulo}</strong>
+                ${texto}
             </span>
         </div>
     </div>`;
 
+const seloGravado = () => seloBarra('Conteúdo gravado',
+    'O roteiro fica aqui como registro do que combinamos.');
+
+/* Aprovado tira os botões da barra e fica só com a mensagem. O "Pedir ajuste"
+   ali era um convite a desfazer o que a pessoa acabou de decidir — e, no
+   celular, disputava espaço com a única informação que importa naquele
+   momento.
+
+   Mudar de ideia continua possível, e por um caminho melhor: tocar na fala.
+   Quem relê e vê algo errado sabe QUAL frase está errada, e o pedido chega
+   apontando para ela em vez de vir solto sobre o conteúdo inteiro. */
+const seloAprovado = () => seloBarra('Roteiro aprovado',
+    'Você já aprovou. Agora é conferir o texto final — se algo ainda precisar mudar, toque na fala.');
+
 const barraAcao = (c) => `
     <div class="cl-barra">
         <div class="cl-barra__estado">
-            ${c.status === 'aprovado' ? '<i data-lucide="circle-check"></i> Você aprovou'
-              : c.status === 'ajuste' ? '<i data-lucide="message-circle"></i> Ajuste pedido'
+            ${c.status === 'ajuste' ? '<i data-lucide="message-circle"></i> Ajuste pedido'
               : '<i data-lucide="clock"></i> Aguardando você'}
         </div>
         <div class="cl-barra__botoes">
-            ${/* Aprovado, o botão de aprovar vira SELO. Ele continuava ali,
-                  escrito "Aprovado" e sem fazer nada ao ser tocado — um botão
-                  morto ensina que os botões desta tela podem não responder, e
-                  esta tela tem só dois.
-
-                  "Pedir ajuste" fica: aprovar não é irreversível enquanto a
-                  peça não foi gravada, e reler no dia seguinte e notar algo é
-                  exatamente o que a ferramenta quer que aconteça. Quem fecha
-                  de vez é a gravação. */''}
-            ${c.status === 'aprovado' ? `
-                <span class="cl-aprovado">
-                    <i data-lucide="circle-check-big"></i> Aprovado por você
-                </span>
-                <button class="ds-btn ds-btn--ghost" id="cl-ajuste">Pedir ajuste</button>` : `
-                <button class="ds-btn ds-btn--ghost" id="cl-ajuste">Pedir ajuste</button>
-                <button class="ds-btn ds-btn--primary" id="cl-aprovar">Aprovar</button>`}
+            <button class="ds-btn ds-btn--ghost" id="cl-ajuste">Pedir ajuste</button>
+            <button class="ds-btn ds-btn--primary" id="cl-aprovar">Aprovar</button>
         </div>
     </div>`;
 
@@ -1255,20 +1259,6 @@ function injectStyles() {
             cursor: pointer;
         }
         .cl-prompter i, .cl-prompter svg { width: 15px; height: 15px; }
-
-        /* O selo que substitui o botão de aprovar. Mesma altura dos botões ao
-           lado, para a barra não mudar de tamanho quando o estado muda. */
-        .cl-aprovado {
-            flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-            min-height: 44px; padding: 0 var(--space-4);
-            border-radius: var(--radius-md);
-            background: linear-gradient(120deg,
-                color-mix(in oklch, var(--success) 30%, var(--surface-1)) 0%,
-                color-mix(in oklch, var(--success) 16%, var(--surface-1)) 100%);
-            color: var(--success);
-            font-size: var(--text-sm); font-weight: 700;
-        }
-        .cl-aprovado i, .cl-aprovado svg { width: 17px; height: 17px; }
 
         .cl-modelo {
             display: flex; align-items: flex-start; gap: var(--space-2); margin: 0;
