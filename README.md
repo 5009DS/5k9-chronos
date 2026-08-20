@@ -297,6 +297,10 @@ O roteiro existe para ser falado, e só podia ser lido numa tela de trabalho —
 com campos de edição, menus e a barra do navegador em volta. **Teleprompter**,
 no topo da seção, abre o texto em tela cheia, preto, rolando sozinho.
 
+Ele está nas **duas telas**: na da equipe e na do cliente. A segunda é onde
+ele é de fato usado — quem grava é a médica, com o celular apoiado ao lado da
+câmera e o link do cliente aberto.
+
 A velocidade tem **duas formas de ser dita, e elas são a mesma conta**:
 palavras por minuto, para quem já sabe o ritmo em que fala, e tempo total, para
 quem tem um limite ("o reels tem 45 segundos"). Mexer numa recalcula a outra na
@@ -422,6 +426,17 @@ no primeiro toque em voltar. Sair no meio devolve o cronograma.
 
 O início automático espera a visita começar pelo cronograma: quem chega por um
 link direto de roteiro veio revisar aquilo, e não é hora de ser interrompido.
+
+### Aprovado vira selo
+
+Depois de aprovar, o botão continuava na tela escrito "Aprovado", sem fazer
+nada ao ser tocado. Botão morto ensina que os botões desta tela podem não
+responder — e esta tela tem só dois.
+
+Agora ele vira um selo verde, *Aprovado por você*. **"Pedir ajuste" fica**:
+aprovar não é irreversível enquanto a peça não foi gravada, e reler no dia
+seguinte e notar algo é exatamente o que a ferramenta quer que aconteça. Quem
+fecha de vez é a gravação.
 
 ## O cliente comenta a fala, não só o conteúdo
 

@@ -14,6 +14,7 @@ import { toast } from '../components/toast.js';
 import { conversas, estadoMeta, ato, daEquipe, novidadesPara } from '../lib/conversa.js';
 import { iniciarTour, tourVisto, marcarTourVisto, MODELO } from '../lib/tour.js';
 import { chipEtiqueta, etiquetasPublicas, injectEstilosEtiqueta, ajusteTravado } from '../lib/etiquetas.js';
+import { abrirTeleprompter } from '../lib/teleprompter.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    A TELA DO CLIENTE — /c/<token> e /c/<token>/<conteúdo>
@@ -398,7 +399,17 @@ const desenharConteudo = (container, token, visao, conteudoId) => {
 
                 <!-- ══ O roteiro ═══════════════════════════════════════ -->
                 <section class="cl-roteiro">
-                    <h2 class="cl-secao-titulo">Roteiro</h2>
+                    <div class="cl-roteiro__cabeca">
+                        <h2 class="cl-secao-titulo">Roteiro</h2>
+                        ${/* Quem grava é quem está deste lado da tela. O
+                              prompter nasceu na tela da equipe, e o lugar em
+                              que ele é USADO é este: o celular apoiado ao lado
+                              da câmera, com o link do cliente aberto. */''}
+                        ${meus.length ? `
+                            <button class="cl-prompter" id="cl-prompter">
+                                <i data-lucide="captions"></i> Teleprompter
+                            </button>` : ''}
+                    </div>
                     ${novidades.length ? `
                         <!-- Some sozinho na próxima visita: é um aviso de
                              mudança, não um estado permanente da tela. -->
@@ -434,6 +445,10 @@ const desenharConteudo = (container, token, visao, conteudoId) => {
         ligarAcoes(container, token, c);
         ligarFalas(container, token, c, meus, historico);
     }
+    container.querySelector('#cl-prompter')?.addEventListener('click', () => {
+        const { erro } = abrirTeleprompter(c, meus);
+        if (erro) toast(erro);
+    });
     desenharConversas(container, token, c, meus, historico, novidades);
     if (window.lucide) lucide.createIcons();
     window.scrollTo(0, 0);
@@ -757,10 +772,22 @@ const barraAcao = (c) => `
               : '<i data-lucide="clock"></i> Aguardando você'}
         </div>
         <div class="cl-barra__botoes">
-            <button class="ds-btn ds-btn--ghost" id="cl-ajuste">Pedir ajuste</button>
-            <button class="ds-btn ds-btn--primary" id="cl-aprovar">
-                ${c.status === 'aprovado' ? 'Aprovado' : 'Aprovar'}
-            </button>
+            ${/* Aprovado, o botão de aprovar vira SELO. Ele continuava ali,
+                  escrito "Aprovado" e sem fazer nada ao ser tocado — um botão
+                  morto ensina que os botões desta tela podem não responder, e
+                  esta tela tem só dois.
+
+                  "Pedir ajuste" fica: aprovar não é irreversível enquanto a
+                  peça não foi gravada, e reler no dia seguinte e notar algo é
+                  exatamente o que a ferramenta quer que aconteça. Quem fecha
+                  de vez é a gravação. */''}
+            ${c.status === 'aprovado' ? `
+                <span class="cl-aprovado">
+                    <i data-lucide="circle-check-big"></i> Aprovado por você
+                </span>
+                <button class="ds-btn ds-btn--ghost" id="cl-ajuste">Pedir ajuste</button>` : `
+                <button class="ds-btn ds-btn--ghost" id="cl-ajuste">Pedir ajuste</button>
+                <button class="ds-btn ds-btn--primary" id="cl-aprovar">Aprovar</button>`}
         </div>
     </div>`;
 
@@ -785,8 +812,7 @@ function ligarAcoes(container, token, c) {
         await renderCliente(container, token, caminho.split('/')[3] || null);
     };
 
-    aprovar.addEventListener('click', async () => {
-        if (c.status === 'aprovado') return;
+    aprovar?.addEventListener('click', async () => {
         aprovar.disabled = true;
         aprovar.textContent = 'Aprovando…';
         try {
@@ -800,7 +826,7 @@ function ligarAcoes(container, token, c) {
         }
     });
 
-    ajustar.addEventListener('click', () => {
+    ajustar?.addEventListener('click', () => {
         openDrawer({
             title: 'Pedir ajuste',
             subtitle: c.titulo,
@@ -1217,6 +1243,32 @@ function injectStyles() {
             color: color-mix(in oklch, var(--success) 70%, var(--text-secondary));
         }
         .cl-etiquetas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--space-2); }
+
+        .cl-roteiro__cabeca { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+        .cl-roteiro__cabeca .cl-secao-titulo { flex: 1; margin: 0; }
+        .cl-prompter {
+            display: inline-flex; align-items: center; gap: 6px;
+            min-height: 38px; padding: 0 var(--space-4);
+            border: 1px solid var(--accent-border); border-radius: var(--radius-pill);
+            background: var(--accent-muted); color: var(--accent);
+            font-family: var(--font-sans); font-size: var(--text-xs); font-weight: 700;
+            cursor: pointer;
+        }
+        .cl-prompter i, .cl-prompter svg { width: 15px; height: 15px; }
+
+        /* O selo que substitui o botão de aprovar. Mesma altura dos botões ao
+           lado, para a barra não mudar de tamanho quando o estado muda. */
+        .cl-aprovado {
+            flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+            min-height: 44px; padding: 0 var(--space-4);
+            border-radius: var(--radius-md);
+            background: linear-gradient(120deg,
+                color-mix(in oklch, var(--success) 30%, var(--surface-1)) 0%,
+                color-mix(in oklch, var(--success) 16%, var(--surface-1)) 100%);
+            color: var(--success);
+            font-size: var(--text-sm); font-weight: 700;
+        }
+        .cl-aprovado i, .cl-aprovado svg { width: 17px; height: 17px; }
 
         .cl-modelo {
             display: flex; align-items: flex-start; gap: var(--space-2); margin: 0;
