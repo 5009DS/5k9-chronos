@@ -37,37 +37,76 @@ import { esc, semAcento } from './formato.js';
    O recorte de verdade acontece no banco (db/migracao-etiquetas-cliente.sql).
    Esta marcação existe para a interna e a pública concordarem; se as duas
    discordarem, quem manda é o banco, e é ele que precisa ser corrigido. */
+/* ── A ESTEIRA ────────────────────────────────────────────────────────────
+   Sete destas etiquetas são ETAPAS: uma peça está em uma delas de cada vez, e
+   avançar significa sair da anterior. Marcar "gravado" tira "a gravar" e
+   "roteiro aprovado" sozinho — antes elas se acumulavam e o cartão passava a
+   dizer três coisas contraditórias ao mesmo tempo.
+
+   `etapa` é a ordem no caminho feliz e `proxima` diz para onde o botão de
+   avançar leva. "revisão" tem etapa mas volta para "em edição": é o desvio de
+   quando a gravação não passa, e o caminho de volta é o corte, não a câmera.
+
+   As que NÃO têm `etapa` são paralelas — "aguardando data" e "aguardando
+   material" convivem com qualquer etapa, porque descrevem uma pendência, não
+   um estágio. Marcar uma delas não tira nada.
+
+   Continua valendo o que o resto do arquivo diz: etiqueta é texto livre, e
+   qualquer palavra que a equipe inventar funciona, fora da esteira e com o
+   desenho neutro. */
 export const ETIQUETAS = [
-    { nome: 'roteiro em aprovação', publica: true, icone: 'file-clock',    tom: 'espera',
+    { nome: 'roteiro em aprovação', publica: true, etapa: 1, proxima: 'roteiro aprovado',
+      icone: 'file-clock', tom: 'espera',
       dica: 'A médica está lendo o roteiro.' },
-    { nome: 'roteiro aprovado', publica: true,     icone: 'file-check',    tom: 'ok',
+
+    { nome: 'roteiro aprovado', publica: true, etapa: 2, proxima: 'a gravar',
+      icone: 'file-check', tom: 'ok',
       dica: 'Liberado para gravar.' },
-    { nome: 'a gravar', publica: true,             icone: 'video',         tom: 'atencao',
+
+    { nome: 'a gravar', publica: true, etapa: 3, proxima: 'gravado',
+      icone: 'video', tom: 'atencao',
       dica: 'Ainda não foi para a câmera.' },
-    /* Esta é a ÚNICA etiqueta do arquivo que DECIDE algo, e a exceção está
-       registrada de propósito. O resto do vocabulário serve para desenhar;
-       esta faz o cliente perder o botão de pedir ajuste.
 
-       O motivo é físico, não organizacional: depois de gravado, mudar uma
-       fala custa uma diária de estúdio. Deixar o botão ali é convidar para
-       um pedido que a equipe vai ter de recusar — e recusar depois é pior
-       que não oferecer.
+    /* Esta é a ÚNICA etiqueta que DECIDE algo, e a exceção está registrada de
+       propósito: ela faz o cliente perder o botão de pedir ajuste.
 
-       Está declarado como DADO, num lugar só, em vez de espalhado em
-       condições pelas telas. E a trava de verdade mora no banco: a função
-       pública recusa o pedido mesmo que alguém a chame direto
-       (db/migracao-gravado.sql). */
-    { nome: 'gravado', publica: true, travaAjuste: true, icone: 'circle-check',  tom: 'ok',
+       O motivo é físico, não organizacional — depois de gravado, mudar uma
+       fala custa uma diária de estúdio. Deixar o botão ali é convidar para um
+       pedido que a equipe vai ter de recusar, e recusar depois é pior que não
+       oferecer. A trava de verdade mora no banco (db/migracao-gravado.sql). */
+    { nome: 'gravado', publica: true, travaAjuste: true, etapa: 4, proxima: 'em edição',
+      icone: 'circle-check', tom: 'ok',
       dica: 'Material bruto na mão.' },
-    { nome: 'em edição', publica: true,            icone: 'scissors',      tom: 'info',
+
+    { nome: 'em edição', publica: true, etapa: 5, proxima: 'gravação aguardando aprovação',
+      icone: 'scissors', tom: 'info',
       dica: 'Na mesa de corte.' },
-    { nome: 'aguardando data', publica: true,      icone: 'calendar-clock', tom: 'espera',
+
+    { nome: 'gravação aguardando aprovação', publica: true, etapa: 6, proxima: 'publicado',
+      icone: 'monitor-play', tom: 'espera',
+      dica: 'O vídeo pronto está com a médica.' },
+
+    /* Fora do caminho feliz: some quando a peça avança, e leva de volta ao
+       corte porque é lá que o problema se resolve. */
+    { nome: 'revisão', publica: false, etapa: 6.5, proxima: 'em edição',
+      icone: 'rotate-ccw', tom: 'risco',
+      dica: 'A gravação não passou — volta para o corte.' },
+
+    { nome: 'publicado', publica: true, etapa: 7,
+      icone: 'send', tom: 'ok',
+      dica: 'No ar.' },
+
+    /* Paralelas: descrevem pendência, não estágio, e convivem com qualquer
+       etapa da esteira. */
+    { nome: 'aguardando data', publica: true, icone: 'calendar-clock', tom: 'espera',
       dica: 'Pronto, sem dia definido.' },
-    { nome: 'aguardando material', publica: true,  icone: 'image',          tom: 'espera',
+
+    { nome: 'aguardando material', publica: true, icone: 'image', tom: 'espera',
       dica: 'Falta algo que vem do cliente.' },
-    { nome: 'refazer',              icone: 'rotate-ccw',     tom: 'risco',
-      dica: 'Não ficou bom, volta para o começo.' },
 ];
+
+/** As etapas da esteira, na ordem do caminho feliz. */
+export const ETAPAS = ETIQUETAS.filter(e => e.etapa).sort((a, b) => a.etapa - b.etapa);
 
 /* Comparação sem acento, sem caixa e sem pontuação: "A Gravar", "a gravar" e
    "à gravar" são a mesma etiqueta para os olhos de quem lê o cartão, e seria
@@ -89,37 +128,49 @@ export const ajusteTravado = (lista) =>
     (lista || []).some(nome => etiquetaMeta(nome).travaAjuste);
 
 /* ── O QUE A APROVAÇÃO DO CLIENTE MUDA ────────────────────────────────────
-   Quando ele aprova, duas coisas passam a ser verdade no mesmo instante: o
-   roteiro está aprovado e a peça entrou na fila de gravação. Alguém teria de
-   escrever as duas etiquetas à mão — e é o tipo de tarefa que ninguém lembra
-   de fazer na sexta à noite, deixando o quadro dizer "roteiro em aprovação"
-   numa peça já liberada.
+   Aprovar o roteiro põe a peça na etapa "a gravar" — que é a etapa seguinte
+   e, por estar depois de "roteiro aprovado" na esteira, já diz que o roteiro
+   passou. Guardar as duas seria dizer a mesma coisa em duplicado, e foi
+   exatamente isso que empilhou etiquetas contraditórias no cartão.
 
-   Tira o que deixou de valer, põe o que passou a valer, e não encosta em mais
-   nada: "aguardando material" continua verdade depois da aprovação, e apagar
-   o que a equipe escreveu seria trocar o trabalho dela por um palpite nosso.
+   Que o roteiro foi aprovado não se perde: está no `status` do conteúdo, que
+   é onde a conversa com o cliente mora.
 
    Peça já GRAVADA fica intocada — aprovar um assunto pendente depois da
-   gravação é legítimo, e devolver "a gravar" ali mandaria a equipe gravar de
-   novo o que já está pronto.
+   gravação é legítimo, e voltar para "a gravar" mandaria gravar de novo o que
+   está pronto.
 
-   A regra também vive no banco (db/migracao-aprovado-etiquetas.sql), que é
-   quem decide de fato. Aqui ela existe para o adaptador local responder
-   igual. */
-const SAI_AO_APROVAR = ['roteiro em aprovação'];
-const ENTRA_AO_APROVAR = ['roteiro aprovado', 'a gravar'];
-
+   A regra decide no banco (db/migracao-esteira.sql); aqui ela existe para o
+   adaptador local responder igual. */
 export const etiquetasAoAprovar = (lista) => {
     const atuais = lista || [];
     if (ajusteTravado(atuais)) return atuais;
+    return comEtapa(atuais, 'a gravar');
+};
 
-    const chaveDe = (x) => String(x).toLowerCase().trim();
-    const fora = new Set(SAI_AO_APROVAR.map(chaveDe));
-    const ficam = atuais.filter(e => !fora.has(chaveDe(e)));
-    const faltam = ENTRA_AO_APROVAR.filter(n =>
-        !ficam.some(e => chaveDe(e) === chaveDe(n)));
+/** Em que etapa a peça está, ou null quando ainda não entrou na esteira. */
+export const etapaAtual = (lista) => {
+    const achadas = (lista || [])
+        .map(etiquetaMeta)
+        .filter(m => m.etapa)
+        .sort((a, b) => b.etapa - a.etapa);
+    return achadas[0] || null;
+};
 
-    return [...ficam, ...faltam];
+/**
+ * A lista depois de marcar uma etapa: a nova entra, as OUTRAS etapas saem, e
+ * as paralelas ficam. Uma peça não está gravada e a gravar ao mesmo tempo.
+ */
+export const comEtapa = (lista, nome) => {
+    const paralelas = (lista || []).filter(e => !etiquetaMeta(e).etapa);
+    return nome ? [...paralelas, nome] : paralelas;
+};
+
+/** A próxima etapa do caminho feliz. Sem etapa nenhuma, o começo. */
+export const proximaEtapa = (lista) => {
+    const atual = etapaAtual(lista);
+    if (!atual) return ETAPAS[0]?.nome || null;
+    return atual.proxima || null;
 };
 
 export const chipEtiqueta = (nome) => {

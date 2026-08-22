@@ -398,13 +398,17 @@ begin
                        select 1 from unnest(coalesce(etiquetas, '{}')) g
                         where lower(trim(g)) = 'gravado'
                    ) then (
+                       -- Sai qualquer ETAPA da esteira, entra a de gravar.
+                       -- As paralelas e as etiquetas livres ficam onde
+                       -- estão. Ver db/migracao-esteira.sql.
                        select array(
-                           select distinct x from unnest(
-                               array(select e from unnest(coalesce(etiquetas, '{}')) e
-                                      where lower(trim(e)) <> 'roteiro em aprovação')
-                               || array['roteiro aprovado', 'a gravar']
-                           ) x
-                       )
+                           select e from unnest(coalesce(etiquetas, '{}')) e
+                            where lower(trim(e)) not in (
+                                'roteiro em aprovação', 'roteiro aprovado', 'a gravar',
+                                'gravado', 'em edição', 'gravação aguardando aprovação',
+                                'revisão', 'publicado'
+                            )
+                       ) || array['a gravar']
                    )
                    else etiquetas
                end

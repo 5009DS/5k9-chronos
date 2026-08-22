@@ -10,6 +10,7 @@ import { retornosDe } from '../lib/cronograma.js';
 import { timeSalvo } from '../lib/gestor.js';
 import { linkDoCliente } from '../lib/apelido.js';
 import { abrirTeleprompter } from '../lib/teleprompter.js';
+import { ETAPAS, etapaAtual, comEtapa, proximaEtapa, chipEtiqueta, etiquetaMeta, injectEstilosEtiqueta } from '../lib/etiquetas.js';
 import {
     conversas, estadoMeta, ato, daEquipe, textoOriginal, entradaDaEquipe,
 } from '../lib/conversa.js';
@@ -118,10 +119,23 @@ export const renderRoteiro = async (container, conteudoId) => {
                 </a>` : ''}
             <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-editar">
                 <i data-lucide="pencil"></i> Editar ficha
-            </button>`,
+            </button>
+            ${/* A esteira fica na OUTRA PONTA da linha de ações, separada das
+                  que abrem telas. É a única daqui que muda o estado da peça, e
+                  encostá-la em "Editar ficha" convidaria ao clique errado. */''}
+            <span class="rt-esteira">
+                <button class="ds-btn ds-btn--primary ds-btn--sm" id="rt-avancar">
+                    <i data-lucide="arrow-right"></i> ${esc(rotuloAvancar(c))}
+                </button>
+                <button class="ds-btn ds-btn--primary ds-btn--sm rt-esteira__mais" id="rt-etapas"
+                        aria-label="Escolher outra etapa" aria-haspopup="menu">
+                    <i data-lucide="chevron-down"></i>
+                </button>
+            </span>`,
     });
 
     container.insertAdjacentHTML('beforeend', ESTILOS);
+    injectEstilosEtiqueta();
 
     const recarregar = () => renderRoteiro(container, conteudoId);
 
@@ -136,6 +150,11 @@ export const renderRoteiro = async (container, conteudoId) => {
                         ${chipFase(c.fase)}
                         ${objetivo(c.objetivo) ? `<span class="vz-status"><i data-lucide="${esc(objetivo(c.objetivo).icone || 'compass')}"></i>${esc(objetivo(c.objetivo).nome)}</span>` : '<span class="vz-status">sem objetivo</span>'}
                         ${chipStatus(c.status)}
+                        ${/* A etapa da esteira ao lado do status: um é a
+                              conversa com o cliente, o outro é onde a peça
+                              está na produção. Ler os dois juntos é o que
+                              responde "e agora?". */''}
+                        ${(c.etiquetas || []).map(chipEtiqueta).join('')}
                     </div>
                     <div class="rt-status-troca">
                         <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-status">
@@ -1172,6 +1191,38 @@ export const renderRoteiro = async (container, conteudoId) => {
     /* O botão de editar a ficha mora no herói, que renderShell desenha uma vez
        só — fora do que desenhar() reescreve. Ligar aqui, e não em
        ligarEventos(), evita empilhar um listener a cada redesenho. */
+    /* Avançar é um clique; escolher outra etapa é o menu ao lado. O botão diz
+       para ONDE vai — "Mover para gravado" — em vez de um "avançar" que
+       obrigaria a lembrar a ordem de cor. */
+    const irParaEtapa = async (nome) => {
+        const antesEtiquetas = [...(c.etiquetas || [])];
+        await store.conteudos.salvar({ ...c, etiquetas: comEtapa(c.etiquetas, nome) });
+        toast(`Agora: ${nome}.`, {
+            label: 'Desfazer',
+            onClick: async () => {
+                await store.conteudos.salvar({ ...c, etiquetas: antesEtiquetas });
+                recarregar();
+            },
+        });
+        recarregar();
+    };
+
+    document.getElementById('rt-avancar')?.addEventListener('click', () => {
+        const proxima = proximaEtapa(c.etiquetas);
+        if (proxima) irParaEtapa(proxima);
+    });
+
+    document.getElementById('rt-etapas')?.addEventListener('click', (e) => {
+        e.stopPropagation();   // ver a explicação no menu de status
+        const atual = etapaAtual(c.etiquetas);
+        abrirMenu(e.target.closest('button'), ETAPAS.map(et => ({
+            id: et.nome,
+            label: et.nome === atual?.nome ? `${et.nome} (agora)` : et.nome,
+            icon: et.icone,
+            onClick: () => { if (et.nome !== atual?.nome) irParaEtapa(et.nome); },
+        })));
+    });
+
     document.getElementById('rt-editar').addEventListener('click', () =>
         formularioConteudo(c, cliente, c.data.slice(0, 7), recarregar,
             [...new Set(conteudos.flatMap(x => x.etiquetas || []))],
@@ -1220,6 +1271,14 @@ const sugestaoDeFase = (c, blocos) => {
                 <i data-lucide="check"></i> ${c.fase ? `Trocar para ${esc(nomeFase(s.fase).toLowerCase())}` : `Marcar como ${esc(nomeFase(s.fase).toLowerCase())}`}
             </button>
         </div>`;
+};
+
+/* O rótulo do botão diz o destino, e o destino sai da esteira: peça sem etapa
+   nenhuma começa pelo primeiro estágio, peça publicada não tem para onde ir. */
+const rotuloAvancar = (c) => {
+    const proxima = proximaEtapa(c.etiquetas);
+    if (!proxima) return 'No fim da esteira';
+    return `Mover para ${proxima}`;
 };
 
 const medida = (blocos) => {
@@ -1638,6 +1697,16 @@ function autoAltura(campo) {
 
 const ESTILOS = `
 <style>
+/* Botão e menu colados, como um controle só: são a mesma decisão em dois
+   níveis de precisão. */
+.rt-esteira { display: inline-flex; }
+.rt-esteira .ds-btn:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.rt-esteira__mais {
+    border-top-left-radius: 0; border-bottom-left-radius: 0;
+    padding: 0 var(--space-2); min-width: 0;
+    box-shadow: inset 1px 0 0 rgba(0, 0, 0, 0.25);
+}
+
 .rt-chips { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 /* flex-wrap: com quatro botões, o último era cortado pela borda numa tela de
    trabalho estreita — o mesmo defeito que já custou a barra do celular. */

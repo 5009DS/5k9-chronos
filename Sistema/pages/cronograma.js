@@ -21,7 +21,7 @@ import {
     leitura, conferir, noDiaCerto, classificar,
 } from '../lib/diretorio.js';
 import { chipFase, chipStatus, seloDeslocado, vazioHTML, STATUS } from '../lib/pecas.js';
-import { chipEtiqueta, injectEstilosEtiqueta } from '../lib/etiquetas.js';
+import { chipEtiqueta, injectEstilosEtiqueta, etapaAtual } from '../lib/etiquetas.js';
 import { ativarArraste } from '../lib/arrastar.js';
 import { timeSalvo } from '../lib/gestor.js';
 import { sugerirObjetivo } from '../lib/importar.js';
@@ -323,8 +323,14 @@ const cartaoHTML = (c, todos) => {
     const desl = leituraDeslocamento(c, todos);
     const foraDeLugar = c.fase && !noDiaCerto(c.fase, indiceDia(c.data));
 
+    /* A COR DIZ EM QUE PÉ ESTÁ A PRODUÇÃO, e é a mesma escala dos chips: quem
+       aprende a cor num lugar lê no outro. Rascunho fica sem cor nenhuma — é a
+       ausência de produção, e pintar tudo faria a cor deixar de significar. */
+    const etapa = etapaAtual(c.etiquetas);
+
     return `
-        <button class="vz-conteudo" data-conteudo="${esc(c.id)}"
+        <button class="vz-conteudo ${etapa ? `cr-etapa cr-etapa--${esc(etapa.tom)}` : ''}"
+                data-conteudo="${esc(c.id)}"
                 data-arrastavel="${esc(c.id)}" data-solta="${esc(c.id)}">
             <span class="vz-fita vz-fita--${esc(c.fase || '')}"></span>
             <div class="vz-conteudo__corpo">
@@ -350,6 +356,10 @@ const cartaoHTML = (c, todos) => {
                     </div>` : ''}
                 ${seloDeslocado(desl)}
             </div>
+            ${/* O guardar ficava colado na seta de abrir, e as duas zonas de
+                  clique se tocavam: quem queria ler o roteiro arquivava a
+                  demanda. Agora ele mora no CANTO SUPERIOR, longe da seta, com
+                  área de toque de 34px e um respiro de 8px entre os dois. */''}
             <span class="cr-guardar" role="button" tabindex="0" data-guardar="${esc(c.id)}"
                   title="Mandar para o banco de temas" aria-label="Mandar para o banco de temas">
                 <i data-lucide="archive"></i>
@@ -1077,11 +1087,14 @@ const ESTILOS = `
    porque é ação ocasional; presente porque procurar em menu uma ação de um
    clique é o que faz ninguém usar. Em toque não há hover, então ele fica. */
 .cr-guardar {
-    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-    width: 30px; height: 30px; border-radius: var(--radius-sm);
+    position: absolute; top: var(--space-2); right: var(--space-2);
+    display: flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; border-radius: var(--radius-sm);
     color: var(--text-disabled); cursor: pointer; opacity: 0;
     transition: opacity var(--dur-fast), color var(--dur-fast), background-color var(--dur-fast);
 }
+/* A seta desce para o meio-baixo, e sobra espaço entre as duas zonas. */
+.vz-conteudo { position: relative; }
 .cr-guardar i, .cr-guardar svg { width: 15px; height: 15px; }
 .vz-conteudo:hover .cr-guardar { opacity: 1; }
 .cr-guardar:hover { background: var(--surface-3); color: var(--text-primary); }
@@ -1095,6 +1108,17 @@ const ESTILOS = `
     background: var(--accent); color: var(--accent-contrast, #fff);
     font-size: 11px; font-weight: 700; line-height: 18px; text-align: center;
 }
+/* ── A cor da etapa ──────────────────────────────────────────────────────
+   Um fio à esquerda, do lado oposto à fita de fase: são duas informações
+   diferentes — para QUEM o conteúdo fala e em que PÉ ele está — e disputar a
+   mesma borda faria uma esconder a outra. */
+.cr-etapa { box-shadow: inset -3px 0 0 0 var(--cor-etapa); }
+.cr-etapa--atencao { --cor-etapa: var(--warning); }
+.cr-etapa--info    { --cor-etapa: var(--info); }
+.cr-etapa--ok      { --cor-etapa: var(--success); }
+.cr-etapa--espera  { --cor-etapa: var(--accent); }
+.cr-etapa--risco   { --cor-etapa: var(--danger); }
+
 .cr-etiquetas { display: flex; flex-wrap: wrap; gap: 5px; margin-top: var(--space-2); }
 .cr-dia--alerta { color: var(--warning) !important; }
 
