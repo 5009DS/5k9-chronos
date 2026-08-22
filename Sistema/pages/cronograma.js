@@ -24,6 +24,7 @@ import { chipFase, chipStatus, seloDeslocado, vazioHTML, STATUS } from '../lib/p
 import { chipEtiqueta, injectEstilosEtiqueta } from '../lib/etiquetas.js';
 import { ativarArraste } from '../lib/arrastar.js';
 import { timeSalvo } from '../lib/gestor.js';
+import { sugerirObjetivo } from '../lib/importar.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    CRONOGRAMA DO CLIENTE — a tela onde o mês é montado.
@@ -920,6 +921,11 @@ export function formularioConteudo(c, cliente, mesSugerido, aoTerminar, etiqueta
                E continua sem chutar: sem sinal no texto, `classificar` devolve
                null e o campo fica vazio esperando gente. */
             let faseAutomatica = !c?.fase;
+            /* O objetivo tem o mesmo tratamento da fase, e pelo mesmo motivo:
+               ele nasce vazio e quase nunca é preenchido, então o cartão de
+               leitura estratégica — que é a razão desta ferramenta existir —
+               fica sem a metade que explica o conteúdo. */
+            let objetivoAutomatico = !c?.objetivo;
 
             const atualizar = () => {
                 const v = lerValores();
@@ -936,20 +942,43 @@ export function formularioConteudo(c, cliente, mesSugerido, aoTerminar, etiqueta
 
                 const texto = [v.titulo, v.tema, textoDoRoteiro].filter(Boolean).join('. ');
 
-                // 2. A fase, quando ninguém escolheu
+                // 2. A fase e o objetivo, enquanto ninguém escolheu
                 if (faseAutomatica) {
                     const palpite = classificar(texto);
-                    if (palpite && palpite.fase !== selFase.value) {
-                        selFase.value = palpite.fase;
-                        repintarObjetivos();
-                    }
+
                     if (palpite) {
+                        if (palpite.fase !== selFase.value) {
+                            selFase.value = palpite.fase;
+                            repintarObjetivos();
+                        }
+                        if (objetivoAutomatico) sugerirObjetivoPara(texto, palpite.fase);
+
                         notaSugestao.hidden = false;
                         notaSugestao.classList.remove('cp-viva--erro');
                         notaSugestao.innerHTML =
                             `<b>Fase sugerida: ${esc(nomeFase(palpite.fase))}.</b> `
-                            + `Pelo título — ${esc(palpite.termos.slice(0, 4).join(', '))}. `
-                            + 'Troque no seletor se discordar.';
+                            + `Pelo título — ${esc(palpite.termos.slice(0, 4).join(', '))}.`
+                            /* Confiança baixa é empate técnico, e dizer isso vale
+                               mais que esconder: a pessoa confere UM caso em vez
+                               de desconfiar de todos. */
+                            + (palpite.confianca === 'baixa'
+                                ? ' Os sinais ficaram empatados — vale conferir.'
+                                : ' Troque no seletor se discordar.');
+                        return;
+                    }
+
+                    /* SEM SINAL, A TELA DIZ ISSO. Antes ela ficava muda, e o
+                       campo vazio parecia defeito — foi exatamente assim que
+                       o recurso foi dado como quebrado. O classificador não
+                       chuta, e isso é uma decisão; o que não pode é a decisão
+                       ser invisível. */
+                    if (texto.trim().length > 12) {
+                        notaSugestao.hidden = false;
+                        notaSugestao.classList.remove('cp-viva--erro');
+                        notaSugestao.innerHTML =
+                            '<b>Não reconheci a fase por este título.</b> '
+                            + 'Ele não tem nenhuma das palavras que o diretório conhece — '
+                            + 'escolha a fase no seletor, ou escreva o roteiro e o sistema tenta de novo por lá.';
                         return;
                     }
                 }
@@ -966,6 +995,18 @@ export function formularioConteudo(c, cliente, mesSugerido, aoTerminar, etiqueta
                     notaSugestao.hidden = true;
                 }
             };
+
+            /* O palpite de objetivo sai do mesmo lugar que a importação de PDF
+               usa há meses (lib/importar.js): a mesma pergunta feita na mesma
+               base, para os dois caminhos de entrada não discordarem sobre o
+               mesmo texto. */
+            function sugerirObjetivoPara(texto, faseId) {
+                const palpite = sugerirObjetivo(texto, faseId);
+                if (!palpite || selObj.value === palpite) return;
+                selObj.value = palpite;
+            }
+
+            selObj.addEventListener('change', () => { objetivoAutomatico = false; });
 
             selFase.addEventListener('change', () => {
                 faseAutomatica = false;
