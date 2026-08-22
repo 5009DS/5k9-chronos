@@ -14,6 +14,7 @@ import { toast } from '../components/toast.js';
 import { conversas, estadoMeta, ato, daEquipe, novidadesPara } from '../lib/conversa.js';
 import { iniciarTour, tourVisto, marcarTourVisto, MODELO } from '../lib/tour.js';
 import { chipEtiqueta, etiquetasPublicas, injectEstilosEtiqueta, ajusteTravado, etapaAtual } from '../lib/etiquetas.js';
+import { precisaDoCliente } from '../lib/consistencia.js';
 import { abrirTeleprompter } from '../lib/teleprompter.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -111,7 +112,7 @@ const desenharCronograma = (container, token, visao) => {
 
                 <main class="cl-corpo">
 
-                    ${painelDoCliente(conteudos, token)}
+                    ${painelDoCliente(conteudos, token, visao.retornos)}
 
                     <div class="cl-mes">
                         <button class="ds-icon-btn" id="cl-anterior" aria-label="Mês anterior">
@@ -256,10 +257,12 @@ const marcarModelo = (container) => {
    Some quando não há nada: um painel que vive dizendo "nada por aqui" ensina a
    pular o topo da página.
    ═══════════════════════════════════════════════════════════════════════════ */
-const painelDoCliente = (conteudos, token) => {
-    const esperando = conteudos.filter(c =>
-        c.status === 'em_revisao'
-        || etapaAtual(c.etiquetas)?.nome === 'gravação aguardando aprovação');
+const painelDoCliente = (conteudos, token, retornos) => {
+    /* A MESMA função que a conferência usa, e que qualquer tela deve usar para
+       esta pergunta. Ela existia escrita aqui de um jeito e na barra de ação de
+       outro — e foi essa diferença que colocou uma peça já aprovada na lista de
+       "esperando você". Ver lib/consistencia.js. */
+    const esperando = conteudos.filter(c => precisaDoCliente(c, retornos));
 
     /* "Em produção" é o que já passou por ele e ainda não foi ao ar. Publicado
        sai da lista: virou passado, e o lugar dele é o mês. */

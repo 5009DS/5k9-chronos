@@ -35,6 +35,7 @@ erros que ele detecta.
 | `/quadro/:id` | O mês como grade: semanas × vagas do funil. Arrastar, trocar e ver quem saiu do lugar. |
 | `/importar/:id` | Sobe o PDF de temas ou de roteiros, mostra o que entendeu e grava depois da conferência. |
 | `/diretorio` | O funil, os objetivos, a matriz de cruzamento e o testador do classificador. |
+| `/conferencia` | A varredura: onde o sistema se contradiz, com o conserto ao lado. |
 | `/configuracoes` | Conexão, diretório, cópia de segurança, tema, dados de exemplo. |
 | **`/c/:token`** | **O cliente.** Cronograma do mês, sem login. |
 | **`/c/:token/:conteudo`** | **O cliente.** Roteiro, explicação e os botões de aprovar ou pedir ajuste. |

@@ -34,6 +34,9 @@ export const renderPainel = async (container) => {
                 <button class="ds-btn ds-btn--ghost" id="pn-gestor">
                     <i data-lucide="arrow-down-up"></i> Trazer do Gestor
                 </button>` : ''}
+            <a class="ds-btn ds-btn--ghost" href="/conferencia">
+                <i data-lucide="shield-check"></i> Conferência
+            </a>
             <button class="ds-btn ds-btn--primary" id="pn-novo">
                 <i data-lucide="plus"></i> Novo cliente
             </button>`,
