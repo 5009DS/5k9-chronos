@@ -22,7 +22,8 @@ import {
     leitura, conferir, noDiaCerto, classificar,
 } from '../lib/diretorio.js';
 import { chipFase, chipStatus, seloDeslocado, vazioHTML, STATUS } from '../lib/pecas.js';
-import { chipEtiqueta, injectEstilosEtiqueta, etapaAtual, comEtapa, proximaEtapa, statusParaEtapa } from '../lib/etiquetas.js';
+import { chipEtiqueta, injectEstilosEtiqueta, etapaAtual, proximaEtapa } from '../lib/etiquetas.js';
+import { moverParaEtapa } from '../lib/etapas.js';
 import { ativarArraste } from '../lib/arrastar.js';
 import { timeSalvo } from '../lib/gestor.js';
 import { sugerirObjetivo } from '../lib/importar.js';
@@ -230,12 +231,19 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
                        o destino em vez de exigir que se lembre da ordem. */
                     ...(proxima ? [{
                         id: 'etapa', label: `Mover para ${proxima}`, icon: 'arrow-right',
-                        onClick: () => {
-                            const novoStatus = statusParaEtapa(alvo.status, proxima);
-                            mudar(
-                                { etiquetas: comEtapa(alvo.etiquetas, proxima),
-                                  ...(novoStatus ? { status: novoStatus } : {}) },
-                                `Agora: ${proxima}.`);
+                        onClick: async () => {
+                            // A mesma função da demanda e da esteira.
+                            const { novoStatus, reabriu, desfazer } = await moverParaEtapa(alvo, proxima);
+                            // O status muda junto quando a etapa exige — e a
+                            // mensagem diz, porque mudança calada é a que
+                            // ninguém entende depois.
+                            toast(`Agora: ${proxima}.`
+                                + (novoStatus ? ` Status: ${STATUS[novoStatus]?.rotulo || novoStatus}.` : '')
+                                + (reabriu ? ' A volta ficou registrada no histórico.' : ''), {
+                                label: 'Desfazer',
+                                onClick: async () => { await desfazer(); recarregar(); },
+                            });
+                            recarregar();
                         },
                     }] : []),
                     ...Object.entries(STATUS)

@@ -1,4 +1,5 @@
 import { etapaAtual, ETAPAS } from './etiquetas.js';
+import { daEquipe } from './conversa.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    CONSISTÊNCIA — onde o sistema se contradiz.
@@ -48,6 +49,25 @@ export const pediuAjusteDepois = (retornos, conteudoId) => {
 };
 
 /**
+ * A equipe devolveu a bola ao cliente depois da última fala dele?
+ *
+ * Uma aprovação de ontem não responde a um roteiro reescrito hoje. Quando a
+ * equipe põe a peça de volta em "roteiro em aprovação", fica um registro no
+ * histórico — e é ele que reabre a conversa, não uma coluna nova.
+ *
+ * "Assunto encerrado" (tipo 'aprovado' vindo da equipe) fica de fora de
+ * propósito: encerrar é fechar a conversa, não devolvê-la. É a mesma leitura
+ * de estadoDaConversa() em lib/conversa.js, aplicada ao conteúdo inteiro.
+ */
+export const equipeDevolveu = (retornos, conteudoId) => {
+    const doConteudo = (retornos || [])
+        .filter(r => r.conteudo_id === conteudoId && !r.bloco_id)
+        .sort((a, b) => String(a.criado_em).localeCompare(String(b.criado_em)));
+    const ultimo = doConteudo[doConteudo.length - 1];
+    return !!ultimo && daEquipe(ultimo) && ultimo.tipo !== 'aprovado';
+};
+
+/**
  * Está esperando o cliente?
  *
  * A pergunta que o painel dele, o cartão e a barra faziam cada um do seu
@@ -60,6 +80,11 @@ export const precisaDoCliente = (c, retornos) => {
 
     // A gravação pronta esperando o olho dele é a outra forma de "sua vez".
     if (etapaAtual(c.etiquetas)?.nome === 'gravação aguardando aprovação') return true;
+
+    /* A equipe falou por último, e não foi para encerrar: o roteiro voltou
+       para ele. Vem ANTES das duas leituras abaixo porque as duas olham só o
+       que o cliente disse — e o que ele disse já foi respondido. */
+    if (equipeDevolveu(retornos, c.id)) return c.status === 'em_revisao';
 
     /* O último movimento dele foi PEDIR mudança: a bola é nossa, não dele.
        Isto vale mesmo com status "em revisão", e foi o segundo caso que a
@@ -96,13 +121,16 @@ export const auditar = (conteudos, blocos, retornos) => {
         const etapa = etapaAtual(c.etiquetas);
         const aprovou = aprovouNoHistorico(retornos, c.id);
         const pediuDepois = pediuAjusteDepois(retornos, c.id);
+        const devolveu = equipeDevolveu(retornos, c.id);
         const etapasNaPeca = (c.etiquetas || [])
             .filter(e => ETAPAS.some(x => x.nome.toLowerCase() === String(e).toLowerCase()));
 
         /* ── Contradições ──────────────────────────────────────────────── */
 
-        // O bug que originou este arquivo.
-        if (c.status === 'em_revisao' && aprovou && !pediuDepois) {
+        /* O bug que originou este arquivo. `devolveu` fora: se a equipe
+           reabriu o roteiro para aprovação, "em revisão" é o estado certo — e
+           acusar contradição aqui faria o sistema apontar a própria ação. */
+        if (c.status === 'em_revisao' && aprovou && !pediuDepois && !devolveu) {
             achados.push(problema('grave', 'aprovacao-perdida', c,
                 'Aprovado pelo cliente, mas marcado como em revisão',
                 'O histórico tem a aprovação dele e o status ficou para trás. A tela dele mostra '
@@ -153,6 +181,25 @@ export const auditar = (conteudos, blocos, retornos) => {
                 'A produção avançou e o status ficou para trás. O cliente vê uma peça já gravada '
               + 'pedindo aprovação de roteiro.',
                 { rotulo: 'Marcar como aprovado', campo: 'status', valor: 'aprovado' }));
+        }
+
+        /* O espelho do caso acima: a etapa diz que o roteiro está com o
+           cliente e o status diz que ele já respondeu.
+
+           O conserto mexe na ETAPA, não no status, e a razão importa: quando a
+           volta para aprovação é feita pelo sistema, ela reabre a conversa e
+           deixa registro (lib/etapas.js). Aqui não há registro nenhum — o que
+           existe é uma aprovação no histórico e uma etiqueta que ficou para
+           trás. Demote o status e a varredura acusaria, com toda razão, o
+           problema contrário na volta seguinte; um conserto que cria a próxima
+           contradição não é conserto. */
+        if (etapa && etapa.etapa === 1 && ['aprovado', 'publicado'].includes(c.status)) {
+            const destino = c.status === 'publicado' ? 'publicado' : 'a gravar';
+            achados.push(problema('grave', 'aprovacao-sem-volta', c,
+                'Na etapa de aprovação e já marcado como aprovado',
+                'A etapa diz que o roteiro está com o cliente e o status diz que ele já respondeu. '
+              + 'A tela dele mostra o selo de aprovado onde deveria estar o botão de aprovar.',
+                { rotulo: `Marcar como ${destino}`, campo: 'etiquetas', valor: destino }));
         }
 
         if (etapa && etapa.etapa >= 4 && c.status === 'ajuste') {

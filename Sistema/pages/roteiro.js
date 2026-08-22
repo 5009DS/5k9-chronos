@@ -10,7 +10,8 @@ import { retornosDe } from '../lib/cronograma.js';
 import { timeSalvo } from '../lib/gestor.js';
 import { linkDoCliente } from '../lib/apelido.js';
 import { abrirTeleprompter } from '../lib/teleprompter.js';
-import { ETAPAS, etapaAtual, comEtapa, proximaEtapa, statusParaEtapa, chipEtiqueta, etiquetaMeta, injectEstilosEtiqueta } from '../lib/etiquetas.js';
+import { ETAPAS, etapaAtual, proximaEtapa, chipEtiqueta, etiquetaMeta, injectEstilosEtiqueta } from '../lib/etiquetas.js';
+import { moverParaEtapa } from '../lib/etapas.js';
 import {
     conversas, estadoMeta, ato, daEquipe, textoOriginal, entradaDaEquipe,
 } from '../lib/conversa.js';
@@ -1200,24 +1201,12 @@ export const renderRoteiro = async (container, conteudoId) => {
        para ONDE vai — "Mover para gravado" — em vez de um "avançar" que
        obrigaria a lembrar a ordem de cor. */
     const irParaEtapa = async (nome) => {
-        const antesEtiquetas = [...(c.etiquetas || [])];
-        const antesStatus = c.status;
-        /* A etapa puxa o status quando ele ficou para trás (ver
-           lib/etiquetas.js). Sem isto, uma peça gravada continuava pedindo
-           aprovação de roteiro na tela do cliente. */
-        const novoStatus = statusParaEtapa(c.status, nome);
-
-        await store.conteudos.salvar({
-            ...c,
-            etiquetas: comEtapa(c.etiquetas, nome),
-            ...(novoStatus ? { status: novoStatus } : {}),
-        });
-        toast(`Agora: ${nome}.${novoStatus ? ` Status: ${STATUS[novoStatus]?.rotulo || novoStatus}.` : ''}`, {
+        const { novoStatus, reabriu, desfazer } = await moverParaEtapa(c, nome, { autor: autorPadrao() });
+        toast(`Agora: ${nome}.`
+            + (novoStatus ? ` Status: ${STATUS[novoStatus]?.rotulo || novoStatus}.` : '')
+            + (reabriu ? ' A volta ficou registrada no histórico.' : ''), {
             label: 'Desfazer',
-            onClick: async () => {
-                await store.conteudos.salvar({ ...c, etiquetas: antesEtiquetas, status: antesStatus });
-                recarregar();
-            },
+            onClick: async () => { await desfazer(); recarregar(); },
         });
         recarregar();
     };

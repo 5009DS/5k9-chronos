@@ -182,16 +182,30 @@ export const proximaEtapa = (lista) => {
    gravar. Então o status acompanha: rascunho ou em revisão viram aprovado, e
    "publicado" leva o status junto.
 
+   E o caminho de volta, pela mesma razão: pôr a peça em "roteiro em aprovação"
+   é dizer que ela está na mão do cliente, então o status vira "em revisão". Sem
+   isto, escrever o roteiro e marcar a etapa deixava a peça invisível para ele —
+   o rascunho não aparece na tela do cliente — e ninguém descobria até a cobrança
+   de uma aprovação que nunca foi pedida. Esta volta vale de QUALQUER status,
+   inclusive de aprovado: reabrir para aprovação é um ato explícito de quem
+   mexeu, não um resto de estado antigo.
+
    ── O QUE ELA NÃO FAZ ────────────────────────────────────────────────────
-   Não mexe em "ajuste". Gravar com um pedido de mudança em aberto é uma
-   contradição de verdade — alguém gravou o que o cliente pediu para mudar — e
-   apagá-la aqui esconderia o problema em vez de mostrá-lo. A conferência
+   AVANÇANDO, não mexe em "ajuste". Gravar com um pedido de mudança em aberto é
+   uma contradição de verdade — alguém gravou o que o cliente pediu para mudar —
+   e apagá-la aqui esconderia o problema em vez de mostrá-lo. A conferência
    aponta esse caso.
+
+   Voltar para aprovação é o contrário: sai de "ajuste" de propósito, porque
+   devolver o roteiro ao cliente é justamente o desfecho do pedido dele.
 
    Devolve null quando não há nada a mudar, para quem chama não gravar à toa. */
 export const statusParaEtapa = (statusAtual, nomeEtapa) => {
     const meta = etiquetaMeta(nomeEtapa);
     if (!meta.etapa) return null;
+
+    // 1 = "roteiro em aprovação": a bola é do cliente, e o status diz isso.
+    if (meta.etapa === 1) return statusAtual === 'em_revisao' ? null : 'em_revisao';
 
     const podeSubir = ['rascunho', 'em_revisao'].includes(statusAtual);
 

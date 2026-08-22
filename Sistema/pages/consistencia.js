@@ -57,12 +57,15 @@ export const renderConsistencia = async (container) => {
 
         const antes = { ...c };
         const campo = achado.conserto.campo;
-        /* Etiquetas é o único conserto que não é "escreva este valor": manter
-           só a etapa mais avançada é uma operação, e ela já existe em
-           comEtapa(). Reimplementá-la aqui criaria a segunda versão da regra
-           que esta tela existe para impedir. */
+        /* Etiquetas é o único conserto que não é "escreva este valor": pôr uma
+           etapa é uma operação — a nova entra, as outras saem —, e ela já
+           existe em comEtapa(). Reimplementá-la aqui criaria a segunda versão
+           da regra que esta tela existe para impedir.
+
+           Sem destino (`valor: null`), o conserto é "mantenha só a etapa que
+           já vale", que é o caso de duas etapas marcadas ao mesmo tempo. */
         const valor = campo === 'etiquetas'
-            ? comEtapa(c.etiquetas, etapaAtual(c.etiquetas)?.nome || null)
+            ? comEtapa(c.etiquetas, achado.conserto.valor ?? etapaAtual(c.etiquetas)?.nome ?? null)
             : achado.conserto.valor;
 
         await store.conteudos.salvar({ ...c, [campo]: valor });

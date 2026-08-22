@@ -3,8 +3,9 @@ import { renderShell } from '../components/pageshell.js';
 import { toast } from '../components/toast.js';
 import { navegar } from '../lib/rotas.js';
 import { esc, dataBR, diaCurto, nomeDiaCurto } from '../lib/formato.js';
-import { chipFase, vazioHTML } from '../lib/pecas.js';
-import { ETAPAS, etapaAtual, comEtapa, statusParaEtapa, injectEstilosEtiqueta } from '../lib/etiquetas.js';
+import { chipFase, vazioHTML, STATUS } from '../lib/pecas.js';
+import { ETAPAS, etapaAtual, injectEstilosEtiqueta } from '../lib/etiquetas.js';
+import { moverParaEtapa } from '../lib/etapas.js';
 import { ativarArraste } from '../lib/arrastar.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -21,8 +22,9 @@ import { ativarArraste } from '../lib/arrastar.js';
 
    ── ARRASTAR É AVANÇAR ────────────────────────────────────────────────────
    Mover o cartão para outra coluna é a mesma operação do botão "Mover para" da
-   tela da demanda, e chama exatamente a mesma função (`comEtapa`). Duas
-   implementações da mesma regra divergiriam na primeira etapa nova.
+   tela da demanda, e chama exatamente a mesma função (`moverParaEtapa`, em
+   lib/etapas.js). Duas implementações da mesma regra divergiriam na primeira
+   etapa nova — e o sintoma seria arrastar e clicar deixando estados diferentes.
 
    ── A COLUNA QUE NÃO É ETAPA ──────────────────────────────────────────────
    A primeira coluna é "sem etapa": peças que existem no cronograma e ainda não
@@ -85,24 +87,16 @@ export const renderProducao = async (container, clienteId) => {
         const atual = etapaAtual(c.etiquetas);
         if ((atual?.nome || SEM_ETAPA) === chaveColuna) return;
 
-        const antes = [...(c.etiquetas || [])];
-        const antesStatus = c.status;
         const nome = chaveColuna === SEM_ETAPA ? null : chaveColuna;
-        // A MESMA regra do botão da tela da demanda: arrastar e clicar não
+        // A MESMA função do botão da tela da demanda: arrastar e clicar não
         // podem deixar o conteúdo em estados diferentes.
-        const novoStatus = nome ? statusParaEtapa(c.status, nome) : null;
+        const { novoStatus, reabriu, desfazer } = await moverParaEtapa(c, nome);
 
-        await store.conteudos.salvar({
-            ...c,
-            etiquetas: comEtapa(c.etiquetas, nome),
-            ...(novoStatus ? { status: novoStatus } : {}),
-        });
-        toast(nome ? `"${c.titulo}" → ${nome}.` : `"${c.titulo}" saiu da esteira.`, {
+        toast((nome ? `"${c.titulo}" → ${nome}.` : `"${c.titulo}" saiu da esteira.`)
+            + (novoStatus ? ` Status: ${STATUS[novoStatus]?.rotulo || novoStatus}.` : '')
+            + (reabriu ? ' A volta ficou registrada no histórico.' : ''), {
             label: 'Desfazer',
-            onClick: async () => {
-                await store.conteudos.salvar({ ...c, etiquetas: antes, status: antesStatus });
-                recarregar();
-            },
+            onClick: async () => { await desfazer(); recarregar(); },
         });
         recarregar();
     };
