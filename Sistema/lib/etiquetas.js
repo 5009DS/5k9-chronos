@@ -173,6 +173,34 @@ export const proximaEtapa = (lista) => {
     return atual.proxima || null;
 };
 
+/* ── A ETAPA PUXA O STATUS ────────────────────────────────────────────────
+   Uma peça marcada como "gravado" continuava com status "em revisão": a
+   equipe avançava a produção e a conversa com o cliente ficava para trás. Na
+   tela dele, uma peça já gravada pedia aprovação de roteiro.
+
+   Da etapa "a gravar" em diante, o roteiro FOI aprovado — é o que autoriza
+   gravar. Então o status acompanha: rascunho ou em revisão viram aprovado, e
+   "publicado" leva o status junto.
+
+   ── O QUE ELA NÃO FAZ ────────────────────────────────────────────────────
+   Não mexe em "ajuste". Gravar com um pedido de mudança em aberto é uma
+   contradição de verdade — alguém gravou o que o cliente pediu para mudar — e
+   apagá-la aqui esconderia o problema em vez de mostrá-lo. A conferência
+   aponta esse caso.
+
+   Devolve null quando não há nada a mudar, para quem chama não gravar à toa. */
+export const statusParaEtapa = (statusAtual, nomeEtapa) => {
+    const meta = etiquetaMeta(nomeEtapa);
+    if (!meta.etapa) return null;
+
+    const podeSubir = ['rascunho', 'em_revisao'].includes(statusAtual);
+
+    if (meta.nome === 'publicado' && statusAtual !== 'publicado') return 'publicado';
+    // 3 = "a gravar": a partir daí, o roteiro já passou pelo cliente.
+    if (meta.etapa >= 3 && podeSubir) return 'aprovado';
+    return null;
+};
+
 export const chipEtiqueta = (nome) => {
     const m = etiquetaMeta(nome);
     return `<span class="vz-etiqueta vz-etiqueta--${esc(m.tom)}"${m.dica ? ` title="${esc(m.dica)}"` : ''}>

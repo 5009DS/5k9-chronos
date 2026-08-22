@@ -93,7 +93,11 @@ export const ativarArraste = (raiz, { item, alvo, aoSoltar, podeSoltar }) => {
            essencial e não é detalhe: no cronograma o cartão inteiro é um
            <button>, então sem essa comparação `closest('button')` devolveria o
            próprio cartão e o arraste nunca começaria naquela tela. */
-        const interativo = e.target.closest('button, a, select, input, textarea');
+        /* `[role="button"]` na lista: o gatilho do banco de temas mora DENTRO
+           do cartão e não podia ser um <button>, porque o cartão já é um. Sem
+           incluí-lo aqui, o arraste capturava o toque nele e o engolidor de
+           clique terminava o serviço — o botão existia e não respondia. */
+        const interativo = e.target.closest('button, a, select, input, textarea, [role="button"]');
         if (interativo && interativo !== el) return;
 
         estado = {

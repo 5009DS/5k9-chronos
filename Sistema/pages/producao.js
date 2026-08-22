@@ -4,7 +4,7 @@ import { toast } from '../components/toast.js';
 import { navegar } from '../lib/rotas.js';
 import { esc, dataBR, diaCurto, nomeDiaCurto } from '../lib/formato.js';
 import { chipFase, vazioHTML } from '../lib/pecas.js';
-import { ETAPAS, etapaAtual, comEtapa, injectEstilosEtiqueta } from '../lib/etiquetas.js';
+import { ETAPAS, etapaAtual, comEtapa, statusParaEtapa, injectEstilosEtiqueta } from '../lib/etiquetas.js';
 import { ativarArraste } from '../lib/arrastar.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -86,12 +86,21 @@ export const renderProducao = async (container, clienteId) => {
         if ((atual?.nome || SEM_ETAPA) === chaveColuna) return;
 
         const antes = [...(c.etiquetas || [])];
+        const antesStatus = c.status;
         const nome = chaveColuna === SEM_ETAPA ? null : chaveColuna;
-        await store.conteudos.salvar({ ...c, etiquetas: comEtapa(c.etiquetas, nome) });
+        // A MESMA regra do botão da tela da demanda: arrastar e clicar não
+        // podem deixar o conteúdo em estados diferentes.
+        const novoStatus = nome ? statusParaEtapa(c.status, nome) : null;
+
+        await store.conteudos.salvar({
+            ...c,
+            etiquetas: comEtapa(c.etiquetas, nome),
+            ...(novoStatus ? { status: novoStatus } : {}),
+        });
         toast(nome ? `"${c.titulo}" → ${nome}.` : `"${c.titulo}" saiu da esteira.`, {
             label: 'Desfazer',
             onClick: async () => {
-                await store.conteudos.salvar({ ...c, etiquetas: antes });
+                await store.conteudos.salvar({ ...c, etiquetas: antes, status: antesStatus });
                 recarregar();
             },
         });

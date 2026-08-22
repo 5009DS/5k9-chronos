@@ -10,7 +10,7 @@ import { retornosDe } from '../lib/cronograma.js';
 import { timeSalvo } from '../lib/gestor.js';
 import { linkDoCliente } from '../lib/apelido.js';
 import { abrirTeleprompter } from '../lib/teleprompter.js';
-import { ETAPAS, etapaAtual, comEtapa, proximaEtapa, chipEtiqueta, etiquetaMeta, injectEstilosEtiqueta } from '../lib/etiquetas.js';
+import { ETAPAS, etapaAtual, comEtapa, proximaEtapa, statusParaEtapa, chipEtiqueta, etiquetaMeta, injectEstilosEtiqueta } from '../lib/etiquetas.js';
 import {
     conversas, estadoMeta, ato, daEquipe, textoOriginal, entradaDaEquipe,
 } from '../lib/conversa.js';
@@ -1196,11 +1196,21 @@ export const renderRoteiro = async (container, conteudoId) => {
        obrigaria a lembrar a ordem de cor. */
     const irParaEtapa = async (nome) => {
         const antesEtiquetas = [...(c.etiquetas || [])];
-        await store.conteudos.salvar({ ...c, etiquetas: comEtapa(c.etiquetas, nome) });
-        toast(`Agora: ${nome}.`, {
+        const antesStatus = c.status;
+        /* A etapa puxa o status quando ele ficou para trás (ver
+           lib/etiquetas.js). Sem isto, uma peça gravada continuava pedindo
+           aprovação de roteiro na tela do cliente. */
+        const novoStatus = statusParaEtapa(c.status, nome);
+
+        await store.conteudos.salvar({
+            ...c,
+            etiquetas: comEtapa(c.etiquetas, nome),
+            ...(novoStatus ? { status: novoStatus } : {}),
+        });
+        toast(`Agora: ${nome}.${novoStatus ? ` Status: ${STATUS[novoStatus]?.rotulo || novoStatus}.` : ''}`, {
             label: 'Desfazer',
             onClick: async () => {
-                await store.conteudos.salvar({ ...c, etiquetas: antesEtiquetas });
+                await store.conteudos.salvar({ ...c, etiquetas: antesEtiquetas, status: antesStatus });
                 recarregar();
             },
         });

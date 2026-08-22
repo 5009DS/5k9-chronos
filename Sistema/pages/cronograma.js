@@ -190,12 +190,13 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
         /* O ícone de guardar mora DENTRO do cartão, que é um botão que abre o
            roteiro. Sem parar a propagação, guardar abriria o roteiro do que
            acabou de sair da tela. */
-        content.querySelectorAll('[data-guardar]').forEach(el => {
-            const guardar = async (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                const alvo = conteudos.find(x => x.id === el.dataset.guardar);
+        /* Botão de verdade, irmão do cartão: não precisa mais barrar a
+           propagação nem disputar o toque com o arraste. */
+        content.querySelectorAll('[data-guardar]').forEach(botao =>
+            botao.addEventListener('click', async () => {
+                const alvo = conteudos.find(x => x.id === botao.dataset.guardar);
                 if (!alvo) return;
+                botao.disabled = true;
                 await store.conteudos.salvar({ ...alvo, banco_em: new Date().toISOString() });
                 toast(`"${alvo.titulo}" foi para o banco de temas.`, {
                     label: 'Desfazer',
@@ -205,12 +206,7 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
                     },
                 });
                 recarregar();
-            };
-            el.addEventListener('click', guardar);
-            el.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' || e.key === ' ') guardar(e);
-            });
-        });
+            }));
 
         content.querySelectorAll('[data-conteudo]').forEach(el =>
             el.addEventListener('click', () => navegar(`/conteudo/${el.dataset.conteudo}`)));
@@ -331,7 +327,19 @@ const cartaoHTML = (c, todos) => {
        ausência de produção, e pintar tudo faria a cor deixar de significar. */
     const etapa = etapaAtual(c.etiquetas);
 
+    /* ── DUAS ZONAS DE CLIQUE, LADO A LADO E SEPARADAS ────────────────────
+       O gatilho do banco morava DENTRO do cartão. Isso trazia dois problemas,
+       e o segundo é o que impedia de usar:
+
+         · encostava na seta de abrir, e quem queria ler arquivava;
+         · o cartão é arrastável, e o arraste capturava o toque antes de o
+           clique acontecer. O botão existia e não respondia — só funcionava no
+           Quadro do mês, onde o cartão não é um <button>.
+
+       Agora são dois elementos IRMÃOS, com um vão de verdade entre eles: o
+       cartão abre, a caixa guarda, e nenhum dos dois alcança a área do outro. */
     return `
+        <div class="cr-item">
         <button class="vz-conteudo ${etapa ? `cr-etapa cr-etapa--${esc(etapa.tom)}` : ''}"
                 data-conteudo="${esc(c.id)}"
                 data-arrastavel="${esc(c.id)}" data-solta="${esc(c.id)}">
@@ -359,16 +367,14 @@ const cartaoHTML = (c, todos) => {
                     </div>` : ''}
                 ${seloDeslocado(desl)}
             </div>
-            ${/* O guardar ficava colado na seta de abrir, e as duas zonas de
-                  clique se tocavam: quem queria ler o roteiro arquivava a
-                  demanda. Agora ele mora no CANTO SUPERIOR, longe da seta, com
-                  área de toque de 34px e um respiro de 8px entre os dois. */''}
-            <span class="cr-guardar" role="button" tabindex="0" data-guardar="${esc(c.id)}"
-                  title="Mandar para o banco de temas" aria-label="Mandar para o banco de temas">
-                <i data-lucide="archive"></i>
-            </span>
             <i class="cr-seta" data-lucide="chevron-right"></i>
-        </button>`;
+        </button>
+
+        <button class="cr-guardar" data-guardar="${esc(c.id)}"
+                title="Mandar para o banco de temas" aria-label="Mandar para o banco de temas">
+            <i data-lucide="archive"></i>
+        </button>
+        </div>`;
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1089,20 +1095,27 @@ const ESTILOS = `
 /* O ícone de guardar aparece no cartão e some quando o dedo sai. Discreto
    porque é ação ocasional; presente porque procurar em menu uma ação de um
    clique é o que faz ninguém usar. Em toque não há hover, então ele fica. */
+/* O item é o par: cartão e caixa, com um vão de 8px que nenhuma das duas
+   áreas de clique atravessa. A separação é física, não uma questão de
+   alguns pixels a mais de margem interna. */
+.cr-item { display: flex; align-items: stretch; gap: var(--space-2); }
+.cr-item .vz-conteudo { flex: 1; min-width: 0; }
+
 .cr-guardar {
-    position: absolute; top: var(--space-2); right: var(--space-2);
+    flex: 0 0 44px;
     display: flex; align-items: center; justify-content: center;
-    width: 34px; height: 34px; border-radius: var(--radius-sm);
-    color: var(--text-disabled); cursor: pointer; opacity: 0;
-    transition: opacity var(--dur-fast), color var(--dur-fast), background-color var(--dur-fast);
+    border: 1px dashed var(--border-subtle); border-radius: var(--radius-md);
+    background: transparent; color: var(--text-disabled);
+    cursor: pointer;
+    transition: color var(--dur-fast), border-color var(--dur-fast), background-color var(--dur-fast);
 }
-/* A seta desce para o meio-baixo, e sobra espaço entre as duas zonas. */
-.vz-conteudo { position: relative; }
-.cr-guardar i, .cr-guardar svg { width: 15px; height: 15px; }
-.vz-conteudo:hover .cr-guardar { opacity: 1; }
-.cr-guardar:hover { background: var(--surface-3); color: var(--text-primary); }
-.cr-guardar:focus-visible { opacity: 1; outline: 2px solid var(--border-focus); outline-offset: 2px; }
-@media (hover: none) { .cr-guardar { opacity: 1; } }
+.cr-guardar i, .cr-guardar svg { width: 17px; height: 17px; }
+.cr-guardar:hover { border-style: solid; border-color: var(--accent-border); color: var(--accent); background: var(--accent-muted); }
+.cr-guardar:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+
+/* Borda tracejada e não sólida: a caixa é ação ocasional, e um segundo
+   botão sólido ao lado de cada cartão competiria com o próprio cartão. */
+
 
 /* O contador ao lado do rótulo, e não um ponto: quantos há muda a decisão
    de abrir. Some quando é zero — um contador em zero só ocupa espaço. */

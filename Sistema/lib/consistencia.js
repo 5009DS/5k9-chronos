@@ -144,6 +144,24 @@ export const auditar = (conteudos, blocos, retornos) => {
                 `Guardado fora do cronograma e marcado como ${etapa.nome}. A produção não vai achá-lo.`));
         }
 
+        /* O caso relatado: produção andou e a conversa com o cliente ficou
+           para trás. Na tela dele, uma peça já gravada pedindo aprovação de
+           roteiro. */
+        if (etapa && etapa.etapa >= 3 && ['rascunho', 'em_revisao'].includes(c.status)) {
+            achados.push(problema('grave', 'etapa-sem-status', c,
+                `Já está em "${etapa.nome}" e ainda consta como ${c.status === 'rascunho' ? 'rascunho' : 'em revisão'}`,
+                'A produção avançou e o status ficou para trás. O cliente vê uma peça já gravada '
+              + 'pedindo aprovação de roteiro.',
+                { rotulo: 'Marcar como aprovado', campo: 'status', valor: 'aprovado' }));
+        }
+
+        if (etapa && etapa.etapa >= 4 && c.status === 'ajuste') {
+            achados.push(problema('grave', 'gravado-com-ajuste', c,
+                `Gravado com um pedido de ajuste em aberto`,
+                'A peça foi gravada e o cliente tinha pedido mudança no roteiro. Vale conferir se '
+              + 'o pedido entrou na gravação antes de encerrar.'));
+        }
+
         if (c.status === 'em_revisao' && !temRoteiro.has(c.id)) {
             achados.push(problema('grave', 'revisao-sem-roteiro', c,
                 'Esperando aprovação sem roteiro escrito',
