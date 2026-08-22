@@ -1,6 +1,7 @@
 import { store } from '../store.js';
 import { renderShell } from '../components/pageshell.js';
 import { abrirFormulario } from '../components/campos.js';
+import { abrirMenu } from '../components/menu.js';
 import { openDrawer, closeDrawer } from '../components/drawer.js';
 import {
     apelidoSugerido, criticarApelido, temSufixoAleatorio, linkDoCliente,
@@ -21,7 +22,7 @@ import {
     leitura, conferir, noDiaCerto, classificar,
 } from '../lib/diretorio.js';
 import { chipFase, chipStatus, seloDeslocado, vazioHTML, STATUS } from '../lib/pecas.js';
-import { chipEtiqueta, injectEstilosEtiqueta, etapaAtual } from '../lib/etiquetas.js';
+import { chipEtiqueta, injectEstilosEtiqueta, etapaAtual, comEtapa, proximaEtapa, statusParaEtapa } from '../lib/etiquetas.js';
 import { ativarArraste } from '../lib/arrastar.js';
 import { timeSalvo } from '../lib/gestor.js';
 import { sugerirObjetivo } from '../lib/importar.js';
@@ -47,6 +48,19 @@ const FILTROS = [
     { id: 'em_revisao', rotulo: 'Em revisão' },
     { id: 'ajuste',     rotulo: 'Com ajuste' },
 ];
+
+/* ── ONDE A PESSOA ESTAVA ─────────────────────────────────────────────────
+   Mês e filtro sobrevivem à ida e volta para uma demanda. Sem isso, o fluxo
+   real virava um labirinto: trocar de mês, filtrar por "em revisão", abrir uma
+   demanda, voltar — e cair no mês de hoje, sem filtro, para refazer os dois
+   passos antes de abrir a próxima. Cada correção de status custava seis
+   cliques, quatro deles para desfazer o que a tela tinha esquecido.
+
+   Guardado POR CLIENTE: quem trabalha em dois cronogramas na mesma sessão não
+   quer o mês de um aparecendo no outro. E na memória, não no navegador — é
+   estado de navegação, não preferência; abrir o sistema amanhã deve começar do
+   mês corrente. */
+const ULTIMO = new Map();
 
 export const renderCronograma = async (container, clienteId, mesInicial = null) => {
     const { cliente, conteudos: todos } = await store.doCliente(clienteId);
@@ -76,8 +90,11 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
     // `mesInicial` preserva o mês entre redesenhos: arrastar, liberar o mês ou
     // salvar a ficha redesenham a tela, e sem ele a pessoa era devolvida ao mês
     // corrente a cada ação.
-    let mes = mesInicial || chaveMes(proximo(conteudos)?.data || hoje());
-    let filtro = 'tudo';
+    const lembrado = ULTIMO.get(clienteId) || {};
+    let mes = mesInicial || lembrado.mes || chaveMes(proximo(conteudos)?.data || hoje());
+    let filtro = lembrado.filtro || 'tudo';
+
+    const lembrar = () => ULTIMO.set(clienteId, { mes, filtro });
     let soltarArraste = null;
 
     const { content } = renderShell(container, {
@@ -173,13 +190,14 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
         `;
 
         // ── Eventos ─────────────────────────────────────────────────────
-        content.querySelector('#cr-anterior').addEventListener('click', () => { mes = somarMeses(mes, -1); desenhar(); });
-        content.querySelector('#cr-proximo').addEventListener('click', () => { mes = somarMeses(mes, 1); desenhar(); });
+        content.querySelector('#cr-anterior').addEventListener('click', () => { mes = somarMeses(mes, -1); lembrar(); desenhar(); });
+        content.querySelector('#cr-proximo').addEventListener('click', () => { mes = somarMeses(mes, 1); lembrar(); desenhar(); });
 
         content.querySelector('#cr-filtros').addEventListener('click', (e) => {
             const b = e.target.closest('[data-filtro]');
             if (!b) return;
             filtro = b.dataset.filtro;
+            lembrar();
             marcarAtivo(content, 'filtro', filtro);
             desenhar();
         });
@@ -190,6 +208,48 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
         /* O ícone de guardar mora DENTRO do cartão, que é um botão que abre o
            roteiro. Sem parar a propagação, guardar abriria o roteiro do que
            acabou de sair da tela. */
+        content.querySelectorAll('[data-acoes]').forEach(botao =>
+            botao.addEventListener('click', (e) => {
+                e.stopPropagation();   // ver a explicação no menu de status
+                const alvo = conteudos.find(x => x.id === botao.dataset.acoes);
+                if (!alvo) return;
+
+                const proxima = proximaEtapa(alvo.etiquetas);
+                const mudar = async (mudanca, aviso) => {
+                    const anterior = { ...alvo };
+                    await store.conteudos.salvar({ ...alvo, ...mudanca });
+                    toast(aviso, {
+                        label: 'Desfazer',
+                        onClick: async () => { await store.conteudos.salvar(anterior); recarregar(); },
+                    });
+                    recarregar();
+                };
+
+                abrirMenu(botao, [
+                    /* A etapa vem primeiro: é a ação da rotina, e o rótulo diz
+                       o destino em vez de exigir que se lembre da ordem. */
+                    ...(proxima ? [{
+                        id: 'etapa', label: `Mover para ${proxima}`, icon: 'arrow-right',
+                        onClick: () => {
+                            const novoStatus = statusParaEtapa(alvo.status, proxima);
+                            mudar(
+                                { etiquetas: comEtapa(alvo.etiquetas, proxima),
+                                  ...(novoStatus ? { status: novoStatus } : {}) },
+                                `Agora: ${proxima}.`);
+                        },
+                    }] : []),
+                    ...Object.entries(STATUS)
+                        .filter(([id]) => id !== alvo.status)
+                        .map(([id, meta]) => ({
+                            id: `status-${id}`, label: `Status: ${meta.rotulo}`, icon: meta.icone,
+                            separadorAntes: id === 'rascunho',
+                            onClick: () => mudar({ status: id }, `Status: ${meta.rotulo}.`),
+                        })),
+                    { id: 'abrir', label: 'Abrir o roteiro', icon: 'file-text', separadorAntes: true,
+                      onClick: () => navegar(`/conteudo/${alvo.id}`) },
+                ]);
+            }));
+
         /* Botão de verdade, irmão do cartão: não precisa mais barrar a
            propagação nem disputar o toque com o arraste. */
         content.querySelectorAll('[data-guardar]').forEach(botao =>
@@ -373,6 +433,15 @@ const cartaoHTML = (c, todos) => {
         <button class="cr-guardar" data-guardar="${esc(c.id)}"
                 title="Mandar para o banco de temas" aria-label="Mandar para o banco de temas">
             <i data-lucide="archive"></i>
+        </button>
+
+        ${/* Mudar o status exigia abrir a demanda, mexer lá dentro e voltar —
+              e voltar custava refazer mês e filtro. Três telas para trocar uma
+              palavra. Aqui as três ações que se faz percorrendo a lista ficam
+              a um clique, sem sair de onde se está. */''}
+        <button class="cr-acoes" data-acoes="${esc(c.id)}"
+                title="Ações" aria-label="Ações" aria-haspopup="menu">
+            <i data-lucide="ellipsis-vertical"></i>
         </button>
         </div>`;
 };
@@ -1112,6 +1181,17 @@ const ESTILOS = `
 .cr-guardar i, .cr-guardar svg { width: 17px; height: 17px; }
 .cr-guardar:hover { border-style: solid; border-color: var(--accent-border); color: var(--accent); background: var(--accent-muted); }
 .cr-guardar:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+
+.cr-acoes {
+    flex: 0 0 34px;
+    display: flex; align-items: center; justify-content: center;
+    border: none; border-radius: var(--radius-md);
+    background: transparent; color: var(--text-disabled); cursor: pointer;
+    transition: color var(--dur-fast), background-color var(--dur-fast);
+}
+.cr-acoes i, .cr-acoes svg { width: 17px; height: 17px; }
+.cr-acoes:hover { background: var(--surface-3); color: var(--text-primary); }
+.cr-acoes:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
 
 /* Borda tracejada e não sólida: a caixa é ação ocasional, e um segundo
    botão sólido ao lado de cada cartão competiria com o próprio cartão. */

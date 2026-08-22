@@ -70,17 +70,22 @@ export const renderRoteiro = async (container, conteudoId) => {
        cliente usa. Duas leituras do mesmo histórico acabariam discordando, e o
        sistema perderia a única coisa que ele oferece: um lugar onde os dois
        lados olham o mesmo estado. */
-    /* ── Limpeza de quem já ficou órfão ──────────────────────────────────
-       A regra "sem roteiro, sem conversa" passou a valer na hora de excluir.
-       Ela não alcança o que foi apagado ANTES dela existir: conteúdos que
-       ficaram sem bloco nenhum e continuaram com "aprovado por você" e com o
-       histórico inteiro pendurado.
+    /* ── Limpeza de quem ficou órfão, e SÓ dele ──────────────────────────
+       A regra "sem roteiro, sem conversa" vale na exclusão. Ela também roda ao
+       abrir, para alcançar o que foi apagado antes de a regra existir — mas
+       agora só quando há CONVERSA órfã, que é o sinal de que houve um roteiro
+       ali um dia.
 
-       Então a regra também se aplica na abertura: um conteúdo sem roteiro não
-       pode ter conversa nem estado vindo do cliente, tenha isso acontecido
-       hoje ou no mês passado. Roda uma vez por conteúdo — depois da limpeza a
-       condição não se repete. */
-    if (!blocos.length && (historico.length || ['aprovado', 'ajuste', 'em_revisao'].includes(c.status))) {
+       Antes ela bastava o status não ser rascunho, e isso pegava o caso mais
+       comum do mundo: uma demanda recém-criada, liberada para o cliente e
+       ainda sem roteiro escrito. Abrir para trabalhar nela rebaixava para
+       rascunho, tirava da tela do cliente e devolvia a pessoa para o mês
+       errado — três coisas que ninguém pediu, no meio de outra tarefa.
+
+       Sem conversa, o sistema não mexe em nada. A contradição continua sendo
+       apontada em /conferencia, com o conserto ao lado, onde a decisão é de
+       quem está olhando. */
+    if (!blocos.length && historico.length) {
         for (const r of historico) await store.retornos.excluir(r.id);
         if (c.status !== 'rascunho') await store.conteudos.salvar({ ...c, status: 'rascunho' });
         toast('Este conteúdo estava sem roteiro: a conversa e o estado antigos saíram junto.');
