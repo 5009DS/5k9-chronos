@@ -12,6 +12,7 @@ import { renderLogin } from './pages/login.js';
 import { renderCliente } from './pages/cliente.js';
 import { renderImportar } from './pages/importar.js';
 import { renderQuadro } from './pages/quadro.js';
+import { renderProducao } from './pages/producao.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    5K9 CHRONOS — roteador.
@@ -41,6 +42,7 @@ const ROTAS = [
     ['/cliente/:id',       (id) => renderCronograma(app, id)],
     ['/conteudo/:id',      (id) => renderRoteiro(app, id)],
     ['/quadro/:id',        (id) => renderQuadro(app, id)],
+    ['/producao/:id',      (id) => renderProducao(app, id)],
     ['/importar/:id',      (id) => renderImportar(app, id)],
     ['/importar/:id/:modo', (id, modo) => renderImportar(app, id, modo)],
     ['/diretorio',         () => renderDiretorio(app)],

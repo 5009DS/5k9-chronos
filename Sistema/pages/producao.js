@@ -1,0 +1,226 @@
+import { store } from '../store.js';
+import { renderShell } from '../components/pageshell.js';
+import { toast } from '../components/toast.js';
+import { navegar } from '../lib/rotas.js';
+import { esc, dataBR, diaCurto, nomeDiaCurto } from '../lib/formato.js';
+import { chipFase, vazioHTML } from '../lib/pecas.js';
+import { ETAPAS, etapaAtual, comEtapa, injectEstilosEtiqueta } from '../lib/etiquetas.js';
+import { ativarArraste } from '../lib/arrastar.js';
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PRODUÇÃO — a esteira vista de cima.
+
+   O cronograma responde QUANDO cada peça vai ao ar; o quadro responde em que
+   semana e em que vaga do funil ela cai. Nenhum dos dois responde a pergunta
+   que a equipe faz toda segunda: o que está parado, e parado onde.
+
+   Esta tela agrupa por ETAPA, não por data. É a mesma esteira do cartão, com
+   as colunas na ordem em que o trabalho acontece — e o que se enxerga aqui é o
+   acúmulo: seis peças em "a gravar" e nenhuma em "em edição" é uma tarde de
+   gravação que ninguém marcou.
+
+   ── ARRASTAR É AVANÇAR ────────────────────────────────────────────────────
+   Mover o cartão para outra coluna é a mesma operação do botão "Mover para" da
+   tela da demanda, e chama exatamente a mesma função (`comEtapa`). Duas
+   implementações da mesma regra divergiriam na primeira etapa nova.
+
+   ── A COLUNA QUE NÃO É ETAPA ──────────────────────────────────────────────
+   A primeira coluna é "sem etapa": peças que existem no cronograma e ainda não
+   entraram na produção. Sem ela, um conteúdo recém-criado não apareceria em
+   lugar nenhum desta tela — e sumir é pior que aparecer no lugar errado.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const SEM_ETAPA = '__sem__';
+
+export const renderProducao = async (container, clienteId) => {
+    const { cliente, conteudos: todos } = await store.doCliente(clienteId);
+
+    if (!cliente) {
+        const { content } = renderShell(container, {
+            path: '/', title: 'Cliente não encontrado',
+            subtitle: 'Ele pode ter sido excluído.',
+            actions: `<a href="/" class="ds-btn ds-btn--primary">Voltar aos clientes</a>`,
+        });
+        content.innerHTML = '';
+        return;
+    }
+
+    // Banco de temas fora, como nas outras telas: guardado não está em produção.
+    const conteudos = todos.filter(c => !c.banco_em);
+
+    const { content } = renderShell(container, {
+        path: '/',
+        crumbs: [{ href: '/', label: 'Clientes' }, { href: `/cliente/${clienteId}`, label: cliente.nome }],
+        title: 'Produção',
+        subtitle: `${cliente.nome} · ${conteudos.length} conteúdo${conteudos.length === 1 ? '' : 's'} fora do banco de temas`,
+        actions: `
+            <a class="ds-btn ds-btn--ghost" href="/cliente/${esc(clienteId)}">
+                <i data-lucide="list"></i> Cronograma
+            </a>
+            <a class="ds-btn ds-btn--ghost" href="/quadro/${esc(clienteId)}">
+                <i data-lucide="layout-grid"></i> Quadro do mês
+            </a>`,
+    });
+
+    container.insertAdjacentHTML('beforeend', ESTILOS);
+    injectEstilosEtiqueta();
+
+    const recarregar = () => renderProducao(container, clienteId);
+    let soltarArraste = null;
+
+    const colunas = () => [
+        { chave: SEM_ETAPA, nome: 'Sem etapa', icone: 'circle-dashed', tom: 'neutro',
+          dica: 'Existe no cronograma e ainda não entrou na produção.' },
+        ...ETAPAS.map(e => ({ chave: e.nome, nome: e.nome, icone: e.icone, tom: e.tom, dica: e.dica })),
+    ];
+
+    const daColuna = (chave) => conteudos.filter(c => {
+        const etapa = etapaAtual(c.etiquetas);
+        return chave === SEM_ETAPA ? !etapa : etapa?.nome === chave;
+    });
+
+    const mover = async (idConteudo, chaveColuna) => {
+        const c = conteudos.find(x => x.id === idConteudo);
+        if (!c) return;
+        const atual = etapaAtual(c.etiquetas);
+        if ((atual?.nome || SEM_ETAPA) === chaveColuna) return;
+
+        const antes = [...(c.etiquetas || [])];
+        const nome = chaveColuna === SEM_ETAPA ? null : chaveColuna;
+        await store.conteudos.salvar({ ...c, etiquetas: comEtapa(c.etiquetas, nome) });
+        toast(nome ? `"${c.titulo}" → ${nome}.` : `"${c.titulo}" saiu da esteira.`, {
+            label: 'Desfazer',
+            onClick: async () => {
+                await store.conteudos.salvar({ ...c, etiquetas: antes });
+                recarregar();
+            },
+        });
+        recarregar();
+    };
+
+    const desenhar = () => {
+        soltarArraste?.();
+
+        content.innerHTML = conteudos.length ? `
+            <div class="pr-esteira" id="pr-esteira">
+                ${colunas().map(col => {
+                    const itens = daColuna(col.chave);
+                    return `
+                    <section class="pr-coluna pr-coluna--${esc(col.tom)}" data-solta="${esc(col.chave)}">
+                        <header class="pr-coluna__cabeca">
+                            <i data-lucide="${esc(col.icone)}"></i>
+                            <span class="pr-coluna__nome">${esc(col.nome)}</span>
+                            <span class="pr-coluna__conta">${itens.length}</span>
+                        </header>
+                        <p class="pr-coluna__dica">${esc(col.dica || '')}</p>
+                        <div class="pr-coluna__itens">
+                            ${itens.length
+                                ? itens.map(cartao).join('')
+                                : '<p class="pr-vazio">—</p>'}
+                        </div>
+                    </section>`;
+                }).join('')}
+            </div>` : `
+            <article class="ds-card vz-secao">
+                ${vazioHTML('workflow', 'Nada em produção',
+                    'Os conteúdos deste cliente estão todos no banco de temas, ou ele ainda não tem nenhum. '
+                  + 'Crie um no cronograma para ele aparecer aqui.',
+                    `<a class="ds-btn ds-btn--primary" href="/cliente/${esc(clienteId)}">Ir ao cronograma</a>`)}
+            </article>`;
+
+        content.querySelectorAll('[data-abrir]').forEach(b =>
+            b.addEventListener('click', () => navegar(`/conteudo/${b.dataset.abrir}`)));
+
+        if (conteudos.length) {
+            soltarArraste = ativarArraste(content.querySelector('#pr-esteira'), {
+                item: '[data-arrastavel]',
+                alvo: '[data-solta]',
+                aoSoltar: (id, coluna) => mover(id, coluna),
+            });
+        }
+
+        if (window.lucide) lucide.createIcons();
+    };
+
+    desenhar();
+};
+
+const cartao = (c) => `
+    <article class="pr-cartao" data-arrastavel="${esc(c.id)}">
+        <span class="vz-fita vz-fita--${esc(c.fase || '')}"></span>
+        <div class="pr-cartao__corpo">
+            <div class="pr-cartao__topo">
+                <span class="pr-cartao__dia">${esc(nomeDiaCurto(c.data))} ${esc(diaCurto(c.data))}</span>
+                ${chipFase(c.fase, { curto: true })}
+            </div>
+            <h3 class="pr-cartao__titulo">${esc(c.titulo)}</h3>
+            ${c.responsavel ? `<span class="pr-cartao__quem">${esc(c.responsavel)}</span>` : ''}
+        </div>
+        <button class="ds-icon-btn ds-icon-btn--sm" data-abrir="${esc(c.id)}" title="Abrir o roteiro">
+            <i data-lucide="chevron-right"></i>
+        </button>
+    </article>`;
+
+const ESTILOS = `
+<style>
+/* Colunas que rolam na horizontal. Não é grade: o número de etapas cresce
+   (três entraram esta semana), e uma grade fixa quebraria a cada etapa nova. */
+.pr-esteira {
+    display: flex; gap: var(--space-3);
+    overflow-x: auto; padding-bottom: var(--space-3);
+    scroll-snap-type: x proximity;
+}
+.pr-coluna {
+    flex: 0 0 260px; display: flex; flex-direction: column; gap: var(--space-2);
+    padding: var(--space-3);
+    border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+    background: var(--surface-2);
+    scroll-snap-align: start;
+}
+.pr-coluna.ar-sobre { border-color: var(--accent); background: var(--accent-muted); }
+
+.pr-coluna__cabeca {
+    display: flex; align-items: center; gap: var(--space-2);
+    font-size: var(--text-xs); font-weight: 700;
+    text-transform: uppercase; letter-spacing: var(--tracking-wide);
+    color: var(--text-tertiary);
+}
+.pr-coluna__cabeca i, .pr-coluna__cabeca svg { width: 14px; height: 14px; }
+.pr-coluna__nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pr-coluna__conta {
+    min-width: 22px; padding: 0 6px; border-radius: var(--radius-pill);
+    background: var(--surface-3); color: var(--text-secondary);
+    font-size: 11px; line-height: 18px; text-align: center;
+}
+/* A cor da etapa vive no cabeçalho da coluna, não no fundo dela: fundo
+   colorido em seis colunas lado a lado vira vitral. */
+.pr-coluna--atencao .pr-coluna__cabeca { color: var(--warning); }
+.pr-coluna--info    .pr-coluna__cabeca { color: var(--info); }
+.pr-coluna--ok      .pr-coluna__cabeca { color: var(--success); }
+.pr-coluna--espera  .pr-coluna__cabeca { color: var(--accent); }
+.pr-coluna--risco   .pr-coluna__cabeca { color: var(--danger); }
+
+.pr-coluna__dica { margin: 0; font-size: 11px; color: var(--text-disabled); line-height: var(--leading-body); }
+.pr-coluna__itens { display: flex; flex-direction: column; gap: var(--space-2); min-height: 60px; }
+.pr-vazio { margin: 0; padding: var(--space-4) 0; text-align: center; color: var(--text-disabled); }
+
+.pr-cartao {
+    display: flex; align-items: center; gap: var(--space-2); overflow: hidden;
+    border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);
+    background: var(--surface-1);
+    cursor: grab;
+}
+.pr-cartao__corpo { flex: 1; display: flex; flex-direction: column; gap: 3px; padding: var(--space-2) 0; min-width: 0; }
+.pr-cartao__topo { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.pr-cartao__dia { font-size: 10px; text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--text-tertiary); }
+.pr-cartao__titulo {
+    margin: 0; font-size: var(--text-sm); font-weight: 600; line-height: var(--leading-snug);
+    color: var(--text-primary);
+}
+.pr-cartao__quem { font-size: var(--text-xs); color: var(--text-tertiary); }
+
+@media (max-width: 720px) {
+    .pr-coluna { flex-basis: 82vw; }
+}
+</style>
+`;

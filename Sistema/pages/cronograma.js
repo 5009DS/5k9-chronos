@@ -92,6 +92,9 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
             <a class="ds-btn ds-btn--ghost" href="/quadro/${esc(clienteId)}">
                 <i data-lucide="layout-grid"></i> Quadro do mês
             </a>
+            <a class="ds-btn ds-btn--ghost" href="/producao/${esc(clienteId)}">
+                <i data-lucide="workflow"></i> Produção
+            </a>
             <a class="ds-btn ds-btn--ghost" href="/importar/${esc(clienteId)}">
                 <i data-lucide="file-up"></i> Importar
             </a>

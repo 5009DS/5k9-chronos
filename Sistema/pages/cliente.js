@@ -13,7 +13,7 @@ import { openDrawer, closeDrawer } from '../components/drawer.js';
 import { toast } from '../components/toast.js';
 import { conversas, estadoMeta, ato, daEquipe, novidadesPara } from '../lib/conversa.js';
 import { iniciarTour, tourVisto, marcarTourVisto, MODELO } from '../lib/tour.js';
-import { chipEtiqueta, etiquetasPublicas, injectEstilosEtiqueta, ajusteTravado } from '../lib/etiquetas.js';
+import { chipEtiqueta, etiquetasPublicas, injectEstilosEtiqueta, ajusteTravado, etapaAtual } from '../lib/etiquetas.js';
 import { abrirTeleprompter } from '../lib/teleprompter.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -104,19 +104,14 @@ const desenharCronograma = (container, token, visao) => {
     const desenhar = () => {
         const semanas = mesEmSemanas(conteudos, mesVisto);
         const doMes = conteudos.filter(c => chaveMes(c.data) === mesVisto);
-        const aguardando = conteudos.filter(c => c.status === 'em_revisao').length;
 
         container.innerHTML = `
             <div class="cl">
                 ${cabecalho(cliente)}
 
                 <main class="cl-corpo">
-                    ${aguardando ? `
-                        <a class="cl-chamada" href="#semanas">
-                            <i data-lucide="clock"></i>
-                            <span><strong>${aguardando} conteúdo${aguardando > 1 ? 's' : ''}</strong>
-                            ${aguardando > 1 ? 'esperam' : 'espera'} sua aprovação</span>
-                        </a>` : ''}
+
+                    ${painelDoCliente(conteudos, token)}
 
                     <div class="cl-mes">
                         <button class="ds-icon-btn" id="cl-anterior" aria-label="Mês anterior">
@@ -239,6 +234,77 @@ const marcarModelo = (container) => {
             serve só para mostrar como um roteiro aparece aqui.</span>
         </p>`);
     if (window.lucide) lucide.createIcons();
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   O QUE DEPENDE DE VOCÊ, E O QUE ESTÁ ANDANDO
+
+   O cronograma por mês responde "o que vai ao ar e quando". Não responde a
+   pergunta que o cliente abre o link para fazer: tem alguma coisa me
+   esperando?
+
+   Duas listas, e só duas. A primeira é o que precisa dele — roteiro para ler,
+   gravação para ver. A segunda é o que está em andamento, em UMA linha por
+   peça, com a etapa escrita por extenso.
+
+   ── POR QUE NÃO COLUNAS ───────────────────────────────────────────────────
+   A equipe tem a esteira em /producao, com seis colunas e arrastar. Aqui isso
+   seria pedir ao cliente que aprendesse o processo do estúdio para descobrir
+   se tem tarefa. Ele não quer entender a produção; quer saber se pode fechar o
+   celular.
+
+   Some quando não há nada: um painel que vive dizendo "nada por aqui" ensina a
+   pular o topo da página.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const painelDoCliente = (conteudos, token) => {
+    const esperando = conteudos.filter(c =>
+        c.status === 'em_revisao'
+        || etapaAtual(c.etiquetas)?.nome === 'gravação aguardando aprovação');
+
+    /* "Em produção" é o que já passou por ele e ainda não foi ao ar. Publicado
+       sai da lista: virou passado, e o lugar dele é o mês. */
+    const andando = conteudos.filter(c => {
+        const etapa = etapaAtual(c.etiquetas);
+        if (!etapa || esperando.includes(c)) return false;
+        return etapa.nome !== 'publicado';
+    });
+
+    if (!esperando.length && !andando.length) return '';
+
+    const linha = (c, comEtapa) => `
+        <a class="cl-linha" href="/c/${esc(token)}/${esc(c.id)}">
+            <span class="vz-ponto vz-ponto--${esc(c.fase || '')}"></span>
+            <span class="cl-linha__titulo">${esc(c.titulo)}</span>
+            ${comEtapa && etapaAtual(c.etiquetas)
+                ? `<span class="cl-linha__etapa">${esc(etapaAtual(c.etiquetas).nome)}</span>`
+                : `<span class="cl-linha__quando">${esc(diaCurto(c.data))}</span>`}
+            <i data-lucide="chevron-right"></i>
+        </a>`;
+
+    return `
+        <section class="cl-painel">
+            ${esperando.length ? `
+                <div class="cl-bloco cl-bloco--voce">
+                    <h2 class="cl-bloco__titulo">
+                        <i data-lucide="hand"></i>
+                        Esperando você
+                        <span class="cl-bloco__conta">${esperando.length}</span>
+                    </h2>
+                    <p class="cl-bloco__dica">Abra, leia e diga se pode seguir.</p>
+                    ${esperando.map(c => linha(c, false)).join('')}
+                </div>` : ''}
+
+            ${andando.length ? `
+                <div class="cl-bloco">
+                    <h2 class="cl-bloco__titulo">
+                        <i data-lucide="loader"></i>
+                        Em produção
+                        <span class="cl-bloco__conta">${andando.length}</span>
+                    </h2>
+                    <p class="cl-bloco__dica">Já passou por você. A gente avisa quando precisar de algo.</p>
+                    ${andando.map(c => linha(c, true)).join('')}
+                </div>` : ''}
+        </section>`;
 };
 
 const semanaHTML = ({ segunda, conteudos }, token, comRoteiro) => {
@@ -1246,6 +1312,51 @@ function injectStyles() {
             font-size: var(--text-xs); line-height: var(--leading-body);
             color: color-mix(in oklch, var(--success) 70%, var(--text-secondary));
         }
+        /* ── O painel do topo ─────────────────────────────────────────────
+           Linhas, não cartões: são atalhos para o que já está detalhado
+           embaixo, e repetir o cartão inteiro faria a mesma peça aparecer
+           duas vezes com o mesmo peso. */
+        .cl-painel { display: flex; flex-direction: column; gap: var(--space-4); }
+        .cl-bloco {
+            display: flex; flex-direction: column; gap: var(--space-2);
+            padding: var(--space-4);
+            border: 1px solid var(--border-subtle); border-radius: var(--radius-lg);
+            background: var(--surface-2);
+        }
+        .cl-bloco--voce { border-color: var(--accent-border); background: var(--accent-muted); }
+        .cl-bloco__titulo {
+            display: flex; align-items: center; gap: var(--space-2); margin: 0;
+            font-size: var(--text-sm); font-weight: 700;
+            text-transform: uppercase; letter-spacing: var(--tracking-wide);
+            color: var(--text-secondary);
+        }
+        .cl-bloco--voce .cl-bloco__titulo { color: var(--accent); }
+        .cl-bloco__titulo i, .cl-bloco__titulo svg { width: 15px; height: 15px; }
+        .cl-bloco__conta {
+            min-width: 20px; padding: 0 6px; border-radius: var(--radius-pill);
+            background: var(--surface-3); color: var(--text-primary);
+            font-size: 11px; line-height: 18px; text-align: center;
+        }
+        .cl-bloco--voce .cl-bloco__conta { background: var(--accent); color: var(--surface-1); }
+        .cl-bloco__dica { margin: 0 0 var(--space-1); font-size: var(--text-xs); color: var(--text-tertiary); line-height: var(--leading-body); }
+
+        .cl-linha {
+            display: flex; align-items: center; gap: var(--space-3);
+            min-height: 46px; padding: var(--space-2) var(--space-3);
+            border-radius: var(--radius-md);
+            background: var(--surface-1); color: var(--text-primary);
+            text-decoration: none;
+        }
+        .cl-linha:hover { background: var(--surface-3); }
+        .cl-linha__titulo {
+            flex: 1; min-width: 0; font-size: var(--text-sm); font-weight: 500;
+            line-height: var(--leading-snug);
+        }
+        .cl-linha__etapa, .cl-linha__quando {
+            font-size: var(--text-xs); color: var(--text-tertiary); white-space: nowrap;
+        }
+        .cl-linha i, .cl-linha svg { width: 15px; height: 15px; flex-shrink: 0; color: var(--text-disabled); }
+
         .cl-etiquetas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--space-2); }
 
         .cl-roteiro__cabeca { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }

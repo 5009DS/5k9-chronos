@@ -31,6 +31,7 @@ erros que ele detecta.
 | `/` | Quem são os clientes e, antes disso, o que eles devolveram sem resposta. |
 | `/cliente/:id` | O mês daquele cliente, semana a semana. Onde o cronograma é montado e liberado. |
 | `/conteudo/:id` | O roteiro em blocos, com a leitura estratégica e o que o cliente respondeu. |
+| `/producao/:id` | A esteira: colunas por etapa de produção, arrastar entre elas. Onde o trabalho está parado. |
 | `/quadro/:id` | O mês como grade: semanas × vagas do funil. Arrastar, trocar e ver quem saiu do lugar. |
 | `/importar/:id` | Sobe o PDF de temas ou de roteiros, mostra o que entendeu e grava depois da conferência. |
 | `/diretorio` | O funil, os objetivos, a matriz de cruzamento e o testador do classificador. |
