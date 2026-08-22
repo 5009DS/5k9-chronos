@@ -139,8 +139,43 @@ export const renderProducao = async (container, clienteId) => {
             });
         }
 
+        ajustarAltura();
         if (window.lucide) lucide.createIcons();
     };
+
+    /* ── A BARRA HORIZONTAL PRECISA CABER NA TELA ────────────────────────
+       Um teto em vh não resolve sozinho: a esteira começa depois do cabeçalho
+       e do herói, e a altura desses dois muda com o título do cliente e com a
+       largura da janela. Com 68vh a barra caía 27px abaixo da dobra — perto o
+       bastante para parecer certo num teste e longe o bastante para obrigar a
+       rolar a página antes de rolar as colunas.
+
+       Então a altura é medida: o que sobra da janela a partir de onde a esteira
+       começa, menos um respiro. Recalculada ao redimensionar, porque o herói
+       reflui e o ponto de partida muda com ele. */
+    function ajustarAltura() {
+        const esteira = content.querySelector('#pr-esteira');
+        if (!esteira) return;
+
+        /* Medido contra a ÁREA DE ROLAGEM, não contra a janela. Com a janela, o
+           cálculo dava certo só com a página no topo: bastava rolar um pouco
+           para o topo da esteira subir, o "espaço" crescer e a barra voltar a
+           cair abaixo da dobra. A distância entre o topo da esteira e o fim da
+           área visível não depende de onde a página está. */
+        const rolador = esteira.closest('.sh-scroll') || document.documentElement;
+        const espaco = rolador.getBoundingClientRect().bottom
+                     - esteira.getBoundingClientRect().top - 24;
+
+        // Piso de 240px: numa janela muito baixa é melhor a página rolar do que
+        // a coluna virar uma fresta com meio cartão dentro.
+        esteira.style.maxHeight = `${Math.max(240, espaco)}px`;
+    }
+
+    /* Um listener por render acumularia um a cada visita à tela, todos medindo
+       conteúdo que já saiu do DOM. */
+    window.removeEventListener('resize', window.__prAjuste);
+    window.__prAjuste = ajustarAltura;
+    window.addEventListener('resize', ajustarAltura);
 
     desenhar();
 };
@@ -164,14 +199,41 @@ const cartao = (c) => `
 const ESTILOS = `
 <style>
 /* Colunas que rolam na horizontal. Não é grade: o número de etapas cresce
-   (três entraram esta semana), e uma grade fixa quebraria a cada etapa nova. */
+   (três entraram esta semana), e uma grade fixa quebraria a cada etapa nova.
+
+   ── A ALTURA É LIMITADA DE PROPÓSITO ────────────────────────────────────
+   Sem teto, a coluna mais cheia esticava a esteira inteira e empurrava a barra
+   de rolagem horizontal para muito abaixo da dobra. Quem usa mouse sem roda
+   lateral — a maioria — não tinha como chegar às etapas seguintes: a barra
+   existia num lugar que exigia rolar a página para encontrar.
+
+   Com teto, a barra fica logo abaixo das colunas, sempre à vista, e cada
+   coluna rola por dentro. São duas rolagens em vez de uma, e é a troca certa:
+   a de fora anda entre etapas, a de dentro anda dentro de uma. */
 .pr-esteira {
     display: flex; gap: var(--space-3);
-    overflow-x: auto; padding-bottom: var(--space-3);
+    overflow-x: auto; overflow-y: hidden;
+    padding-bottom: var(--space-2);
     scroll-snap-type: x proximity;
 }
+
+/* A barra horizontal é DESENHADA, não escondida. O padrão do sistema some
+   quando não se está rolando, e uma barra invisível numa área que precisa ser
+   rolada é a mesma coisa que não ter barra. */
+.pr-esteira { scrollbar-width: auto; scrollbar-color: var(--accent) var(--surface-3); }
+.pr-esteira::-webkit-scrollbar { height: 12px; }
+.pr-esteira::-webkit-scrollbar-track {
+    background: var(--surface-3); border-radius: var(--radius-pill);
+}
+.pr-esteira::-webkit-scrollbar-thumb {
+    background: var(--accent); border-radius: var(--radius-pill);
+    border: 3px solid var(--surface-1);
+}
+.pr-esteira::-webkit-scrollbar-thumb:hover { background: var(--accent-hover, var(--accent)); }
+
 .pr-coluna {
     flex: 0 0 260px; display: flex; flex-direction: column; gap: var(--space-2);
+    max-height: 100%; min-height: 0;
     padding: var(--space-3);
     border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
     background: var(--surface-2);
@@ -201,10 +263,25 @@ const ESTILOS = `
 .pr-coluna--risco   .pr-coluna__cabeca { color: var(--danger); }
 
 .pr-coluna__dica { margin: 0; font-size: 11px; color: var(--text-disabled); line-height: var(--leading-body); }
-.pr-coluna__itens { display: flex; flex-direction: column; gap: var(--space-2); min-height: 60px; }
+/* É esta parte que rola, e não a coluna inteira: o cabeçalho com o nome da
+   etapa e a contagem precisa continuar visível enquanto se percorre a lista —
+   é ele que diz o que está sendo lido. */
+.pr-coluna__itens {
+    flex: 1; min-height: 60px; overflow-y: auto;
+    display: flex; flex-direction: column; gap: var(--space-2);
+    padding-right: 2px;
+}
+.pr-coluna__itens::-webkit-scrollbar { width: 6px; }
+.pr-coluna__itens::-webkit-scrollbar-thumb {
+    background: var(--border-default); border-radius: var(--radius-pill);
+}
 .pr-vazio { margin: 0; padding: var(--space-4) 0; text-align: center; color: var(--text-disabled); }
 
 .pr-cartao {
+    /* flex-shrink: 0 — sem isto, a lista com altura limitada ESPREME os cartões
+       em vez de rolar: sete peças viravam sete tiras de 30px, e a barra de
+       rolagem interna nunca aparecia porque, tecnicamente, tudo "cabia". */
+    flex-shrink: 0;
     display: flex; align-items: center; gap: var(--space-2); overflow: hidden;
     border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);
     background: var(--surface-1);
