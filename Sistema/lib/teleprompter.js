@@ -24,15 +24,62 @@ import { ordenar, tipo as tipoBloco } from './roteiro.js';
    Uma velocidade fixa em pixels por segundo obrigaria a recalibrar a cada
    aparelho.
 
-   ── A LINHA DE LEITURA ────────────────────────────────────────────────────
-   Fica a 38% da altura, e não no meio: quem lê em prompter olha um pouco acima
-   do centro da lente, e o texto seguinte precisa estar visível abaixo dela. O
-   respiro de 40vh em cima e embaixo existe para a primeira e a última fala
-   também alcançarem a linha.
+   ── OS MARCADORES DE LEITURA ──────────────────────────────────────────────
+   Ficam a 38% da altura, e não no meio: quem lê em prompter olha um pouco
+   acima do centro da lente, e o texto seguinte precisa estar visível abaixo
+   dali. O respiro de 40vh em cima e embaixo existe para a primeira e a última
+   fala também alcançarem a marca.
+
+   São dois triângulos nas bordas, sem a linha que os ligava. A linha atravessa
+   o texto na altura exata em que o olho está — ela riscava justamente a
+   palavra que se está falando. Os prompters de mercado marcam a altura pela
+   borda pela mesma razão: a informação é "é aqui", e a borda diz isso sem
+   passar por cima da leitura.
+
+   ── O JEITO DE LER É DE QUEM LÊ ───────────────────────────────────────────
+   Alinhamento, margem e tamanho da letra ficam guardados no aparelho. Quem
+   grava tem um jeito só de ler, e reconfigurar isso a cada gravação seria
+   cobrar de novo uma decisão que já foi tomada. A velocidade NÃO fica: ela
+   pertence ao roteiro, não à pessoa.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const MIN_PPM = 60;
 const MAX_PPM = 320;
+
+const MIN_FONTE = 18;
+const MAX_FONTE = 96;
+const PASSO_MARGEM = 24;
+const MAX_MARGEM = 200;
+
+/* O jeito de ler, no aparelho de quem lê. Se o localStorage falhar, o prompter
+   abre no padrão — é conforto, e nada aqui pode impedir a gravação. */
+const CHAVE_JEITO = '5k9_prompter_jeito';
+
+const entre = (n, min, max) => Math.min(max, Math.max(min, n));
+
+/* Número guardado ou o padrão — e "guardado" precisa ser um número de verdade.
+   Zero é um valor legítimo de margem, então `|| padrao` estaria errado; e
+   `?? padrao` não pega o NaN que Number(undefined) devolve. Foi exatamente
+   esse NaN que, na primeira medição, virou `--tp-margem: NaNpx` e apagou a
+   regra de largura inteira. */
+const numero = (valor, padrao) =>
+    valor != null && Number.isFinite(Number(valor)) ? Number(valor) : padrao;
+
+const lerJeito = () => {
+    const padrao = { fonte: 34, alinhar: 'center', margem: 24 };
+    try {
+        const guardado = JSON.parse(localStorage.getItem(CHAVE_JEITO)) || {};
+        return {
+            fonte: entre(numero(guardado.fonte, padrao.fonte), MIN_FONTE, MAX_FONTE),
+            alinhar: ['left', 'center', 'right'].includes(guardado.alinhar) ? guardado.alinhar : padrao.alinhar,
+            margem: entre(numero(guardado.margem, padrao.margem), 0, MAX_MARGEM),
+        };
+    } catch { return padrao; }
+};
+
+const guardarJeito = (jeito) => {
+    try { localStorage.setItem(CHAVE_JEITO, JSON.stringify(jeito)); } catch { /* sem localStorage */ }
+};
 
 /* Seção não se fala, e orientação de gravação também não — mas as duas
    precisam aparecer, porque quem está na frente da câmera usa as duas para se
@@ -96,27 +143,44 @@ export const abrirTeleprompter = (conteudo, todosBlocos) => {
             </button>
         </div>
 
-        <div class="tp-palco" id="tp-palco">
-            <div class="tp-linha" aria-hidden="true"></div>
-            <div class="tp-texto" id="tp-texto">
-                ${blocos.map(desenharBloco).join('')}
+        <div class="tp-caixa">
+            <div class="tp-palco" id="tp-palco">
+                <div class="tp-texto" id="tp-texto">
+                    ${blocos.map(desenharBloco).join('')}
+                </div>
             </div>
+            <div class="tp-marca" aria-hidden="true"></div>
         </div>
 
         <div class="tp-controles">
             <div class="tp-progresso"><span id="tp-barra"></span></div>
 
-            <div class="tp-linha-controles">
+            ${/* Duas fileiras, e a divisão não é por falta de espaço: em cima o
+                  que se mexe GRAVANDO — começar, voltar, acelerar. Embaixo o
+                  que se acerta ANTES, uma vez. Misturar as duas faria procurar
+                  o play entre botões de margem com a câmera já rodando. */''}
+            <div class="tp-fileira">
                 <button class="tp-btn tp-btn--principal" id="tp-play">
                     <i data-lucide="play"></i> <span>Rolar</span>
                 </button>
-                <button class="tp-btn" id="tp-reiniciar" title="Voltar ao início (R)">
+                <button class="tp-btn tp-btn--icone" id="tp-reiniciar" title="Voltar ao início (R)"
+                        aria-label="Voltar ao início">
                     <i data-lucide="rotate-ccw"></i>
                 </button>
 
-                <label class="tp-campo">
-                    <span>Palavras / min</span>
-                    <input type="number" id="tp-ppm" min="${MIN_PPM}" max="${MAX_PPM}" step="5" value="${ppm}">
+                ${/* Faixa e não campo numérico: velocidade se acha ouvindo, não
+                      digitando. Ninguém sabe de cabeça que fala a 165 por
+                      minuto — sabe que "um tiquinho mais rápido" está bom, e o
+                      dedo faz isso enquanto o texto já está subindo. O número
+                      continua à vista para quem quer repetir o ajuste. */''}
+                <label class="tp-campo tp-campo--faixa">
+                    <span>Velocidade · <b id="tp-ppm-valor">${ppm}</b> ppm</span>
+                    ${/* Passo de 1, e não de 5: digitar "45 segundos" no campo ao
+                          lado devolve 187 palavras por minuto, e uma faixa de
+                          cinco em cinco pararia em 185 — o número embaixo do
+                          dedo diria uma coisa e o tempo, outra. */''}
+                    <input type="range" id="tp-ppm" min="${MIN_PPM}" max="${MAX_PPM}" step="1" value="${ppm}"
+                           aria-label="Palavras por minuto">
                 </label>
 
                 <label class="tp-campo">
@@ -125,8 +189,29 @@ export const abrirTeleprompter = (conteudo, todosBlocos) => {
                 </label>
 
                 <span class="tp-restante" id="tp-restante">${mmss(duracao())}</span>
+            </div>
 
-                <div class="tp-extras">
+            <div class="tp-fileira tp-fileira--jeito">
+                <div class="tp-grupo" role="group" aria-label="Alinhamento do texto">
+                    ${[['left', 'align-left', 'à esquerda'],
+                        ['center', 'align-center', 'centralizado'],
+                        ['right', 'align-right', 'à direita']].map(([id, icone, nome]) => `
+                        <button class="tp-btn tp-btn--icone" data-alinhar="${id}"
+                                title="Texto ${nome}" aria-label="Texto ${nome}" aria-pressed="false">
+                            <i data-lucide="${icone}"></i>
+                        </button>`).join('')}
+                </div>
+
+                <div class="tp-grupo" role="group" aria-label="Margem">
+                    <button class="tp-btn tp-btn--icone" data-margem="-1" title="Menos margem" aria-label="Menos margem">
+                        <i data-lucide="chevrons-left-right"></i>
+                    </button>
+                    <button class="tp-btn tp-btn--icone" data-margem="1" title="Mais margem" aria-label="Mais margem">
+                        <i data-lucide="chevrons-right-left"></i>
+                    </button>
+                </div>
+
+                <div class="tp-grupo">
                     <button class="tp-btn" data-fonte="-1" title="Diminuir a letra">A−</button>
                     <button class="tp-btn" data-fonte="1" title="Aumentar a letra">A+</button>
                 </div>
@@ -144,12 +229,38 @@ export const abrirTeleprompter = (conteudo, todosBlocos) => {
     const campoTempo = camada.querySelector('#tp-tempo');
     const restante = camada.querySelector('#tp-restante');
     const barra = camada.querySelector('#tp-barra');
-
-    let fonte = 34;
-    const aplicarFonte = () => { texto.style.fontSize = `${fonte}px`; };
-    aplicarFonte();
+    const valorPpm = camada.querySelector('#tp-ppm-valor');
 
     const rolagemMax = () => Math.max(1, palco.scrollHeight - palco.clientHeight);
+
+    const jeito = lerJeito();
+
+    const aplicarJeito = () => {
+        texto.style.fontSize = `${jeito.fonte}px`;
+        /* Custom properties e não style direto: a nota de gravação é flex e
+           ignora text-align, e uma variável herdada faz as duas obedecerem ao
+           mesmo ajuste sem uma segunda regra para manter em dia. */
+        texto.style.setProperty('--tp-alinhar', jeito.alinhar);
+        texto.style.setProperty('--tp-flex',
+            jeito.alinhar === 'center' ? 'center' : jeito.alinhar === 'left' ? 'flex-start' : 'flex-end');
+        texto.style.setProperty('--tp-margem', `${jeito.margem}px`);
+        camada.querySelectorAll('[data-alinhar]').forEach(b =>
+            b.setAttribute('aria-pressed', String(b.dataset.alinhar === jeito.alinhar)));
+        guardarJeito(jeito);
+    };
+
+    /* ── Mexer no jeito não pode perder o lugar ───────────────────────────
+       Letra maior, mais margem e outro alinhamento mudam a ALTURA do texto, e
+       a posição é guardada em pixels. Sem isto, aumentar a fonte no meio da
+       gravação jogava a leitura para outro trecho — quanto maior a mudança,
+       maior o salto. O que se preserva é a FRAÇÃO já lida. */
+    const semPerderOLugar = (mexer) => {
+        const fracao = palco.scrollTop / rolagemMax();
+        mexer();
+        posicao = fracao * rolagemMax();
+        palco.scrollTop = posicao;
+        atualizarNumeros();
+    };
 
     const atualizarNumeros = () => {
         const andado = palco.scrollTop / rolagemMax();
@@ -220,8 +331,9 @@ export const abrirTeleprompter = (conteudo, todosBlocos) => {
     };
 
     const mudarPpm = (novo) => {
-        ppm = Math.min(MAX_PPM, Math.max(MIN_PPM, Math.round(novo)));
+        ppm = entre(Math.round(novo), MIN_PPM, MAX_PPM);
         campoPpm.value = ppm;
+        valorPpm.textContent = ppm;
         campoTempo.value = mmss(duracao());
         atualizarNumeros();
     };
@@ -239,7 +351,10 @@ export const abrirTeleprompter = (conteudo, todosBlocos) => {
     camada.querySelector('[data-tp-sair]').addEventListener('click', sair);
     camada.querySelector('#tp-reiniciar').addEventListener('click', voltarAoInicio);
 
-    campoPpm.addEventListener('change', () => mudarPpm(Number(campoPpm.value) || PALAVRAS_POR_MINUTO));
+    /* 'input' e não 'change': a faixa avisa a cada pixel arrastado, e é isso
+       que faz o texto acelerar DEBAIXO do dedo. Esperar soltar transformaria o
+       ajuste em tentativa e erro. */
+    campoPpm.addEventListener('input', () => mudarPpm(Number(campoPpm.value) || PALAVRAS_POR_MINUTO));
     campoTempo.addEventListener('change', () => {
         const segundos = lerMMSS(campoTempo.value);
         /* Tempo inválido volta ao que estava, sem discutir: o número certo já
@@ -249,11 +364,22 @@ export const abrirTeleprompter = (conteudo, todosBlocos) => {
     });
 
     camada.querySelectorAll('[data-fonte]').forEach(b =>
-        b.addEventListener('click', () => {
-            fonte = Math.min(96, Math.max(18, fonte + Number(b.dataset.fonte) * 4));
-            aplicarFonte();
-            atualizarNumeros();
-        }));
+        b.addEventListener('click', () => semPerderOLugar(() => {
+            jeito.fonte = entre(jeito.fonte + Number(b.dataset.fonte) * 4, MIN_FONTE, MAX_FONTE);
+            aplicarJeito();
+        })));
+
+    camada.querySelectorAll('[data-alinhar]').forEach(b =>
+        b.addEventListener('click', () => semPerderOLugar(() => {
+            jeito.alinhar = b.dataset.alinhar;
+            aplicarJeito();
+        })));
+
+    camada.querySelectorAll('[data-margem]').forEach(b =>
+        b.addEventListener('click', () => semPerderOLugar(() => {
+            jeito.margem = entre(jeito.margem + Number(b.dataset.margem) * PASSO_MARGEM, 0, MAX_MARGEM);
+            aplicarJeito();
+        })));
 
     /* Rolar com o dedo é correção legítima: quem se perdeu volta duas linhas
        e continua. A posição interna passa a ser a de quem corrigiu — sem isto,
@@ -265,6 +391,7 @@ export const abrirTeleprompter = (conteudo, todosBlocos) => {
     });
     document.addEventListener('keydown', aoTeclado);
 
+    aplicarJeito();
     atualizarNumeros();
     return { erro: null };
 };
@@ -308,14 +435,25 @@ function injetarEstilos() {
 
         /* Preto puro, e não var(--surface): o prompter costuma ficar diante da
            lente, e qualquer cinza vira véu no vidro. */
-        .tp-palco { flex: 1; overflow-y: auto; position: relative; scrollbar-width: none; }
+        /* A caixa existe só para a marca ter onde se firmar. Ela morava DENTRO
+           do palco, e o palco é o que rola: um filho absoluto de um contêiner
+           com overflow rola junto com o conteúdo. Então a marca de leitura —
+           que só serve para ficar parada — subia com o texto e desaparecia nos
+           primeiros segundos. Fora do palco, o texto passa por baixo dela. */
+        .tp-caixa { position: relative; flex: 1; min-height: 0; display: flex; }
+        .tp-palco { flex: 1; overflow-y: auto; scrollbar-width: none; }
         .tp-palco::-webkit-scrollbar { display: none; }
 
+        /* A largura sai de "o que cabe, menos a margem dos dois lados", e é
+           por isso que o mesmo botão funciona no monitor e no celular: no
+           monitor ele encolhe a coluna de 900px, no celular ele afasta o texto
+           das bordas. Uma largura fixa em pixels não faria as duas coisas. */
         .tp-texto {
-            max-width: 900px; margin: 0 auto;
-            padding: 40vh var(--space-5);
+            width: max(140px, calc(min(900px, 100%) - var(--tp-margem, 24px) * 2));
+            margin: 0 auto;
+            padding: 40vh 0;
             font-size: 34px; line-height: 1.45; font-weight: 500;
-            text-align: center;
+            text-align: var(--tp-alinhar, center);
         }
 
         .tp-fala { margin: 0 0 0.9em; }
@@ -332,23 +470,27 @@ function injetarEstilos() {
             color: rgba(255, 255, 255, 0.35);
         }
         .tp-nota {
-            display: flex; align-items: center; justify-content: center; gap: 8px;
+            display: flex; align-items: center; justify-content: var(--tp-flex, center); gap: 8px;
             margin: 0 0 0.9em; font-size: 0.45em; font-style: italic;
             color: rgba(255, 255, 255, 0.4);
         }
         .tp-nota i, .tp-nota svg { width: 0.9em; height: 0.9em; }
 
-        .tp-linha {
+        /* Sem a linha ligando os dois: ela cruzava o texto exatamente na
+           altura em que o olho está, riscando a palavra sendo falada. Os
+           triângulos dizem a mesma coisa a partir da borda, onde não há o que
+           atrapalhar. Maiores que antes, porque agora carregam o recado
+           sozinhos. */
+        .tp-marca {
             position: absolute; left: 0; right: 0; top: 38%;
-            border-top: 1px solid rgba(201, 169, 255, 0.5);
             pointer-events: none;
         }
-        .tp-linha::before, .tp-linha::after {
-            content: ""; position: absolute; top: -5px;
-            border: 5px solid transparent;
+        .tp-marca::before, .tp-marca::after {
+            content: ""; position: absolute; top: -9px;
+            border: 9px solid transparent;
         }
-        .tp-linha::before { left: 0;  border-left-color: rgba(201, 169, 255, 0.8); }
-        .tp-linha::after  { right: 0; border-right-color: rgba(201, 169, 255, 0.8); }
+        .tp-marca::before { left: 0;  border-left-color: rgba(201, 169, 255, 0.9); }
+        .tp-marca::after  { right: 0; border-right-color: rgba(201, 169, 255, 0.9); }
 
         .tp-controles {
             border-top: 1px solid rgba(255, 255, 255, 0.12);
@@ -359,7 +501,16 @@ function injetarEstilos() {
         .tp-progresso { height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.14); margin-bottom: var(--space-3); }
         .tp-progresso span { display: block; height: 100%; width: 0; border-radius: 2px; background: #A855FF; }
 
-        .tp-linha-controles { display: flex; align-items: flex-end; gap: var(--space-2); flex-wrap: wrap; }
+        .tp-fileira { display: flex; align-items: flex-end; gap: var(--space-2); flex-wrap: wrap; }
+        /* A segunda fileira é ajuste, não comando: menor, apagada e separada
+           por um fio, para o olho não disputá-la com o botão de rolar. */
+        .tp-fileira--jeito {
+            margin-top: var(--space-3); padding-top: var(--space-3);
+            border-top: 1px solid rgba(255, 255, 255, 0.10);
+            gap: var(--space-3);
+        }
+        .tp-grupo { display: flex; gap: 4px; }
+        .tp-grupo:last-child { margin-left: auto; }
 
         .tp-btn {
             display: inline-flex; align-items: center; justify-content: center; gap: 6px;
@@ -374,6 +525,14 @@ function injetarEstilos() {
         .tp-btn--principal { min-width: 130px; background: #A855FF; border-color: transparent; }
         .tp-btn--principal:hover { background: #B96BFF; }
         .tp-btn--x { min-height: 34px; padding: 0 10px; }
+        .tp-btn--icone { padding: 0 12px; }
+        /* O alinhamento escolhido fica aceso: são três botões que fazem coisas
+           parecidas, e sem marca é preciso olhar o texto para saber qual vale. */
+        .tp-btn[aria-pressed="true"] {
+            background: rgba(168, 85, 255, 0.28);
+            border-color: rgba(168, 85, 255, 0.7);
+            color: #E9D5FF;
+        }
 
         .tp-campo { display: flex; flex-direction: column; gap: 3px; }
         .tp-campo span { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255, 255, 255, 0.5); }
@@ -385,17 +544,35 @@ function injetarEstilos() {
             background: rgba(255, 255, 255, 0.06); color: #fff;
             font-family: var(--font-sans); font-size: 16px; text-align: center;
         }
+        .tp-campo--faixa { flex: 1; min-width: 150px; max-width: 260px; }
+        .tp-campo--faixa b { color: #fff; font-variant-numeric: tabular-nums; }
+        .tp-campo--faixa input[type="range"] {
+            width: 100%; height: 40px; margin: 0;
+            accent-color: #A855FF; background: transparent; cursor: pointer;
+        }
+
         .tp-restante {
             min-height: 40px; display: flex; align-items: center;
             padding: 0 var(--space-2);
             font-size: var(--text-h3); font-weight: 700; font-variant-numeric: tabular-nums;
         }
-        .tp-extras { display: flex; gap: var(--space-2); margin-left: auto; }
 
         @media (max-width: 720px) {
-            .tp-texto { padding: 38vh var(--space-4); }
-            .tp-extras { margin-left: 0; }
+            .tp-texto { padding: 38vh 0; }
             .tp-btn--principal { flex: 1; }
+            .tp-campo--faixa { max-width: none; }
+            /* Na largura do celular as três caixas de ajuste cabem numa
+               fileira só quando nenhuma delas é empurrada para a direita. */
+            .tp-grupo:last-child { margin-left: 0; }
+            /* Cada pixel de controle é um pixel a menos de texto, e no celular
+               o texto é o que está sendo lido a um braço de distância. A
+               fileira de ajuste encolhe porque ela se mexe uma vez, antes de
+               gravar — não com a câmera rodando. */
+            .tp-fileira--jeito {
+                justify-content: space-between; gap: var(--space-2);
+                margin-top: var(--space-2); padding-top: var(--space-2);
+            }
+            .tp-fileira--jeito .tp-btn { min-height: 36px; }
         }
     `;
     document.head.appendChild(style);

@@ -1362,7 +1362,14 @@ function injectStyles() {
 
         .cl-etiquetas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--space-2); }
 
-        .cl-roteiro__cabeca { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+        /* O respiro embaixo é da CABEÇA, e não do título: pôr o botão ao lado
+           dele zerou a margem que separava a seção do roteiro, e o prompter
+           passou a encostar na primeira fala. Quem perdeu o espaço foi a
+           linha inteira, então é ela quem o devolve. */
+        .cl-roteiro__cabeca {
+            display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
+            margin-bottom: var(--space-4);
+        }
         .cl-roteiro__cabeca .cl-secao-titulo { flex: 1; margin: 0; }
         .cl-prompter {
             display: inline-flex; align-items: center; gap: 6px;
