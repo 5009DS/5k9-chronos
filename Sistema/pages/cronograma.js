@@ -22,8 +22,8 @@ import {
     leitura, conferir, noDiaCerto, classificar,
 } from '../lib/diretorio.js';
 import { chipFase, chipStatus, seloDeslocado, vazioHTML, STATUS } from '../lib/pecas.js';
-import { chipEtiqueta, injectEstilosEtiqueta, etapaAtual, proximaEtapa } from '../lib/etiquetas.js';
-import { moverParaEtapa } from '../lib/etapas.js';
+import { chipEtiqueta, injectEstilosEtiqueta, etapaAtual, proximaEtapa, statusParaEtapa } from '../lib/etiquetas.js';
+import { moverParaEtapa, mudarStatus } from '../lib/etapas.js';
 import { ativarArraste } from '../lib/arrastar.js';
 import { timeSalvo } from '../lib/gestor.js';
 import { sugerirObjetivo } from '../lib/importar.js';
@@ -63,6 +63,22 @@ const FILTROS = [
    mês corrente. */
 const ULTIMO = new Map();
 
+/* ── EM QUE MÊS A TELA ABRE ───────────────────────────────────────────────
+   No mês corrente, sempre que ele tiver conteúdo. Abria no mês do PRÓXIMO
+   conteúdo a publicar, e isso jogava para setembro no dia 23 de agosto só
+   porque as peças de agosto já tinham passado da data — o mês ainda estava
+   acontecendo, e a tela dizia que não.
+
+   O salto para frente continua existindo para quem tem razão de ver o futuro:
+   um cronograma recém-importado para setembro, sem nada em agosto, abre em
+   setembro. O que mudou é a ordem da pergunta — primeiro "o mês de hoje tem
+   conteúdo?", depois "qual é o próximo?". */
+const mesDeAbertura = (conteudos) => {
+    const agora = chaveMes(hoje());
+    if (conteudos.some(c => chaveMes(c.data) === agora)) return agora;
+    return chaveMes(proximo(conteudos)?.data || hoje());
+};
+
 export const renderCronograma = async (container, clienteId, mesInicial = null) => {
     const { cliente, conteudos: todos } = await store.doCliente(clienteId);
 
@@ -92,7 +108,7 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
     // salvar a ficha redesenham a tela, e sem ele a pessoa era devolvida ao mês
     // corrente a cada ação.
     const lembrado = ULTIMO.get(clienteId) || {};
-    let mes = mesInicial || lembrado.mes || chaveMes(proximo(conteudos)?.data || hoje());
+    let mes = mesInicial || lembrado.mes || mesDeAbertura(conteudos);
     let filtro = lembrado.filtro || 'tudo';
 
     const lembrar = () => ULTIMO.set(clienteId, { mes, filtro });
@@ -216,15 +232,6 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
                 if (!alvo) return;
 
                 const proxima = proximaEtapa(alvo.etiquetas);
-                const mudar = async (mudanca, aviso) => {
-                    const anterior = { ...alvo };
-                    await store.conteudos.salvar({ ...alvo, ...mudanca });
-                    toast(aviso, {
-                        label: 'Desfazer',
-                        onClick: async () => { await store.conteudos.salvar(anterior); recarregar(); },
-                    });
-                    recarregar();
-                };
 
                 abrirMenu(botao, [
                     /* A etapa vem primeiro: é a ação da rotina, e o rótulo diz
@@ -251,7 +258,17 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
                         .map(([id, meta]) => ({
                             id: `status-${id}`, label: `Status: ${meta.rotulo}`, icon: meta.icone,
                             separadorAntes: id === 'rascunho',
-                            onClick: () => mudar({ status: id }, `Status: ${meta.rotulo}.`),
+                            // A MESMA função da tela da demanda: o menu do
+                            // cartão não pode deixar a peça num estado que a
+                            // outra tela não produziria.
+                            onClick: async () => {
+                                const { mensagem, desfazer } = await mudarStatus(alvo, id);
+                                toast(mensagem, {
+                                    label: 'Desfazer',
+                                    onClick: async () => { await desfazer(); recarregar(); },
+                                });
+                                recarregar();
+                            },
                         })),
                     { id: 'abrir', label: 'Abrir o roteiro', icon: 'file-text', separadorAntes: true,
                       onClick: () => navegar(`/conteudo/${alvo.id}`) },
@@ -283,13 +300,30 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
             const b = e.target.closest('button');
             b.disabled = true;
             b.textContent = 'Liberando…';
-            /* Um por vez, sem Promise.all: o adaptador local grava a coleção
+            /* ── CADA UM VAI PARA O STATUS QUE A ETAPA DELE PEDE ───────────
+               Este botão escrevia "em revisão" em cima de TODOS os rascunhos,
+               e era daqui que saía a contradição mais teimosa do sistema: uma
+               peça em rascunho já marcada como "gravado" virava "gravado + em
+               revisão" — o cliente sendo convidado a aprovar o roteiro de um
+               vídeo que já estava filmado.
+
+               Liberar quer dizer "o cliente passa a ver isto", e não "todo
+               mundo volta para o começo da conversa". Quem ainda não entrou na
+               esteira vai para "em revisão", como sempre foi; quem já está
+               adiante vai para o status que a própria etapa implica — a mesma
+               regra que o botão de mover etapa usa (lib/etiquetas.js).
+
+               Um por vez, sem Promise.all: o adaptador local grava a coleção
                inteira a cada salvar, e disparar dez em paralelo faz a última
                escrita sobrescrever as nove anteriores. */
+            let adiantados = 0;
             for (const c of rascunhos) {
-                await store.conteudos.salvar({ ...c, status: 'em_revisao' });
+                const destino = statusParaEtapa('rascunho', etapaAtual(c.etiquetas)?.nome) || 'em_revisao';
+                if (destino !== 'em_revisao') adiantados++;
+                await store.conteudos.salvar({ ...c, status: destino });
             }
-            toast(`${rascunhos.length} conteúdo(s) liberado(s) para o cliente.`);
+            toast(`${rascunhos.length} conteúdo${rascunhos.length === 1 ? '' : 's'} liberado${rascunhos.length === 1 ? '' : 's'} para o cliente.`
+                + (adiantados ? ` ${adiantados} já ${adiantados === 1 ? 'estava' : 'estavam'} adiante na produção e não ${adiantados === 1 ? 'voltou' : 'voltaram'} a pedir aprovação de roteiro.` : ''));
             recarregar();
         });
 

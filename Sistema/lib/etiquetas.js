@@ -105,6 +105,13 @@ export const ETIQUETAS = [
       dica: 'Falta algo que vem do cliente.' },
 ];
 
+/* Os três nomes que o código precisa citar. Escritos uma vez: "a gravar"
+   digitado em quatro arquivos vira "à gravar" no quinto, e a etapa deixa de
+   existir sem ninguém errar nada visível. */
+export const ETAPA_APROVACAO = 'roteiro em aprovação';
+export const ETAPA_GRAVAR    = 'a gravar';
+export const ETAPA_PUBLICADO = 'publicado';
+
 /** As etapas da esteira, na ordem do caminho feliz. */
 export const ETAPAS = ETIQUETAS.filter(e => e.etapa).sort((a, b) => a.etapa - b.etapa);
 
@@ -145,7 +152,7 @@ export const ajusteTravado = (lista) =>
 export const etiquetasAoAprovar = (lista) => {
     const atuais = lista || [];
     if (ajusteTravado(atuais)) return atuais;
-    return comEtapa(atuais, 'a gravar');
+    return comEtapa(atuais, ETAPA_GRAVAR);
 };
 
 /** Em que etapa a peça está, ou null quando ainda não entrou na esteira. */
@@ -213,6 +220,47 @@ export const statusParaEtapa = (statusAtual, nomeEtapa) => {
     // 3 = "a gravar": a partir daí, o roteiro já passou pelo cliente.
     if (meta.etapa >= 3 && podeSubir) return 'aprovado';
     return null;
+};
+
+/* ── E O STATUS PUXA A ETAPA ──────────────────────────────────────────────
+   O outro lado da mesma moeda, e o que faltava: mudar o status para rascunho
+   deixava a etiqueta "roteiro em aprovação" no lugar. A peça sumia do link do
+   cliente e continuava marcada como se estivesse na mão dele — as duas telas
+   dizendo coisas diferentes sobre a mesma peça, que é a queixa que mais se
+   repetiu neste sistema.
+
+   ── O QUE ELA MUDA, E O QUE DEIXA QUIETO ──────────────────────────────────
+   Só age quando a leitura é ÚNICA:
+
+     rascunho    tira a etapa de aprovação — um rascunho não está com ninguém.
+                 Etapas mais adiante ficam: "gravado" é um fato da produção,
+                 e apagá-lo por causa de um clique em status seria destruir
+                 informação que ninguém pediu para destruir.
+     publicado   põe a etapa "publicado". Publicado é publicado.
+     aprovado    avança de "roteiro em aprovação" para "a gravar", que é
+                 exatamente o que a aprovação do cliente já fazia sozinha.
+     em revisão  e ajuste só entram quando a peça ainda não tem etapa nenhuma.
+
+   Quando a peça JÁ está numa etapa adiantada, "em revisão" tem mais de uma
+   leitura possível — o cliente pode estar vendo o roteiro ou a gravação — e
+   chutar uma delas trocaria uma contradição por outra. Esses casos ficam com
+   a conferência, que mostra o par e deixa a escolha com quem sabe.
+
+   Devolve a lista NOVA de etiquetas, ou null quando não há nada a mudar. */
+export const etiquetasParaStatus = (status, etiquetas) => {
+    const atual = etapaAtual(etiquetas);
+
+    const destino = (() => {
+        if (status === 'publicado') return atual?.nome === ETAPA_PUBLICADO ? undefined : ETAPA_PUBLICADO;
+        if (status === 'rascunho')  return atual?.etapa === 1 ? null : undefined;
+        if (status === 'aprovado')  return !atual || atual.etapa === 1 ? ETAPA_GRAVAR : undefined;
+        if (['em_revisao', 'ajuste'].includes(status)) return atual ? undefined : ETAPA_APROVACAO;
+        return undefined;
+    })();
+
+    // undefined é "não mexer"; null é "tirar da esteira" — e os dois precisam
+    // ser distinguíveis aqui dentro, porque só um deles grava.
+    return destino === undefined ? null : comEtapa(etiquetas, destino);
 };
 
 export const chipEtiqueta = (nome) => {

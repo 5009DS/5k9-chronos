@@ -5,7 +5,7 @@ import { navegar } from '../lib/rotas.js';
 import { esc, dataBR } from '../lib/formato.js';
 import { vazioHTML } from '../lib/pecas.js';
 import { auditar, resumoAuditoria } from '../lib/consistencia.js';
-import { comEtapa, etapaAtual, injectEstilosEtiqueta } from '../lib/etiquetas.js';
+import { comEtapa, etapaAtual, etiquetasParaStatus, injectEstilosEtiqueta } from '../lib/etiquetas.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    CONFERÊNCIA — o sistema procurando os próprios erros.
@@ -68,7 +68,16 @@ export const renderConsistencia = async (container) => {
             ? comEtapa(c.etiquetas, achado.conserto.valor ?? etapaAtual(c.etiquetas)?.nome ?? null)
             : achado.conserto.valor;
 
-        await store.conteudos.salvar({ ...c, [campo]: valor });
+        /* Um conserto de status arrasta a etapa pela MESMA regra das telas de
+           trabalho. Sem isto, "voltar para rascunho" deixava a etiqueta de
+           aprovação no lugar e a varredura seguinte acusava o par que este
+           clique acabou de criar. */
+        const etiquetasNovas = campo === 'status' ? etiquetasParaStatus(valor, c.etiquetas) : null;
+
+        await store.conteudos.salvar({
+            ...c, [campo]: valor,
+            ...(etiquetasNovas ? { etiquetas: etiquetasNovas } : {}),
+        });
         toast('Corrigido.', {
             label: 'Desfazer',
             onClick: async () => { await store.conteudos.salvar(antes); recarregar(); },

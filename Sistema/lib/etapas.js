@@ -1,5 +1,6 @@
 import { store } from '../store.js';
-import { comEtapa, statusParaEtapa, etiquetaMeta } from './etiquetas.js';
+import { comEtapa, statusParaEtapa, etiquetasParaStatus, etiquetaMeta, etapaAtual } from './etiquetas.js';
+import { STATUS } from './pecas.js';
 import { entradaDaEquipe } from './conversa.js';
 import { aprovouNoHistorico, equipeDevolveu } from './consistencia.js';
 
@@ -74,5 +75,39 @@ export const moverParaEtapa = async (c, nome, { autor = '' } = {}) => {
             if (reabertura) await store.retornos.excluir(reabertura.id);
             await store.conteudos.salvar({ ...c, ...antes });
         },
+    };
+};
+
+/**
+ * Muda o status de uma peça, com a etapa acompanhando quando a leitura é única.
+ *
+ * O par (status, etapa) é a fonte crônica de contradição neste sistema: são
+ * dois vocabulários sobre a mesma peça, e mexer num sem olhar o outro é o que
+ * põe "rascunho" numa peça marcada como se estivesse com o cliente. As duas
+ * direções agora existem — `moverParaEtapa` puxa o status, esta puxa a etapa —
+ * e as duas moram aqui, para a terceira mudança não encontrar uma cópia velha.
+ *
+ * @returns {Promise<{mensagem: string, mexeuNaEtapa: boolean, desfazer: function}>}
+ */
+export const mudarStatus = async (c, status) => {
+    const antes = { etiquetas: [...(c.etiquetas || [])], status: c.status };
+    const novas = etiquetasParaStatus(status, c.etiquetas);
+
+    await store.conteudos.salvar({ ...c, status, ...(novas ? { etiquetas: novas } : {}) });
+
+    /* A mensagem diz as DUAS coisas quando as duas mudaram. Uma etiqueta que
+       some sem aviso é indistinguível de um bug — e foi assim que este par
+       ganhou fama de quebrado. */
+    const nomeStatus = STATUS[status]?.rotulo || status;
+    const etapaNova = novas ? etapaAtual(novas) : null;
+    const mensagem = `Status: ${nomeStatus}.`
+        + (!novas ? ''
+            : etapaNova ? ` Etapa: ${etapaNova.nome}.`
+            : ' Saiu da esteira de produção.');
+
+    return {
+        mensagem,
+        mexeuNaEtapa: !!novas,
+        desfazer: async () => { await store.conteudos.salvar({ ...c, ...antes }); },
     };
 };

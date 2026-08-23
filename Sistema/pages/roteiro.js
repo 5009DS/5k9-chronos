@@ -11,7 +11,7 @@ import { timeSalvo } from '../lib/gestor.js';
 import { linkDoCliente } from '../lib/apelido.js';
 import { abrirTeleprompter } from '../lib/teleprompter.js';
 import { ETAPAS, etapaAtual, proximaEtapa, chipEtiqueta, etiquetaMeta, injectEstilosEtiqueta } from '../lib/etiquetas.js';
-import { moverParaEtapa } from '../lib/etapas.js';
+import { moverParaEtapa, mudarStatus } from '../lib/etapas.js';
 import {
     conversas, estadoMeta, ato, daEquipe, textoOriginal, entradaDaEquipe,
 } from '../lib/conversa.js';
@@ -333,8 +333,12 @@ export const renderRoteiro = async (container, conteudoId) => {
             abrirMenu(b, Object.entries(STATUS).map(([id, s]) => ({
                 id, label: s.rotulo, icon: s.icone,
                 onClick: async () => {
-                    await store.conteudos.salvar({ ...c, status: id });
-                    toast(`Status: ${s.rotulo}.`);
+                    // A etapa acompanha quando a leitura é única (lib/etapas.js).
+                    const { mensagem, desfazer } = await mudarStatus(c, id);
+                    toast(mensagem, {
+                        label: 'Desfazer',
+                        onClick: async () => { await desfazer(); recarregar(); },
+                    });
                     recarregar();
                 },
             })));

@@ -41,8 +41,28 @@ const crumbsHTML = (crumbs, titulo) => {
         </nav>`;
 };
 
+const POSICOES = new Map();
+let ultimoCaminho = null;
+
 export const renderShell = (container, { path, title, subtitle = '', actions = '', crumbs = null }) => {
     injectStyles();
+
+    /* ── REDESENHAR NÃO É NAVEGAR ─────────────────────────────────────────
+       Mudar o status de um conteúdo redesenha a tela inteira, e a pessoa que
+       estava na quarta semana voltava ao topo a cada clique — numa lista longa
+       isso é rolar tudo de novo depois de cada ajuste.
+
+       O roteador já guarda a posição ao SAIR de uma rota (guardarRolagem, mais
+       abaixo). Faltava guardá-la quando a mesma rota se redesenha sozinha, que
+       é o caso de toda ação feita dentro da página. `ultimoCaminho` é o que
+       separa os dois: na navegação ele ainda é a rota antiga, diferente da
+       atual, e aí não guardamos nada — senão a página nova abriria na altura
+       em que a anterior estava. */
+    const rolagemAtual = container.querySelector('.sh-scroll');
+    if (rolagemAtual && ultimoCaminho === window.location.pathname) {
+        POSICOES.set(ultimoCaminho, rolagemAtual.scrollTop);
+    }
+    ultimoCaminho = window.location.pathname;
 
     container.innerHTML = `
         <div class="sh-page animate-fade-in">
@@ -87,8 +107,6 @@ export const renderShell = (container, { path, title, subtitle = '', actions = '
    Recarregar a página deve começar do topo: é o gesto de quem quer recomeçar.
    Guardar em memória dá isso de graça.
    ═══════════════════════════════════════════════════════════════════════════ */
-
-const POSICOES = new Map();
 
 /**
  * Guarda onde a página estava. O roteador chama isto ANTES de apagar a tela,
