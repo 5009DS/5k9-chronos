@@ -489,7 +489,7 @@ const desenharConteudo = (container, token, visao, conteudoId) => {
                         </p>` : ''}
                     ${meus.length && podeResponder ? `
                         <p class="cl-roteiro__dica">
-                            <i data-lucide="hand-pointer"></i>
+                            <i data-lucide="pointer"></i>
                             Toque em uma fala para comentar só nela.
                         </p>` : ''}
                     ${meus.length
