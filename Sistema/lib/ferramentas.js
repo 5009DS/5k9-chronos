@@ -9,7 +9,7 @@
 
    Poderia ser um endpoint compartilhado, mas não deveria: um menu de
    navegação que depende de rede fica vazio quando a rede falha, e o custo de
-   manter quatro linhas em sincronia é menor que o de explicar por que o botão
+   manter cinco linhas em sincronia é menor que o de explicar por que o botão
    de trocar de ferramenta às vezes não lista nada.
    ═══════════════════════════════════════════════════════════════════════════ */
 
