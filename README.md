@@ -949,12 +949,18 @@ painel que cobre metade da tela esconde exatamente o que precisa ser lido.
 
 **O nome interno continua "visualizador", e é de propósito.** A ferramenta se
 chamava 5K9 Client Visualizer e virou **Chronos** em 15/08/2026. Trocamos tudo
-que uma pessoa lê — produto, aba, login, domínio, documentação. Ficaram como
-estavam: o prefixo `vz_` das tabelas, as chaves `5k9_visualizador_*` do
-localStorage, o prefixo `.vz-` do CSS e o arquivo `pages/visualizador.css`.
-Renomear qualquer um deles custa migração de banco ou um diff que atravessa o
-sistema inteiro, e nenhum aparece para quem usa. Um nome interno herdado é mais
-barato que uma migração feita por estética.
+que uma pessoa lê — produto, aba, login, domínio, documentação — e, em
+23/08/2026, também a pasta (`5K9 Chronos`, como os vizinhos) e o repositório
+(`5k9-chronos`). Ficaram como estavam: o prefixo `vz_` das tabelas, as chaves
+`5k9_visualizador_*` do localStorage, o prefixo `.vz-` do CSS e o arquivo
+`pages/visualizador.css`.
+
+A divisão é essa: **nome que alguém lê muda; nome que só o código usa fica.**
+Renomear o prefixo das tabelas custa migração de banco; renomear as chaves do
+localStorage apaga o que já está no navegador de quem usa — a etiqueta do
+tour, o nome do autor, os fios abertos. Nenhum dos dois aparece para quem usa
+o sistema. Um nome interno herdado é mais barato que uma migração feita por
+estética.
 
 **O leitor de PDF é nosso, e cabe em 250 linhas.** O pdf.js resolve o caso
 geral e pesa um megabyte que viria de CDN — e a regra da casa sobre CDN já
