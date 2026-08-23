@@ -1,11 +1,11 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    FERRAMENTAS DO ESTÚDIO — a lista que alimenta o trocador da topnav.
 
-   Este arquivo é IDÊNTICO nos quatro sistemas (5K9 Forms, 5K9 Gestor, 5K9
-   Chronos e 5K9 Dionísio). A única linha que muda entre eles é a constante
-   ATUAL, no fim. Ao criar uma ferramenta nova, acrescente uma entrada aqui e
-   copie o arquivo para os outros repositórios — é a lista que faz cada
-   sistema saber que os outros existem.
+   Este arquivo é IDÊNTICO nos cinco sistemas (5K9 Forms, 5K9 Gestor, 5K9
+   Chronos, 5K9 Dionísio e 5K9 Partners). A única linha que muda entre eles é
+   a constante ATUAL, no fim. Ao criar uma ferramenta nova, acrescente uma
+   entrada aqui e copie o arquivo para os outros repositórios — é a lista que
+   faz cada sistema saber que os outros existem.
 
    Poderia ser um endpoint compartilhado, mas não deveria: um menu de
    navegação que depende de rede fica vazio quando a rede falha, e o custo de
@@ -47,6 +47,14 @@ export const FERRAMENTAS = [
         icone: 'clapperboard',
         host: 'dionisio.5k9.studio',
         porta: 5176,
+    },
+    {
+        id: 'partners',
+        nome: 'Partners',
+        descricao: 'A porta de entrada do cliente',
+        icone: 'layout-grid',
+        host: 'partners.5k9.studio',
+        porta: 5177,
     },
 ];
 
