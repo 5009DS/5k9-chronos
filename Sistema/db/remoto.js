@@ -64,6 +64,99 @@ const falhar = (contexto, error) => {
     throw error;
 };
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   "JWT ISSUED AT FUTURE" — e por que ele vira uma tentativa, não uma tela de
+   erro.
+
+   O token de sessão é emitido pelo serviço de autenticação e conferido pelo
+   PostgREST. São duas máquinas, e o relógio de uma pode estar alguns segundos
+   à frente do da outra: o token nasce carimbado com um instante que, para
+   quem confere, ainda não chegou. A conferência não tem folga nenhuma, então
+   ela recusa — e o recado que sobra é "JWT issued at future", no meio de um
+   clique qualquer.
+
+   O que torna isso pior do que precisa ser: o erro é TRANSITÓRIO por
+   definição. Um segundo depois, o mesmo token passa. Mas ele subia até o
+   roteador e virava "Algo quebrou ao montar esta tela", com uma frase em
+   inglês sobre JWT e um botão de voltar ao início — para um problema que se
+   resolve sozinho enquanto a pessoa lê a mensagem.
+
+   Então a chamada tenta de novo, em vez de desistir:
+
+     1ª falha transitória → espera um segundo e repete (cobre o desencontro
+                            de relógio, que é de segundos);
+     2ª falha             → renova a sessão e repete (cobre o token vencido
+                            de verdade, que a renovação resolve);
+     3ª falha             → aí sim é erro, e a mensagem diz o que fazer.
+
+   ── QUANDO NÃO É DESENCONTRO DE SEGUNDOS ──────────────────────────────────
+   Se o relógio DESTE computador estiver errado de minutos, nenhuma tentativa
+   resolve: todo token vai nascer no futuro. Nesse caso a mensagem para de
+   falar de JWT e diz a única coisa acionável que existe — que horas o
+   servidor acha que são. O desvio é medido no cabeçalho Date da própria
+   resposta, que é a hora do servidor sem custo de mais uma consulta.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const TRANSITORIO = /issued at future|jwt expired|token is expired|jwsinvalid|pgrst301|invalid claim/i;
+
+const ehTransitorio = (error) =>
+    !!error && TRANSITORIO.test(`${error.message || ''} ${error.code || ''}`);
+
+const espera = (ms) => new Promise(r => setTimeout(r, ms));
+
+/** Quantos segundos este computador está adiantado em relação ao servidor. */
+const desvioDeRelogio = async () => {
+    try {
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/`, {
+            method: 'HEAD', headers: { apikey: SUPABASE_ANON },
+        });
+        const doServidor = Date.parse(r.headers.get('date') || '');
+        if (!doServidor) return null;
+        return Math.round((Date.now() - doServidor) / 1000);
+    } catch { return null; }
+};
+
+const erroDeRelogio = async () => {
+    const desvio = await desvioDeRelogio();
+    if (desvio === null || Math.abs(desvio) < 30) {
+        return new Error('A sessão precisou ser renovada e o banco recusou. Recarregue a página.');
+    }
+    const minutos = Math.round(Math.abs(desvio) / 60);
+    const quanto = minutos >= 1 ? `${minutos} minuto${minutos === 1 ? '' : 's'}` : `${Math.abs(desvio)} segundos`;
+    return new Error(`O relógio deste computador está ${desvio > 0 ? 'adiantado' : 'atrasado'} `
+        + `${quanto} em relação ao servidor, e por isso o acesso é recusado. `
+        + 'Acerte a hora do sistema e recarregue a página.');
+};
+
+/**
+ * Executa uma consulta e insiste quando a falha é de relógio ou de sessão.
+ *
+ * @param {string} contexto  para o console, quando não der
+ * @param {function} consulta  devolve a promessa do supabase-js ({data, error})
+ */
+const executar = async (contexto, consulta) => {
+    let r = await consulta();
+    if (!ehTransitorio(r.error)) {
+        if (r.error) falhar(contexto, r.error);
+        return r.data;
+    }
+
+    await espera(1200);
+    r = await consulta();
+
+    if (ehTransitorio(r.error)) {
+        console.warn(`[db] ${contexto}: token recusado duas vezes, renovando a sessão`);
+        try { await (await cliente()).auth.refreshSession(); } catch { /* segue mesmo assim */ }
+        r = await consulta();
+    }
+
+    if (ehTransitorio(r.error)) {
+        console.error(`[db] ${contexto}:`, r.error);
+        throw await erroDeRelogio();
+    }
+    if (r.error) falhar(contexto, r.error);
+    return r.data;
+};
+
 export const remoto = {
     modo: 'remoto',
 
@@ -94,30 +187,30 @@ export const remoto = {
 
     listar: async (colecao) => {
         const s = await cliente();
-        const { data, error } = await s.from(tabela(colecao)).select('*')
-            .order('criado_em', { ascending: false });
-        if (error) falhar(`listar(${colecao})`, error);
+        const data = await executar(`listar(${colecao})`,
+            () => s.from(tabela(colecao)).select('*').order('criado_em', { ascending: false }));
         return data || [];
     },
 
     salvar: async (colecao, registro) => {
         const s = await cliente();
         const linha = { ...registro, id: registro.id || crypto.randomUUID() };
-        const { data, error } = await s.from(tabela(colecao)).upsert(linha).select().maybeSingle();
-        if (error) falhar(`salvar(${colecao})`, error);
-        return data;
+        /* A repetição é segura aqui porque o upsert é idempotente: o id vem
+           decidido de casa, então gravar duas vezes escreve a mesma linha. */
+        return executar(`salvar(${colecao})`,
+            () => s.from(tabela(colecao)).upsert(linha).select().maybeSingle());
     },
 
     excluir: async (colecao, id) => {
         const s = await cliente();
-        const { error } = await s.from(tabela(colecao)).delete().eq('id', id);
-        if (error) falhar(`excluir(${colecao})`, error);
+        await executar(`excluir(${colecao})`,
+            () => s.from(tabela(colecao)).delete().eq('id', id));
     },
 
     substituir: async (colecao, linhas) => {
         const s = await cliente();
-        const { error } = await s.from(tabela(colecao)).upsert(linhas);
-        if (error) falhar(`substituir(${colecao})`, error);
+        await executar(`substituir(${colecao})`,
+            () => s.from(tabela(colecao)).upsert(linhas));
         return linhas;
     },
 
