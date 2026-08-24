@@ -9,7 +9,8 @@
  * @param {object} [action]  { label, href } para navegar, ou { label, onClick }
  *                           para executar. O segundo formato existe por causa
  *                           do "desfazer": a ação não leva a lugar nenhum, ela
- *                           reverte o que acabou de acontecer.
+ *                           reverte o que acabou de acontecer. O campo
+ *                           "segundos" alonga a vida do aviso — ver abaixo.
  */
 export const toast = (message, action) => {
     injectStyles();
@@ -44,8 +45,13 @@ export const toast = (message, action) => {
 
     requestAnimationFrame(() => el.classList.add('is-open'));
     /* Um aviso com "desfazer" vive mais: seis segundos é tempo de LER, não de
-       perceber o erro, decidir e alcançar o botão. */
-    setTimeout(dismiss, action?.onClick ? 11000 : 6000);
+       perceber o erro, decidir e alcançar o botão.
+
+       E quem desfaz uma ação em MASSA precisa de mais ainda: onze segundos
+       bastam para perceber que UM conteúdo mudou, não para conferir doze.
+       Por isso "segundos" — quem dispara a ação sabe o tamanho dela. */
+    setTimeout(dismiss, action?.segundos ? action.segundos * 1000
+                      : action?.onClick ? 11000 : 6000);
 };
 
 // ─────────────────────────────────────────────────────────────────────────

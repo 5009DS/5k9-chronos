@@ -193,7 +193,7 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
                         Rascunho não aparece no link do cliente. Libere quando o mês estiver pronto.
                     </div>
                     <button class="ds-btn ds-btn--primary ds-btn--sm" id="cr-liberar">
-                        <i data-lucide="send"></i> Liberar o mês para o cliente
+                        <i data-lucide="send"></i> Liberar para o cliente…
                     </button>
                 </article>` : ''}
 
@@ -296,36 +296,8 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
         content.querySelectorAll('[data-conteudo]').forEach(el =>
             el.addEventListener('click', () => navegar(`/conteudo/${el.dataset.conteudo}`)));
 
-        content.querySelector('#cr-liberar')?.addEventListener('click', async (e) => {
-            const b = e.target.closest('button');
-            b.disabled = true;
-            b.textContent = 'Liberando…';
-            /* ── CADA UM VAI PARA O STATUS QUE A ETAPA DELE PEDE ───────────
-               Este botão escrevia "em revisão" em cima de TODOS os rascunhos,
-               e era daqui que saía a contradição mais teimosa do sistema: uma
-               peça em rascunho já marcada como "gravado" virava "gravado + em
-               revisão" — o cliente sendo convidado a aprovar o roteiro de um
-               vídeo que já estava filmado.
-
-               Liberar quer dizer "o cliente passa a ver isto", e não "todo
-               mundo volta para o começo da conversa". Quem ainda não entrou na
-               esteira vai para "em revisão", como sempre foi; quem já está
-               adiante vai para o status que a própria etapa implica — a mesma
-               regra que o botão de mover etapa usa (lib/etiquetas.js).
-
-               Um por vez, sem Promise.all: o adaptador local grava a coleção
-               inteira a cada salvar, e disparar dez em paralelo faz a última
-               escrita sobrescrever as nove anteriores. */
-            let adiantados = 0;
-            for (const c of rascunhos) {
-                const destino = statusParaEtapa('rascunho', etapaAtual(c.etiquetas)?.nome) || 'em_revisao';
-                if (destino !== 'em_revisao') adiantados++;
-                await store.conteudos.salvar({ ...c, status: destino });
-            }
-            toast(`${rascunhos.length} conteúdo${rascunhos.length === 1 ? '' : 's'} liberado${rascunhos.length === 1 ? '' : 's'} para o cliente.`
-                + (adiantados ? ` ${adiantados} já ${adiantados === 1 ? 'estava' : 'estavam'} adiante na produção e não ${adiantados === 1 ? 'voltou' : 'voltaram'} a pedir aprovação de roteiro.` : ''));
-            recarregar();
-        });
+        content.querySelector('#cr-liberar')?.addEventListener('click',
+            () => abrirLiberar(cliente, rascunhos, recarregar));
 
         /* Arrastar um cartão sobre outro TROCA os dois de lugar. Na lista, o
            alvo é sempre outro conteúdo — não existe "vaga vazia" para receber,
@@ -534,6 +506,189 @@ const cartaoHTML = (c, todos) => {
    este é o único lugar do sistema onde um clique errado custa trabalho de
    verdade.
    ═══════════════════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════════════
+   LIBERAR PARA O CLIENTE — uma ação em massa que mostra o que vai fazer.
+
+   Era um clique só, sem lista e sem desfazer, escrevendo por cima de TODOS os
+   rascunhos do mês. Quem tinha acabado de recolher doze conteúdos para
+   rascunho, um por um, perdia as doze decisões nesse clique — e não havia
+   como voltar atrás.
+
+   O problema não era o que o botão fazia; era ele fazer isso às cegas. Ação em
+   massa precisa de duas coisas, e ele não tinha nenhuma:
+
+     · a LISTA antes, com o que muda em cada peça e o direito de desmarcar;
+     · o DESFAZER depois, porque a lista não impede o clique distraído.
+
+   ── POR QUE O DESTINO NÃO É SEMPRE "EM REVISÃO" ───────────────────────────
+   Liberar quer dizer "o cliente passa a ver isto", e não "todo mundo volta ao
+   começo da conversa". Quem ainda não entrou na esteira vai para "em revisão";
+   quem já está adiante vai para o status que a própria etapa pede — senão uma
+   peça já gravada volta a pedir aprovação de roteiro, que foi a contradição
+   mais teimosa que este sistema teve.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const destinoAoLiberar = (c) =>
+    statusParaEtapa('rascunho', etapaAtual(c.etiquetas)?.nome) || 'em_revisao';
+
+function abrirLiberar(cliente, rascunhos, aoTerminar) {
+    const marcados = new Set(rascunhos.map(c => c.id));
+
+    const linha = (c) => {
+        const destino = destinoAoLiberar(c);
+        const meta = STATUS[destino];
+        return `
+            <label class="cr-lib__item">
+                <input type="checkbox" class="cr-lib__caixa" data-lib="${esc(c.id)}" checked>
+                <span class="cr-lib__corpo">
+                    <span class="cr-lib__titulo">${esc(c.titulo || 'Sem título')}</span>
+                    <span class="cr-lib__meta">
+                        ${esc(dataBR(c.data))}
+                        <span class="cr-lib__seta"><i data-lucide="arrow-right"></i></span>
+                        <span class="cr-lib__destino">${esc(meta?.rotulo || destino)}</span>
+                    </span>
+                </span>
+            </label>`;
+    };
+
+    openDrawer({
+        title: 'Liberar para o cliente',
+        subtitle: cliente.nome,
+        body: `
+            <div class="cr-lib">
+                <p class="cr-lib__aviso">
+                    <i data-lucide="info"></i>
+                    <span>Rascunho não aparece no link do cliente. O que estiver marcado
+                    passa a aparecer, com o status ao lado de cada um.</span>
+                </p>
+
+                <div class="cr-lib__topo">
+                    <button type="button" class="ds-btn ds-btn--ghost ds-btn--sm" id="cr-lib-todos">
+                        Desmarcar todos
+                    </button>
+                </div>
+
+                <div class="cr-lib__lista">
+                    ${rascunhos.map(linha).join('')}
+                </div>
+            </div>`,
+        footer: `
+            <span style="flex:1"></span>
+            <button class="ds-btn ds-btn--ghost" id="cr-lib-cancelar">Cancelar</button>
+            <button class="ds-btn ds-btn--primary" id="cr-lib-ok">Liberar ${rascunhos.length}</button>`,
+        onMount: (painel) => {
+            injectEstilosLiberar();
+            if (window.lucide) lucide.createIcons();
+
+            const botao = painel.querySelector('#cr-lib-ok');
+            const todos = painel.querySelector('#cr-lib-todos');
+            painel.querySelector('#cr-lib-cancelar').addEventListener('click', closeDrawer);
+
+            const atualizar = () => {
+                botao.textContent = marcados.size ? `Liberar ${marcados.size}` : 'Nada marcado';
+                botao.disabled = !marcados.size;
+                todos.textContent = marcados.size === rascunhos.length ? 'Desmarcar todos' : 'Marcar todos';
+            };
+
+            painel.querySelectorAll('[data-lib]').forEach(caixa =>
+                caixa.addEventListener('change', () => {
+                    if (caixa.checked) marcados.add(caixa.dataset.lib);
+                    else marcados.delete(caixa.dataset.lib);
+                    atualizar();
+                }));
+
+            todos.addEventListener('click', () => {
+                const marcarTudo = marcados.size !== rascunhos.length;
+                marcados.clear();
+                if (marcarTudo) rascunhos.forEach(c => marcados.add(c.id));
+                painel.querySelectorAll('[data-lib]').forEach(x => { x.checked = marcarTudo; });
+                atualizar();
+            });
+
+            botao.addEventListener('click', async () => {
+                const escolhidos = rascunhos.filter(c => marcados.has(c.id));
+                botao.disabled = true;
+                botao.textContent = 'Liberando…';
+
+                /* Um por vez, sem Promise.all: o adaptador local grava a coleção
+                   inteira a cada salvar, e disparar dez em paralelo faz a última
+                   escrita sobrescrever as nove anteriores. */
+                const desfazeres = [];
+                let adiantados = 0;
+                for (const c of escolhidos) {
+                    const destino = destinoAoLiberar(c);
+                    if (destino !== 'em_revisao') adiantados++;
+                    // A MESMA função das outras telas: liberar também é uma
+                    // troca de status, e a etapa acompanha do mesmo jeito.
+                    const { desfazer } = await mudarStatus(c, destino);
+                    desfazeres.push(desfazer);
+                }
+
+                closeDrawer();
+                toast(`${escolhidos.length} conteúdo${escolhidos.length === 1 ? '' : 's'} no link do cliente.`
+                    + (adiantados ? ` ${adiantados} já ${adiantados === 1 ? 'estava' : 'estavam'} adiante na produção e não ${adiantados === 1 ? 'voltou' : 'voltaram'} a pedir aprovação de roteiro.` : ''), {
+                    label: 'Desfazer',
+                    // Conferir doze conteúdos leva mais que os onze segundos
+                    // padrão — e este é o aviso que faltou da última vez.
+                    segundos: 25,
+                    onClick: async () => {
+                        for (const d of desfazeres) await d();
+                        aoTerminar();
+                    },
+                });
+                aoTerminar();
+            });
+
+            atualizar();
+        },
+    });
+}
+
+function injectEstilosLiberar() {
+    if (document.getElementById('cr-liberar-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'cr-liberar-styles';
+    style.textContent = `
+        .cr-lib { display: flex; flex-direction: column; gap: var(--space-4); }
+        .cr-lib__aviso {
+            display: flex; align-items: flex-start; gap: var(--space-2); margin: 0;
+            padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
+            background: var(--surface-2); color: var(--text-secondary);
+            font-size: var(--text-sm); line-height: var(--leading-body);
+        }
+        .cr-lib__aviso i, .cr-lib__aviso svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 2px; }
+        .cr-lib__topo { display: flex; justify-content: flex-end; }
+
+        .cr-lib__lista { display: flex; flex-direction: column; gap: var(--space-2); }
+        .cr-lib__item {
+            display: flex; align-items: center; gap: var(--space-3);
+            padding: var(--space-3) var(--space-4);
+            border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+            background: var(--surface-1); cursor: pointer;
+            transition: border-color var(--dur-fast), background-color var(--dur-fast), opacity var(--dur-fast);
+        }
+        .cr-lib__item:hover { border-color: var(--accent-border); }
+        /* A peça desmarcada apaga em vez de sumir: ela continua na lista, e é
+           por isso que dá para ver que ela ficou de fora. */
+        .cr-lib__item:has(.cr-lib__caixa:not(:checked)) { opacity: 0.45; }
+        .cr-lib__caixa { width: 18px; height: 18px; accent-color: var(--accent); flex-shrink: 0; }
+
+        .cr-lib__corpo { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .cr-lib__titulo {
+            font-size: var(--text-sm); font-weight: 600; color: var(--text-primary);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .cr-lib__meta {
+            display: flex; align-items: center; gap: 6px;
+            font-size: var(--text-xs); color: var(--text-tertiary);
+        }
+        .cr-lib__seta { display: inline-flex; }
+        .cr-lib__seta i, .cr-lib__seta svg { width: 12px; height: 12px; }
+        .cr-lib__destino { color: var(--text-secondary); font-weight: 600; }
+    `;
+    document.head.appendChild(style);
+}
+
 function abrirApagarCronograma(cliente, conteudos, mes, aoTerminar) {
     const doMes = conteudos.filter(c => chaveMes(c.data) === mes);
     const escopos = {
