@@ -38,7 +38,7 @@ import { esc, semAcento } from './formato.js';
    Esta marcação existe para a interna e a pública concordarem; se as duas
    discordarem, quem manda é o banco, e é ele que precisa ser corrigido. */
 /* ── A ESTEIRA ────────────────────────────────────────────────────────────
-   Sete destas etiquetas são ETAPAS: uma peça está em uma delas de cada vez, e
+   Oito destas etiquetas são ETAPAS: uma peça está em uma delas de cada vez, e
    avançar significa sair da anterior. Marcar "gravado" tira "a gravar" e
    "roteiro aprovado" sozinho — antes elas se acumulavam e o cartão passava a
    dizer três coisas contraditórias ao mesmo tempo.
@@ -55,6 +55,22 @@ import { esc, semAcento } from './formato.js';
    qualquer palavra que a equipe inventar funciona, fora da esteira e com o
    desenho neutro. */
 export const ETIQUETAS = [
+    /* A primeira etapa, e a razão de ela existir: liberar o mês para o cliente
+       exigia ter TODOS os roteiros escritos, senão a peça aparecia lá pedindo
+       uma aprovação que não tinha texto. Isso virava pressa — escrever oito
+       roteiros porque o cronograma precisa sair.
+
+       Com esta etiqueta o cronograma sai primeiro e o roteiro vem depois: o
+       cliente vê a peça, a data e o tema, e lê que o texto ainda está sendo
+       escrito. Ela é a única etapa em que a peça está visível SEM esperar
+       nada dele — a conferência e o painel dele sabem disso.
+
+       Etapa 0.5 e não 1: renumerar a esteira mexeria em toda regra que fala
+       "da etapa tal em diante", e meia etapa custa nada. */
+    { nome: 'roteiro em desenvolvimento', publica: true, etapa: 0.5, proxima: 'roteiro em aprovação',
+      icone: 'file-pen', tom: 'info',
+      dica: 'A equipe ainda está escrevendo o texto.' },
+
     { nome: 'roteiro em aprovação', publica: true, etapa: 1, proxima: 'roteiro aprovado',
       icone: 'file-clock', tom: 'espera',
       dica: 'A médica está lendo o roteiro.' },
@@ -105,9 +121,10 @@ export const ETIQUETAS = [
       dica: 'Falta algo que vem do cliente.' },
 ];
 
-/* Os três nomes que o código precisa citar. Escritos uma vez: "a gravar"
-   digitado em quatro arquivos vira "à gravar" no quinto, e a etapa deixa de
-   existir sem ninguém errar nada visível. */
+/* Os nomes que o código precisa citar. Escritos uma vez: "a gravar" digitado
+   em quatro arquivos vira "à gravar" no quinto, e a etapa deixa de existir sem
+   ninguém errar nada visível. */
+export const ETAPA_ESCRITA   = 'roteiro em desenvolvimento';
 export const ETAPA_APROVACAO = 'roteiro em aprovação';
 export const ETAPA_GRAVAR    = 'a gravar';
 export const ETAPA_PUBLICADO = 'publicado';
@@ -211,8 +228,11 @@ export const statusParaEtapa = (statusAtual, nomeEtapa) => {
     const meta = etiquetaMeta(nomeEtapa);
     if (!meta.etapa) return null;
 
-    // 1 = "roteiro em aprovação": a bola é do cliente, e o status diz isso.
-    if (meta.etapa === 1) return statusAtual === 'em_revisao' ? null : 'em_revisao';
+    /* Pelo NOME e não pelo número: uma etapa nova no começo da esteira não
+       pode mudar o sentido de uma regra escrita meses antes. "Roteiro em
+       desenvolvimento" cai fora daqui de propósito — pôr a peça nela não é
+       pedir nada ao cliente, e o status não muda. */
+    if (meta.nome === ETAPA_APROVACAO) return statusAtual === 'em_revisao' ? null : 'em_revisao';
 
     const podeSubir = ['rascunho', 'em_revisao'].includes(statusAtual);
 
@@ -252,8 +272,10 @@ export const etiquetasParaStatus = (status, etiquetas) => {
 
     const destino = (() => {
         if (status === 'publicado') return atual?.nome === ETAPA_PUBLICADO ? undefined : ETAPA_PUBLICADO;
-        if (status === 'rascunho')  return atual?.etapa === 1 ? null : undefined;
-        if (status === 'aprovado')  return !atual || atual.etapa === 1 ? ETAPA_GRAVAR : undefined;
+        // Rascunho tira a etapa de aprovação e SÓ ela: escrever o roteiro de
+        // uma peça ainda não liberada é o estado mais normal que existe.
+        if (status === 'rascunho')  return atual?.nome === ETAPA_APROVACAO ? null : undefined;
+        if (status === 'aprovado')  return !atual || atual.nome === ETAPA_APROVACAO ? ETAPA_GRAVAR : undefined;
         if (['em_revisao', 'ajuste'].includes(status)) return atual ? undefined : ETAPA_APROVACAO;
         return undefined;
     })();

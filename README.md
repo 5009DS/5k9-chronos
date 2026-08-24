@@ -181,20 +181,29 @@ cliente" — o que precisar, no dia em que precisar, sem passar por código.
 
 ### O vocabulário de produção
 
-Oito etiquetas se repetem em todo cliente, e elas ganharam ícone e cor — do
+Onze etiquetas se repetem em todo cliente, e elas ganharam ícone e cor — do
 mesmo tamanho e peso do chip de status, porque respondem a uma pergunta tão
 frequente quanto:
 
 | Etiqueta | Diz que |
 |---|---|
+| roteiro em desenvolvimento | a equipe ainda está escrevendo |
 | roteiro em aprovação | a médica está lendo |
 | roteiro aprovado | liberado para gravar |
 | a gravar | ainda não foi para a câmera |
 | gravado | material bruto na mão |
 | em edição | na mesa de corte |
+| gravação aguardando aprovação | o vídeo pronto está com a médica |
+| revisão | a gravação não passou — volta para o corte |
+| publicado | no ar |
 | aguardando data | pronto, sem dia definido |
 | aguardando material | falta algo que vem do cliente |
-| refazer | não ficou bom, volta ao começo |
+
+Todas atravessam para a tela do cliente, menos **revisão** — dizer "não passou"
+é conversa da equipe, e o cliente vê a peça voltar para "em edição", que é o
+fato dele. A primeira da lista é a que permite liberar o cronograma antes de
+os roteiros existirem: a peça aparece com data e tema, e o texto vem depois,
+sem a corrida de escrever oito roteiros para o mês poder sair.
 
 No formulário elas aparecem como botões, **na ordem em que as coisas
 acontecem** — é essa ordem que transforma uma lista de palavras numa explicação

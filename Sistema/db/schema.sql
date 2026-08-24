@@ -286,8 +286,10 @@ as $$
                 || jsonb_build_object('etiquetas', coalesce(to_jsonb(array(
                        select e from unnest(coalesce(i.etiquetas, '{}')) e
                         where lower(trim(e)) = any (array[
+                            'roteiro em desenvolvimento',
                             'roteiro em aprovação', 'roteiro aprovado', 'a gravar',
-                            'gravado', 'em edição', 'aguardando data', 'aguardando material'
+                            'gravado', 'em edição', 'gravação aguardando aprovação',
+                            'publicado', 'aguardando data', 'aguardando material'
                         ])
                    )), '[]'::jsonb))
             ) from itens i), '[]'::jsonb),
@@ -404,6 +406,7 @@ begin
                        select array(
                            select e from unnest(coalesce(etiquetas, '{}')) e
                             where lower(trim(e)) not in (
+                                'roteiro em desenvolvimento',
                                 'roteiro em aprovação', 'roteiro aprovado', 'a gravar',
                                 'gravado', 'em edição', 'gravação aguardando aprovação',
                                 'revisão', 'publicado'

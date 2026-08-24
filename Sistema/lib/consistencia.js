@@ -1,4 +1,4 @@
-import { etapaAtual, ETAPAS } from './etiquetas.js';
+import { etapaAtual, ETAPAS, ETAPA_ESCRITA } from './etiquetas.js';
 import { daEquipe } from './conversa.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -77,6 +77,12 @@ export const equipeDevolveu = (retornos, conteudoId) => {
 export const precisaDoCliente = (c, retornos) => {
     if (!c || c.banco_em) return false;
     if (c.status === 'rascunho') return false;
+
+    /* Liberada, e ainda assim não é a vez dele: o roteiro está sendo escrito.
+       É para isso que "roteiro em desenvolvimento" existe — o cronograma sai
+       sem esperar todos os textos, e a peça aparece na tela dele sem cobrar
+       uma leitura que ainda não tem o que ler. */
+    if (etapaAtual(c.etiquetas)?.nome === ETAPA_ESCRITA) return false;
 
     // A gravação pronta esperando o olho dele é a outra forma de "sua vez".
     if (etapaAtual(c.etiquetas)?.nome === 'gravação aguardando aprovação') return true;
@@ -159,7 +165,8 @@ export const auditar = (conteudos, blocos, retornos) => {
                 { rotulo: `Manter só ${etapa?.nome}`, campo: 'etiquetas', valor: null }));
         }
 
-        if (c.status === 'rascunho' && etapa) {
+        // Rascunho com o roteiro sendo escrito é o começo normal de tudo.
+        if (c.status === 'rascunho' && etapa && etapa.nome !== ETAPA_ESCRITA) {
             achados.push(problema('grave', 'rascunho-em-producao', c,
                 'Em produção, mas invisível para o cliente',
                 `Está marcado como ${etapa.nome} e o status é rascunho — ele não vê esta peça.`,
@@ -209,7 +216,10 @@ export const auditar = (conteudos, blocos, retornos) => {
               + 'o pedido entrou na gravação antes de encerrar.'));
         }
 
-        if (c.status === 'em_revisao' && !temRoteiro.has(c.id)) {
+        /* Sem roteiro e esperando aprovação é contradição — MENOS quando a
+           etiqueta diz, na cara do cliente, que o texto está sendo escrito.
+           Essa é a peça liberada de propósito antes do roteiro existir. */
+        if (c.status === 'em_revisao' && !temRoteiro.has(c.id) && etapa?.nome !== ETAPA_ESCRITA) {
             achados.push(problema('grave', 'revisao-sem-roteiro', c,
                 'Esperando aprovação sem roteiro escrito',
                 'O cliente abre e encontra "roteiro ainda não escrito".',
@@ -226,7 +236,13 @@ export const auditar = (conteudos, blocos, retornos) => {
             achados.push(problema('aviso', 'sem-objetivo', c, 'Sem objetivo',
                 'Sem ele, o cartão que explica o conteúdo para o cliente fica pela metade.'));
         }
-        if (c.status !== 'rascunho' && !c.banco_em && !temRoteiro.has(c.id)) {
+        /* O mesmo perdão da regra grave, pelo mesmo motivo: com a etiqueta de
+           desenvolvimento, abrir e não achar texto é o combinado — a tela dele
+           diz isso com todas as letras. Sem esta linha, toda peça liberada
+           antes do roteiro viraria um aviso, e a conferência encheria de
+           pendência normal justamente para quem usa o recurso direito. */
+        if (c.status !== 'rascunho' && !c.banco_em && !temRoteiro.has(c.id)
+            && etapa?.nome !== ETAPA_ESCRITA) {
             achados.push(problema('aviso', 'sem-roteiro', c, 'Publicado ao cliente sem roteiro',
                 'Ele consegue abrir e não há texto para ler.'));
         }

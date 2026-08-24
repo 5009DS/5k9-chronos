@@ -304,7 +304,11 @@ const painelDoCliente = (conteudos, token, retornos) => {
                         Em produção
                         <span class="cl-bloco__conta">${andando.length}</span>
                     </h2>
-                    <p class="cl-bloco__dica">Já passou por você. A gente avisa quando precisar de algo.</p>
+                    ${/* "Já passou por você" deixou de ser verdade para todas: a
+                          peça com o roteiro ainda em desenvolvimento entra aqui
+                          sem nunca ter passado. O texto agora cobre os dois
+                          casos sem prometer nenhum dos dois. */''}
+                    <p class="cl-bloco__dica">Está com a equipe. A gente avisa quando precisar de algo.</p>
                     ${andando.map(c => linha(c, true)).join('')}
                 </div>` : ''}
         </section>`;
