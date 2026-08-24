@@ -532,14 +532,19 @@ const destinoAoLiberar = (c) =>
     statusParaEtapa('rascunho', etapaAtual(c.etiquetas)?.nome) || 'em_revisao';
 
 function abrirLiberar(cliente, rascunhos, aoTerminar) {
-    const marcados = new Set(rascunhos.map(c => c.id));
+    /* NADA marcado ao abrir. Liberar o mês inteiro custa um clique a mais
+       ("Marcar todos"), e é um preço justo: o erro que este painel existe para
+       impedir é o de liberar sem querer o que estava recolhido de propósito.
+       Um painel que já vem com tudo marcado é a mesma ação em massa de antes,
+       só que com uma tela na frente. */
+    const marcados = new Set();
 
     const linha = (c) => {
         const destino = destinoAoLiberar(c);
         const meta = STATUS[destino];
         return `
             <label class="cr-lib__item">
-                <input type="checkbox" class="cr-lib__caixa" data-lib="${esc(c.id)}" checked>
+                <input type="checkbox" class="cr-lib__caixa" data-lib="${esc(c.id)}">
                 <span class="cr-lib__corpo">
                     <span class="cr-lib__titulo">${esc(c.titulo || 'Sem título')}</span>
                     <span class="cr-lib__meta">
@@ -558,13 +563,13 @@ function abrirLiberar(cliente, rascunhos, aoTerminar) {
             <div class="cr-lib">
                 <p class="cr-lib__aviso">
                     <i data-lucide="info"></i>
-                    <span>Rascunho não aparece no link do cliente. O que estiver marcado
-                    passa a aparecer, com o status ao lado de cada um.</span>
+                    <span>Rascunho não aparece no link do cliente. Marque o que já pode
+                    ir — o status ao lado é o que cada um vai ter.</span>
                 </p>
 
                 <div class="cr-lib__topo">
                     <button type="button" class="ds-btn ds-btn--ghost ds-btn--sm" id="cr-lib-todos">
-                        Desmarcar todos
+                        Marcar todos
                     </button>
                 </div>
 
@@ -575,7 +580,7 @@ function abrirLiberar(cliente, rascunhos, aoTerminar) {
         footer: `
             <span style="flex:1"></span>
             <button class="ds-btn ds-btn--ghost" id="cr-lib-cancelar">Cancelar</button>
-            <button class="ds-btn ds-btn--primary" id="cr-lib-ok">Liberar ${rascunhos.length}</button>`,
+            <button class="ds-btn ds-btn--primary" id="cr-lib-ok" disabled>Nada marcado</button>`,
         onMount: (painel) => {
             injectEstilosLiberar();
             if (window.lucide) lucide.createIcons();
