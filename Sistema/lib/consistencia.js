@@ -1,4 +1,4 @@
-import { etapaAtual, ETAPAS, ETAPA_ESCRITA } from './etiquetas.js';
+import { etapaAtual, etapaEsperaCliente, ETAPAS, ETAPA_ESCRITA } from './etiquetas.js';
 import { daEquipe } from './conversa.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -84,8 +84,11 @@ export const precisaDoCliente = (c, retornos) => {
        uma leitura que ainda não tem o que ler. */
     if (etapaAtual(c.etiquetas)?.nome === ETAPA_ESCRITA) return false;
 
-    // A gravação pronta esperando o olho dele é a outra forma de "sua vez".
-    if (etapaAtual(c.etiquetas)?.nome === 'gravação aguardando aprovação') return true;
+    /* A peça PRONTA esperando o olho dele é a outra forma de "sua vez" — o
+       vídeo montado ou a arte diagramada, conforme a esteira. A etapa é quem
+       diz isso (esperaCliente, em lib/etiquetas.js); citar o nome de uma delas
+       aqui deixaria a outra esteira de fora sem ninguém perceber. */
+    if (etapaEsperaCliente(c.etiquetas)) return true;
 
     /* A equipe falou por último, e não foi para encerrar: o roteiro voltou
        para ele. Vem ANTES das duas leituras abaixo porque as duas olham só o

@@ -67,19 +67,26 @@ export const ETIQUETAS = [
 
        Etapa 0.5 e não 1: renumerar a esteira mexeria em toda regra que fala
        "da etapa tal em diante", e meia etapa custa nada. */
-    { nome: 'roteiro em desenvolvimento', publica: true, etapa: 0.5, proxima: 'roteiro em aprovação',
+    { nome: 'roteiro em desenvolvimento', publica: true, etapa: 0.5, esteira: 'ambas',
+      proxima: 'roteiro em aprovação',
       icone: 'file-pen', tom: 'info',
       dica: 'A equipe ainda está escrevendo o texto.' },
 
-    { nome: 'roteiro em aprovação', publica: true, etapa: 1, proxima: 'roteiro aprovado',
+    { nome: 'roteiro em aprovação', publica: true, etapa: 1, esteira: 'ambas',
+      proxima: 'roteiro aprovado', esperaCliente: true,
       icone: 'file-clock', tom: 'espera',
       dica: 'A médica está lendo o roteiro.' },
 
-    { nome: 'roteiro aprovado', publica: true, etapa: 2, proxima: 'a gravar',
+    /* Daqui em diante os dois caminhos se separam: vídeo vai para a câmera,
+       carrossel vai para a prancheta. O texto aprovado é o mesmo; o que se faz
+       com ele, não. */
+    { nome: 'roteiro aprovado', publica: true, etapa: 2, esteira: 'ambas',
+      proxima: { video: 'a gravar', carrossel: 'a diagramar' },
       icone: 'file-check', tom: 'ok',
-      dica: 'Liberado para gravar.' },
+      dica: 'Liberado para produzir.' },
 
-    { nome: 'a gravar', publica: true, etapa: 3, proxima: 'gravado',
+    // ── Esteira de vídeo ────────────────────────────────────────────────
+    { nome: 'a gravar', publica: true, etapa: 3, esteira: 'video', proxima: 'gravado',
       icone: 'video', tom: 'atencao',
       dica: 'Ainda não foi para a câmera.' },
 
@@ -90,25 +97,54 @@ export const ETIQUETAS = [
        fala custa uma diária de estúdio. Deixar o botão ali é convidar para um
        pedido que a equipe vai ter de recusar, e recusar depois é pior que não
        oferecer. A trava de verdade mora no banco (db/migracao-gravado.sql). */
-    { nome: 'gravado', publica: true, travaAjuste: true, etapa: 4, proxima: 'em edição',
+    { nome: 'gravado', publica: true, travaAjuste: true, etapa: 4, esteira: 'video',
+      proxima: 'em edição',
       icone: 'circle-check', tom: 'ok',
       dica: 'Material bruto na mão.' },
 
-    { nome: 'em edição', publica: true, etapa: 5, proxima: 'gravação aguardando aprovação',
+    { nome: 'em edição', publica: true, etapa: 5, esteira: 'video',
+      proxima: 'gravação aguardando aprovação',
       icone: 'scissors', tom: 'info',
       dica: 'Na mesa de corte.' },
 
-    { nome: 'gravação aguardando aprovação', publica: true, etapa: 6, proxima: 'publicado',
+    { nome: 'gravação aguardando aprovação', publica: true, etapa: 6, esteira: 'video',
+      proxima: 'publicado', esperaCliente: true,
       icone: 'monitor-play', tom: 'espera',
       dica: 'O vídeo pronto está com a médica.' },
 
+    // ── Esteira de carrossel ────────────────────────────────────────────
+    /* Os mesmos três degraus do vídeo, com os nomes do ofício: sai da mão de
+       quem escreve, passa pela de quem desenha, volta para o olho do cliente.
+       Os números batem com os do vídeo de propósito — "etapa 3" quer dizer
+       "o texto já passou pelo cliente" nas duas, e é disso que as regras de
+       status precisam saber. */
+    { nome: 'a diagramar', publica: true, etapa: 3, esteira: 'carrossel',
+      proxima: 'arte pronta',
+      icone: 'layout-template', tom: 'atencao',
+      dica: 'Texto aprovado, arte por fazer.' },
+
+    /* Sem travaAjuste, e a diferença com "gravado" é física: refazer uma
+       gravação custa uma diária de estúdio, refazer um card custa reabrir o
+       arquivo. Travar o pedido aqui seria copiar uma regra sem copiar o
+       motivo dela. */
+    { nome: 'arte pronta', publica: true, etapa: 4, esteira: 'carrossel',
+      proxima: 'arte aguardando aprovação',
+      icone: 'image-plus', tom: 'ok',
+      dica: 'Cards diagramados.' },
+
+    { nome: 'arte aguardando aprovação', publica: true, etapa: 6, esteira: 'carrossel',
+      proxima: 'publicado', esperaCliente: true,
+      icone: 'image-check', tom: 'espera',
+      dica: 'A arte pronta está com a médica.' },
+
     /* Fora do caminho feliz: some quando a peça avança, e leva de volta ao
        corte porque é lá que o problema se resolve. */
-    { nome: 'revisão', publica: false, etapa: 6.5, proxima: 'em edição',
+    { nome: 'revisão', publica: false, etapa: 6.5, esteira: 'ambas',
+      proxima: { video: 'em edição', carrossel: 'a diagramar' },
       icone: 'rotate-ccw', tom: 'risco',
-      dica: 'A gravação não passou — volta para o corte.' },
+      dica: 'Não passou — volta para quem produz.' },
 
-    { nome: 'publicado', publica: true, etapa: 7,
+    { nome: 'publicado', publica: true, etapa: 7, esteira: 'ambas',
       icone: 'send', tom: 'ok',
       dica: 'No ar.' },
 
@@ -127,10 +163,48 @@ export const ETIQUETAS = [
 export const ETAPA_ESCRITA   = 'roteiro em desenvolvimento';
 export const ETAPA_APROVACAO = 'roteiro em aprovação';
 export const ETAPA_GRAVAR    = 'a gravar';
+export const ETAPA_DIAGRAMAR = 'a diagramar';
 export const ETAPA_PUBLICADO = 'publicado';
 
-/** As etapas da esteira, na ordem do caminho feliz. */
+/** Todas as etapas, das duas esteiras, na ordem do caminho feliz. */
 export const ETAPAS = ETIQUETAS.filter(e => e.etapa).sort((a, b) => a.etapa - b.etapa);
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DUAS ESTEIRAS
+
+   Um vídeo e um carrossel compartilham o começo — alguém escreve, o cliente lê,
+   o cliente aprova — e se separam exatamente aí. Depois do texto aprovado, um
+   vai para a câmera e o outro para a prancheta, e forçar os dois pelas mesmas
+   etiquetas obrigava a social mídia a ler "a gravar" num post que ninguém vai
+   gravar.
+
+   ── POR QUE OS NÚMEROS SE REPETEM ─────────────────────────────────────────
+   "a gravar" e "a diagramar" são as duas a etapa 3; "gravado" e "arte pronta"
+   são as duas a etapa 4. O número não é a posição numa lista global: ele diz
+   QUÃO LONGE a peça está, e as regras que já existiam falam nessa língua —
+   "da etapa 3 em diante o texto já passou pelo cliente" continua verdade nas
+   duas esteiras, sem uma linha a mais.
+
+   ── QUEM DECIDE A ESTEIRA ─────────────────────────────────────────────────
+   O campo formato, que é texto livre escrito por gente. Na dúvida, vídeo: é
+   o que a maioria das peças é, e é o que o sistema fazia antes de existir a
+   segunda esteira. Formato em branco não muda o comportamento de ninguém.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const FORMATO_ARTE = /carro?ss?el|carousel|est[áa]tico|imagem|foto|arte|infogr[áa]fico/i;
+
+/** Qual esteira este formato segue. Sem formato, a de vídeo. */
+export const esteiraDe = (formato) => FORMATO_ARTE.test(String(formato || '')) ? 'carrossel' : 'video';
+
+/** As etapas de UMA esteira, na ordem. As comuns entram nas duas. */
+export const etapasDa = (esteira) =>
+    ETAPAS.filter(e => e.esteira === 'ambas' || e.esteira === esteira);
+
+/** O destino de proxima, que difere entre as esteiras nas etapas comuns. */
+const proximaDe = (meta, esteira) =>
+    typeof meta?.proxima === 'string' ? meta.proxima : (meta?.proxima?.[esteira] || null);
+
+/** A etapa em que o cliente é quem tem de olhar alguma coisa. */
+export const etapaEsperaCliente = (lista) => !!etapaAtual(lista)?.esperaCliente;
 
 /* Comparação sem acento, sem caixa e sem pontuação: "A Gravar", "a gravar" e
    "à gravar" são a mesma etiqueta para os olhos de quem lê o cartão, e seria
@@ -166,10 +240,10 @@ export const ajusteTravado = (lista) =>
 
    A regra decide no banco (db/migracao-esteira.sql); aqui ela existe para o
    adaptador local responder igual. */
-export const etiquetasAoAprovar = (lista) => {
+export const etiquetasAoAprovar = (lista, esteira = 'video') => {
     const atuais = lista || [];
     if (ajusteTravado(atuais)) return atuais;
-    return comEtapa(atuais, ETAPA_GRAVAR);
+    return comEtapa(atuais, esteira === 'carrossel' ? ETAPA_DIAGRAMAR : ETAPA_GRAVAR);
 };
 
 /** Em que etapa a peça está, ou null quando ainda não entrou na esteira. */
@@ -191,10 +265,10 @@ export const comEtapa = (lista, nome) => {
 };
 
 /** A próxima etapa do caminho feliz. Sem etapa nenhuma, o começo. */
-export const proximaEtapa = (lista) => {
+export const proximaEtapa = (lista, esteira = 'video') => {
     const atual = etapaAtual(lista);
-    if (!atual) return ETAPAS[0]?.nome || null;
-    return atual.proxima || null;
+    if (!atual) return etapasDa(esteira)[0]?.nome || null;
+    return proximaDe(atual, esteira);
 };
 
 /* ── A ETAPA PUXA O STATUS ────────────────────────────────────────────────
@@ -267,15 +341,16 @@ export const statusParaEtapa = (statusAtual, nomeEtapa) => {
    a conferência, que mostra o par e deixa a escolha com quem sabe.
 
    Devolve a lista NOVA de etiquetas, ou null quando não há nada a mudar. */
-export const etiquetasParaStatus = (status, etiquetas) => {
+export const etiquetasParaStatus = (status, etiquetas, esteira = 'video') => {
     const atual = etapaAtual(etiquetas);
+    const produzir = esteira === 'carrossel' ? ETAPA_DIAGRAMAR : ETAPA_GRAVAR;
 
     const destino = (() => {
         if (status === 'publicado') return atual?.nome === ETAPA_PUBLICADO ? undefined : ETAPA_PUBLICADO;
         // Rascunho tira a etapa de aprovação e SÓ ela: escrever o roteiro de
         // uma peça ainda não liberada é o estado mais normal que existe.
         if (status === 'rascunho')  return atual?.nome === ETAPA_APROVACAO ? null : undefined;
-        if (status === 'aprovado')  return !atual || atual.nome === ETAPA_APROVACAO ? ETAPA_GRAVAR : undefined;
+        if (status === 'aprovado')  return !atual || atual.nome === ETAPA_APROVACAO ? produzir : undefined;
         if (['em_revisao', 'ajuste'].includes(status)) return atual ? undefined : ETAPA_APROVACAO;
         return undefined;
     })();

@@ -10,7 +10,7 @@ import { retornosDe } from '../lib/cronograma.js';
 import { timeSalvo } from '../lib/gestor.js';
 import { linkDoCliente } from '../lib/apelido.js';
 import { abrirTeleprompter } from '../lib/teleprompter.js';
-import { ETAPAS, etapaAtual, proximaEtapa, chipEtiqueta, etiquetaMeta, injectEstilosEtiqueta } from '../lib/etiquetas.js';
+import { etapasDa, etapaAtual, proximaEtapa, esteiraDe, chipEtiqueta, etiquetaMeta, injectEstilosEtiqueta } from '../lib/etiquetas.js';
 import { moverParaEtapa, mudarStatus } from '../lib/etapas.js';
 import {
     conversas, estadoMeta, ato, daEquipe, textoOriginal, entradaDaEquipe,
@@ -1326,14 +1326,17 @@ export const renderRoteiro = async (container, conteudoId) => {
     };
 
     document.getElementById('rt-avancar')?.addEventListener('click', () => {
-        const proxima = proximaEtapa(c.etiquetas);
+        const proxima = proximaEtapa(c.etiquetas, esteiraDe(c.formato));
         if (proxima) irParaEtapa(proxima);
     });
 
     document.getElementById('rt-etapas')?.addEventListener('click', (e) => {
         e.stopPropagation();   // ver a explicação no menu de status
         const atual = etapaAtual(c.etiquetas);
-        abrirMenu(e.target.closest('button'), ETAPAS.map(et => ({
+        /* Só as etapas DESTA esteira. Oferecer "a gravar" num carrossel é
+           oferecer um caminho que não existe — e foi o que motivou a segunda
+           esteira. */
+        abrirMenu(e.target.closest('button'), etapasDa(esteiraDe(c.formato)).map(et => ({
             id: et.nome,
             label: et.nome === atual?.nome ? `${et.nome} (agora)` : et.nome,
             icon: et.icone,
@@ -1392,9 +1395,15 @@ const sugestaoDeFase = (c, blocos) => {
 };
 
 /* O rótulo do botão diz o destino, e o destino sai da esteira: peça sem etapa
-   nenhuma começa pelo primeiro estágio, peça publicada não tem para onde ir. */
+   nenhuma começa pelo primeiro estágio, peça publicada não tem para onde ir.
+
+   A esteira vem do formato da PEÇA, como no clique. Elas ficaram um dia
+   discordando durante o desenvolvimento — o botão dizia "mover para a gravar"
+   num carrossel e movia para "a diagramar" — e o defeito não aparece em teste
+   de unidade nenhum: as duas funções estavam certas, a conta é que era feita
+   duas vezes. Por isso as duas leem a mesma origem. */
 const rotuloAvancar = (c) => {
-    const proxima = proximaEtapa(c.etiquetas);
+    const proxima = proximaEtapa(c.etiquetas, esteiraDe(c.formato));
     if (!proxima) return 'No fim da esteira';
     return `Mover para ${proxima}`;
 };

@@ -1,5 +1,5 @@
 import { store } from '../store.js';
-import { comEtapa, statusParaEtapa, etiquetasParaStatus, etiquetaMeta, etapaAtual } from './etiquetas.js';
+import { comEtapa, statusParaEtapa, etiquetasParaStatus, etiquetaMeta, etapaAtual, esteiraDe } from './etiquetas.js';
 import { STATUS } from './pecas.js';
 import { entradaDaEquipe } from './conversa.js';
 import { aprovouNoHistorico, equipeDevolveu } from './consistencia.js';
@@ -91,7 +91,9 @@ export const moverParaEtapa = async (c, nome, { autor = '' } = {}) => {
  */
 export const mudarStatus = async (c, status) => {
     const antes = { etiquetas: [...(c.etiquetas || [])], status: c.status };
-    const novas = etiquetasParaStatus(status, c.etiquetas);
+    /* A esteira sai do formato da PEÇA, não de um parâmetro: quem chama não
+       precisa saber que existem duas, e não há como esquecer de passar. */
+    const novas = etiquetasParaStatus(status, c.etiquetas, esteiraDe(c.formato));
 
     await store.conteudos.salvar({ ...c, status, ...(novas ? { etiquetas: novas } : {}) });
 

@@ -5,7 +5,7 @@ import { navegar } from '../lib/rotas.js';
 import { esc, dataBR } from '../lib/formato.js';
 import { vazioHTML } from '../lib/pecas.js';
 import { auditar, resumoAuditoria } from '../lib/consistencia.js';
-import { comEtapa, etapaAtual, etiquetasParaStatus, injectEstilosEtiqueta } from '../lib/etiquetas.js';
+import { comEtapa, etapaAtual, etiquetasParaStatus, esteiraDe, injectEstilosEtiqueta } from '../lib/etiquetas.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    CONFERÊNCIA — o sistema procurando os próprios erros.
@@ -72,7 +72,8 @@ export const renderConsistencia = async (container) => {
            trabalho. Sem isto, "voltar para rascunho" deixava a etiqueta de
            aprovação no lugar e a varredura seguinte acusava o par que este
            clique acabou de criar. */
-        const etiquetasNovas = campo === 'status' ? etiquetasParaStatus(valor, c.etiquetas) : null;
+        const etiquetasNovas = campo === 'status'
+            ? etiquetasParaStatus(valor, c.etiquetas, esteiraDe(c.formato)) : null;
 
         await store.conteudos.salvar({
             ...c, [campo]: valor,

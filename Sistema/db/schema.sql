@@ -287,8 +287,12 @@ as $$
                        select e from unnest(coalesce(i.etiquetas, '{}')) e
                         where lower(trim(e)) = any (array[
                             'roteiro em desenvolvimento',
-                            'roteiro em aprovação', 'roteiro aprovado', 'a gravar',
-                            'gravado', 'em edição', 'gravação aguardando aprovação',
+                            'roteiro em aprovação', 'roteiro aprovado',
+                            -- esteira de vídeo
+                            'a gravar', 'gravado', 'em edição', 'gravação aguardando aprovação',
+                            -- esteira de carrossel
+                            'a diagramar', 'arte pronta', 'arte aguardando aprovação',
+                            -- comuns
                             'publicado', 'aguardando data', 'aguardando material'
                         ])
                    )), '[]'::jsonb))
@@ -407,11 +411,19 @@ begin
                            select e from unnest(coalesce(etiquetas, '{}')) e
                             where lower(trim(e)) not in (
                                 'roteiro em desenvolvimento',
-                                'roteiro em aprovação', 'roteiro aprovado', 'a gravar',
-                                'gravado', 'em edição', 'gravação aguardando aprovação',
+                                'roteiro em aprovação', 'roteiro aprovado',
+                                'a gravar', 'gravado', 'em edição', 'gravação aguardando aprovação',
+                                'a diagramar', 'arte pronta', 'arte aguardando aprovação',
                                 'revisão', 'publicado'
                             )
-                       ) || array['a gravar']
+                       -- A etapa que entra depende da esteira da peça, e quem
+                       -- decide é o campo `formato`. O mesmo padrão vive em
+                       -- lib/etiquetas.js (esteiraDe); se um dia mudar, muda nos
+                       -- dois — este é o lado que vale para o cliente.
+                       ) || array[
+                           case when formato ~* 'carro?ss?el|carousel|est[áa]tico|imagem|foto|arte|infogr[áa]fico'
+                                then 'a diagramar' else 'a gravar' end
+                       ]
                    )
                    else etiquetas
                end

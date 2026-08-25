@@ -181,29 +181,60 @@ cliente" — o que precisar, no dia em que precisar, sem passar por código.
 
 ### O vocabulário de produção
 
-Onze etiquetas se repetem em todo cliente, e elas ganharam ícone e cor — do
-mesmo tamanho e peso do chip de status, porque respondem a uma pergunta tão
-frequente quanto:
+As etiquetas de produção se repetem em todo cliente, e elas ganharam ícone e cor
+— do mesmo tamanho e peso do chip de status, porque respondem a uma pergunta tão
+frequente quanto. **São duas esteiras**, e elas compartilham o começo:
 
-| Etiqueta | Diz que |
+| Comum às duas | Diz que |
 |---|---|
 | roteiro em desenvolvimento | a equipe ainda está escrevendo |
 | roteiro em aprovação | a médica está lendo |
-| roteiro aprovado | liberado para gravar |
-| a gravar | ainda não foi para a câmera |
-| gravado | material bruto na mão |
-| em edição | na mesa de corte |
-| gravação aguardando aprovação | o vídeo pronto está com a médica |
-| revisão | a gravação não passou — volta para o corte |
+| roteiro aprovado | liberado para produzir |
+| revisão | não passou — volta para quem produz |
 | publicado | no ar |
 | aguardando data | pronto, sem dia definido |
 | aguardando material | falta algo que vem do cliente |
 
+| Vídeo | | Carrossel | |
+|---|---|---|---|
+| a gravar | ainda não foi para a câmera | a diagramar | texto aprovado, arte por fazer |
+| gravado | material bruto na mão | arte pronta | cards diagramados |
+| em edição | na mesa de corte | — | |
+| gravação aguardando aprovação | o vídeo pronto está com a médica | arte aguardando aprovação | a arte pronta está com a médica |
+
 Todas atravessam para a tela do cliente, menos **revisão** — dizer "não passou"
-é conversa da equipe, e o cliente vê a peça voltar para "em edição", que é o
-fato dele. A primeira da lista é a que permite liberar o cronograma antes de
-os roteiros existirem: a peça aparece com data e tema, e o texto vem depois,
-sem a corrida de escrever oito roteiros para o mês poder sair.
+é conversa da equipe, e o cliente vê a peça voltar para quem produz, que é o
+fato dele. "Roteiro em desenvolvimento" é a que permite liberar o cronograma
+antes de os roteiros existirem: a peça aparece com data e tema, e o texto vem
+depois, sem a corrida de escrever oito roteiros para o mês poder sair.
+
+#### Por que duas esteiras, e por que os números se repetem
+
+Vídeo e carrossel são a mesma coisa até o texto ser aprovado, e coisas
+diferentes depois: um vai para a câmera, o outro para a prancheta. Forçar os
+dois pelas mesmas etiquetas obrigava a social media a ler "a gravar" num post
+que ninguém vai gravar.
+
+Internamente cada etapa tem um número, e **"a gravar" e "a diagramar" são as
+duas a etapa 3**; "gravado" e "arte pronta" são as duas a etapa 4. O número não
+é posição numa lista global — ele diz *quão longe* a peça está. As regras que já
+existiam falam nessa língua ("da etapa 3 em diante, o texto já passou pelo
+cliente") e continuaram valendo para as duas esteiras sem uma linha a mais.
+
+Quem decide a esteira é o campo de formato, que é texto livre. Na dúvida, vídeo:
+é o que a maioria das peças é, e é o que o sistema fazia antes de existir a
+segunda esteira — formato em branco não muda o comportamento de ninguém.
+
+O quadro de Produção mostra **uma esteira por vez**, com um seletor no topo e a
+contagem de cada uma. As duas juntas dariam treze colunas, e o quadro existe
+para caber num olhar; além disso, quem grava e quem diagrama são pessoas
+diferentes, e cada uma quer ver a própria fila. A esteira sem trabalho nenhum
+some do seletor.
+
+**A trava de ajuste continua só em "gravado".** Refazer uma gravação custa uma
+diária de estúdio; refazer um card custa reabrir o arquivo. Copiar a trava para
+"arte pronta" seria copiar a regra sem copiar o motivo dela — e é o motivo que
+justifica tirar um botão da mão do cliente.
 
 No formulário elas aparecem como botões, **na ordem em que as coisas
 acontecem** — é essa ordem que transforma uma lista de palavras numa explicação

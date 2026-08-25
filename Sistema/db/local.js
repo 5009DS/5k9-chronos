@@ -13,7 +13,7 @@
    Configurações oferece exportar em JSON.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { etiquetasPublicas, ajusteTravado, etiquetasAoAprovar } from '../lib/etiquetas.js';
+import { etiquetasPublicas, ajusteTravado, etiquetasAoAprovar, esteiraDe } from '../lib/etiquetas.js';
 
 const CHAVE = (colecao) => `5k9_visualizador_${colecao}`;
 
@@ -171,7 +171,7 @@ export const local = {
                 ...alvo,
                 status: retorno.tipo === 'aprovado' ? 'aprovado' : 'ajuste',
                 etiquetas: retorno.tipo === 'aprovado'
-                    ? etiquetasAoAprovar(alvo?.etiquetas)
+                    ? etiquetasAoAprovar(alvo?.etiquetas, esteiraDe(alvo?.formato))
                     : alvo?.etiquetas,
             });
         }

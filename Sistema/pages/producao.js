@@ -4,7 +4,7 @@ import { toast } from '../components/toast.js';
 import { navegar } from '../lib/rotas.js';
 import { esc, dataBR, diaCurto, nomeDiaCurto } from '../lib/formato.js';
 import { chipFase, vazioHTML, STATUS } from '../lib/pecas.js';
-import { ETAPAS, etapaAtual, injectEstilosEtiqueta } from '../lib/etiquetas.js';
+import { etapasDa, etapaAtual, esteiraDe, injectEstilosEtiqueta } from '../lib/etiquetas.js';
 import { moverParaEtapa } from '../lib/etapas.js';
 import { ativarArraste } from '../lib/arrastar.js';
 
@@ -33,6 +33,11 @@ import { ativarArraste } from '../lib/arrastar.js';
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const SEM_ETAPA = '__sem__';
+
+/* Qual esteira estava aberta, por cliente. Mover um cartão redesenha a tela
+   inteira, e sem isto cada arraste devolveria a pessoa para a esteira de
+   vídeo. Em memória: é estado de navegação, não preferência. */
+const ULTIMA = new Map();
 
 export const renderProducao = async (container, clienteId) => {
     const { cliente, conteudos: todos } = await store.doCliente(clienteId);
@@ -70,16 +75,38 @@ export const renderProducao = async (container, clienteId) => {
     const recarregar = () => renderProducao(container, clienteId);
     let soltarArraste = null;
 
+    /* ── UMA ESTEIRA POR VEZ ──────────────────────────────────────────────
+       As duas juntas dariam treze colunas, e este quadro existe para caber num
+       olhar. Também não seria honesto empilhá-las: as colunas do meio não são
+       a mesma coisa com nomes diferentes — quem grava e quem diagrama são
+       pessoas diferentes, e cada uma quer ver a própria fila.
+
+       A esteira sem trabalho nenhum some do seletor: um cliente que só faz
+       vídeo nunca precisa saber que existe a outra. */
+    const conta = { video: 0, carrossel: 0 };
+    for (const c of conteudos) conta[esteiraDe(c.formato)]++;
+
+    const disponiveis = ['video', 'carrossel'].filter(e => conta[e] > 0);
+    let esteiraAtiva = ULTIMA.get(clienteId) || disponiveis[0] || 'video';
+    if (disponiveis.length && !disponiveis.includes(esteiraAtiva)) esteiraAtiva = disponiveis[0];
+
+    const ESTEIRAS = {
+        video:     { rotulo: 'Vídeo',     icone: 'video' },
+        carrossel: { rotulo: 'Carrossel', icone: 'gallery-horizontal-end' },
+    };
+
     const colunas = () => [
         { chave: SEM_ETAPA, nome: 'Sem etapa', icone: 'circle-dashed', tom: 'neutro',
           dica: 'Existe no cronograma e ainda não entrou na produção.' },
-        ...ETAPAS.map(e => ({ chave: e.nome, nome: e.nome, icone: e.icone, tom: e.tom, dica: e.dica })),
+        ...etapasDa(esteiraAtiva).map(e => ({ chave: e.nome, nome: e.nome, icone: e.icone, tom: e.tom, dica: e.dica })),
     ];
 
-    const daColuna = (chave) => conteudos.filter(c => {
-        const etapa = etapaAtual(c.etiquetas);
-        return chave === SEM_ETAPA ? !etapa : etapa?.nome === chave;
-    });
+    const daColuna = (chave) => conteudos
+        .filter(c => esteiraDe(c.formato) === esteiraAtiva)
+        .filter(c => {
+            const etapa = etapaAtual(c.etiquetas);
+            return chave === SEM_ETAPA ? !etapa : etapa?.nome === chave;
+        });
 
     const mover = async (idConteudo, chaveColuna) => {
         const c = conteudos.find(x => x.id === idConteudo);
@@ -105,6 +132,17 @@ export const renderProducao = async (container, clienteId) => {
         soltarArraste?.();
 
         content.innerHTML = conteudos.length ? `
+            ${disponiveis.length > 1 ? `
+                <div class="pr-troca" id="pr-troca" role="tablist">
+                    ${disponiveis.map(id => `
+                        <button type="button" class="pr-troca__op ${id === esteiraAtiva ? 'is-active' : ''}"
+                                data-esteira="${id}" role="tab" aria-selected="${id === esteiraAtiva}">
+                            <i data-lucide="${ESTEIRAS[id].icone}"></i>
+                            ${ESTEIRAS[id].rotulo}
+                            <span class="pr-troca__conta">${conta[id]}</span>
+                        </button>`).join('')}
+                </div>` : ''}
+
             <div class="pr-esteira" id="pr-esteira">
                 ${colunas().map(col => {
                     const itens = daColuna(col.chave);
@@ -133,6 +171,15 @@ export const renderProducao = async (container, clienteId) => {
 
         content.querySelectorAll('[data-abrir]').forEach(b =>
             b.addEventListener('click', () => navegar(`/conteudo/${b.dataset.abrir}`)));
+
+        content.querySelector('#pr-troca')?.addEventListener('click', (e) => {
+            const b = e.target.closest('[data-esteira]');
+            if (!b || b.dataset.esteira === esteiraAtiva) return;
+            esteiraAtiva = b.dataset.esteira;
+            // Sobrevive ao redesenho que um arraste provoca.
+            ULTIMA.set(clienteId, esteiraAtiva);
+            desenhar();
+        });
 
         if (conteudos.length) {
             soltarArraste = ativarArraste(content.querySelector('#pr-esteira'), {
@@ -213,6 +260,32 @@ const ESTILOS = `
    Com teto, a barra fica logo abaixo das colunas, sempre à vista, e cada
    coluna rola por dentro. São duas rolagens em vez de uma, e é a troca certa:
    a de fora anda entre etapas, a de dentro anda dentro de uma. */
+/* O seletor de esteira fala a mesma língua das abas do painel de colar: é a
+   mesma pergunta — qual dos dois formatos estou olhando agora. */
+.pr-troca {
+    display: inline-flex; gap: 4px; padding: 4px; margin-bottom: var(--space-4);
+    border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+    background: var(--surface-2);
+}
+.pr-troca__op {
+    display: inline-flex; align-items: center; gap: 6px;
+    min-height: 34px; padding: 0 var(--space-3);
+    border: none; border-radius: var(--radius-sm);
+    background: transparent; color: var(--text-secondary);
+    font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 600;
+    cursor: pointer;
+    transition: background-color var(--dur-fast), color var(--dur-fast);
+}
+.pr-troca__op i, .pr-troca__op svg { width: 15px; height: 15px; }
+.pr-troca__op:hover { color: var(--text-primary); }
+.pr-troca__op.is-active { background: var(--accent-muted); color: var(--accent); }
+.pr-troca__conta {
+    min-width: 18px; padding: 0 5px; border-radius: var(--radius-pill);
+    background: var(--surface-3); color: var(--text-tertiary);
+    font-size: 11px; font-weight: 700;
+}
+.pr-troca__op.is-active .pr-troca__conta { background: var(--accent); color: var(--surface-0); }
+
 .pr-esteira {
     display: flex; gap: var(--space-3);
     overflow-x: auto; overflow-y: hidden;

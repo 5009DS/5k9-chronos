@@ -22,7 +22,7 @@ import {
     leitura, conferir, noDiaCerto, classificar,
 } from '../lib/diretorio.js';
 import { chipFase, chipStatus, seloDeslocado, vazioHTML, STATUS } from '../lib/pecas.js';
-import { chipEtiqueta, injectEstilosEtiqueta, etapaAtual, proximaEtapa, statusParaEtapa } from '../lib/etiquetas.js';
+import { chipEtiqueta, injectEstilosEtiqueta, etapaAtual, proximaEtapa, statusParaEtapa, esteiraDe } from '../lib/etiquetas.js';
 import { moverParaEtapa, mudarStatus } from '../lib/etapas.js';
 import { ativarArraste } from '../lib/arrastar.js';
 import { timeSalvo } from '../lib/gestor.js';
@@ -231,7 +231,7 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
                 const alvo = conteudos.find(x => x.id === botao.dataset.acoes);
                 if (!alvo) return;
 
-                const proxima = proximaEtapa(alvo.etiquetas);
+                const proxima = proximaEtapa(alvo.etiquetas, esteiraDe(alvo.formato));
 
                 abrirMenu(botao, [
                     /* A etapa vem primeiro: é a ação da rotina, e o rótulo diz
