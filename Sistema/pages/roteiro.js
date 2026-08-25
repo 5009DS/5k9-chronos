@@ -2,7 +2,7 @@ import { store } from '../store.js';
 import { renderShell } from '../components/pageshell.js';
 import { abrirMenu } from '../components/menu.js';
 import { openDrawer, closeDrawer } from '../components/drawer.js';
-import { lerRoteiroUnico } from '../lib/importar.js';
+import { lerRoteiroUnico, lerCarrossel } from '../lib/importar.js';
 import { toast } from '../components/toast.js';
 import { esc, dataBR, quandoRelativo, nomeDia, duracao, segundosDeFala } from '../lib/formato.js';
 import { objetivo, classificar, nomeFase } from '../lib/diretorio.js';
@@ -1052,6 +1052,53 @@ export const renderRoteiro = async (container, conteudoId) => {
        de importação em massa. E, como lá, nada entra sem a pessoa ver antes o
        que foi entendido.
        ═══════════════════════════════════════════════════════════════════ */
+    /* ── A PRÉVIA DO CARROSSEL ────────────────────────────────────────────
+       Uma lista numerada responde "quantos blocos vão entrar". Um carrossel
+       precisa responder outra coisa: se cada tela CABE. Por isso a prévia é
+       feita de telas, na proporção que o Instagram usa, roláveis de lado como
+       o post vai ser — o card comprido demais salta aos olhos aqui, antes de
+       virar problema do designer. */
+    function previaCarrossel(lido) {
+        const { cartoes, legenda, separador, avisos } = lido;
+        return `
+            <div class="rt-carrossel">
+                <div class="rt-previa__cabeca">
+                    <i data-lucide="gallery-horizontal-end"></i>
+                    ${cartoes.length} card${cartoes.length > 1 ? 's' : ''}${legenda ? ' + legenda' : ''}
+                    · ${separador ? `separados por <strong>${esc(separador.rotulo)}</strong>` : 'um card por parágrafo'}
+                </div>
+
+                <div class="rt-pista">
+                    ${cartoes.map(c => `
+                        <article class="rt-card ${c.longo ? 'is-longo' : ''}">
+                            <header class="rt-card__topo">
+                                <span class="rt-card__n">${c.n}</span>
+                                <span class="rt-card__tipo">
+                                    <i data-lucide="${esc(tipoBloco(c.tipo).icone)}"></i>${esc(tipoBloco(c.tipo).nome)}
+                                </span>
+                            </header>
+                            <p class="rt-card__texto">${esc(c.texto)}</p>
+                            <footer class="rt-card__pe">${c.caracteres} caracteres</footer>
+                        </article>`).join('')}
+
+                    ${legenda ? `
+                        <article class="rt-card rt-card--legenda">
+                            <header class="rt-card__topo">
+                                <span class="rt-card__n"><i data-lucide="text"></i></span>
+                                <span class="rt-card__tipo">Legenda</span>
+                            </header>
+                            <p class="rt-card__texto">${esc(legenda)}</p>
+                            <footer class="rt-card__pe">${legenda.length} caracteres</footer>
+                        </article>` : ''}
+                </div>
+
+                ${avisos.length ? `
+                    <ul class="rt-avisos">
+                        ${avisos.map(a => `<li><i data-lucide="triangle-alert"></i>${esc(a)}</li>`).join('')}
+                    </ul>` : ''}
+            </div>`;
+    }
+
     function abrirColar() {
         const temRoteiro = blocos.length > 0;
 
@@ -1060,15 +1107,26 @@ export const renderRoteiro = async (container, conteudoId) => {
             subtitle: c.titulo,
             body: `
                 <div class="rt-colar">
-                    <p class="rt-colar__dica">
-                        Cole o texto como a roteirista mandou. Cada marcador
-                        (<code>-</code>, <code>*</code>, <code>1.</code>) ou parágrafo vira um bloco.
-                        A primeira fala vira <strong>gancho</strong>, a última vira
-                        <strong>chamada para ação</strong> se pedir algo, e frases curtas viram
-                        <strong>frase curta</strong>. Tudo é editável depois.
-                    </p>
-                    <textarea class="ds-input rt-colar__campo" id="rt-texto" rows="12"
-                              placeholder="*ROTEIRO FLACIDEZ NA FACE*&#10;&#10;- Você emagreceu e percebeu que seu rosto ficou mais caído?&#10;&#10;- Isso é mais comum do que parece.&#10;&#10;- Eu sou a Dra. Laiz e te aguardo pra uma avaliação!"></textarea>
+                    ${/* O MESMO TEXTO, LIDO DE DOIS JEITOS ─────────────────────────
+                          Um roteiro de vídeo é fala contínua; um carrossel é
+                          tela por tela. Ler um com o leitor do outro estraga
+                          justamente o recorte: o de vídeo junta parágrafos
+                          vizinhos numa fala só e desmancha os cards.
+
+                          Duas abas e não dois botões no rodapé: a escolha é
+                          sobre COMO LER o que está colado, então ela fica em
+                          cima do campo, antes de a pessoa colar. */''}
+                    <div class="rt-formato" id="rt-formato" role="tablist">
+                        <button type="button" class="rt-formato__op is-active" data-formato="video" role="tab" aria-selected="true">
+                            <i data-lucide="clapperboard"></i> Roteiro de vídeo
+                        </button>
+                        <button type="button" class="rt-formato__op" data-formato="carrossel" role="tab" aria-selected="false">
+                            <i data-lucide="gallery-horizontal-end"></i> Carrossel
+                        </button>
+                    </div>
+
+                    <p class="rt-colar__dica" id="rt-dica"></p>
+                    <textarea class="ds-input rt-colar__campo" id="rt-texto" rows="12"></textarea>
 
                     ${temRoteiro ? `
                         <!-- A escolha entre substituir e acrescentar mora AQUI, e
@@ -1104,8 +1162,46 @@ export const renderRoteiro = async (container, conteudoId) => {
                 const previa = painel.querySelector('#rt-previa');
                 const gravarBtn = painel.querySelector('#rt-gravar');
                 const seletorModo = painel.querySelector('#rt-modo');
+                const seletorFormato = painel.querySelector('#rt-formato');
+                const dica = painel.querySelector('#rt-dica');
                 let modo = 'substituir';
+                let formato = 'video';
                 let lido = { titulo: null, blocos: [] };
+
+                const DICAS = {
+                    video: `Cole o texto como a roteirista mandou. Cada marcador
+                        (<code>-</code>, <code>*</code>, <code>1.</code>) ou parágrafo vira um bloco.
+                        A primeira fala vira <strong>gancho</strong>, a última vira
+                        <strong>chamada para ação</strong> se pedir algo, e frases curtas viram
+                        <strong>frase curta</strong>. Tudo é editável depois.`,
+                    carrossel: `Cole o carrossel do jeito que veio. O sistema procura a marcação
+                        que separa os cards — <code>Card 1</code>, <code>Slide 2</code>, um número
+                        sozinho na linha, uma régua <code>---</code> — e, se não achar nenhuma,
+                        cada parágrafo vira um card. A <strong>legenda</strong> sai reconhecida e
+                        não vira card.`,
+                };
+
+                const EXEMPLOS = {
+                    video: '*ROTEIRO FLACIDEZ NA FACE*\n\n- Você emagreceu e percebeu que seu rosto ficou mais caído?\n\n- Isso é mais comum do que parece.\n\n- Eu sou a Dra. Laiz e te aguardo pra uma avaliação!',
+                    carrossel: 'Card 1: Você emagreceu e o rosto ficou mais caído?\n\nCard 2: Isso tem nome — perda de suporte.\n\nCard 3: Não é falta de cuidado. É biologia.\n\nCard 4: Agende sua avaliação pelo link na bio.\n\nLegenda: A flacidez depois do emagrecimento tem explicação.\n#flacidez #dermatologia',
+                };
+
+                const trocarFormato = (novo) => {
+                    formato = novo;
+                    dica.innerHTML = DICAS[formato];
+                    campo.placeholder = EXEMPLOS[formato];
+                    seletorFormato.querySelectorAll('[data-formato]').forEach(x => {
+                        const ativo = x.dataset.formato === formato;
+                        x.classList.toggle('is-active', ativo);
+                        x.setAttribute('aria-selected', String(ativo));
+                    });
+                    analisar();
+                };
+
+                seletorFormato.addEventListener('click', (e) => {
+                    const b = e.target.closest('[data-formato]');
+                    if (b && b.dataset.formato !== formato) trocarFormato(b.dataset.formato);
+                });
 
                 seletorModo?.addEventListener('click', (e) => {
                     const b = e.target.closest('[data-modo]');
@@ -1117,18 +1213,26 @@ export const renderRoteiro = async (container, conteudoId) => {
                 });
 
                 const analisar = () => {
-                    lido = lerRoteiroUnico(campo.value);
+                    lido = formato === 'carrossel' ? lerCarrossel(campo.value) : lerRoteiroUnico(campo.value);
                     const vazio = !lido.blocos.length;
                     gravarBtn.disabled = vazio;
                     if (!vazio) {
+                        const n = lido.blocos.length;
+                        const peca = formato === 'carrossel'
+                            ? `${lido.cartoes.length} card${lido.cartoes.length > 1 ? 's' : ''}${lido.legenda ? ' + legenda' : ''}`
+                            : `${n} bloco${n > 1 ? 's' : ''}`;
                         gravarBtn.textContent = temRoteiro
-                            ? (modo === 'substituir'
-                                ? `Substituir por ${lido.blocos.length}`
-                                : `Acrescentar ${lido.blocos.length}`)
-                            : `Criar ${lido.blocos.length} bloco${lido.blocos.length > 1 ? 's' : ''}`;
+                            ? (modo === 'substituir' ? `Substituir por ${peca}` : `Acrescentar ${peca}`)
+                            : `Criar ${peca}`;
                     }
 
                     if (vazio) { previa.innerHTML = ''; return; }
+
+                    if (formato === 'carrossel') {
+                        previa.innerHTML = previaCarrossel(lido);
+                        if (window.lucide) lucide.createIcons();
+                        return;
+                    }
 
                     const conta = {};
                     for (const b of lido.blocos) conta[b.tipo] = (conta[b.tipo] || 0) + 1;
@@ -1182,7 +1286,9 @@ export const renderRoteiro = async (container, conteudoId) => {
                             ordem += 10;
                         }
                         closeDrawer();
-                        toast(`${lido.blocos.length} bloco(s) criado(s). Confira os tipos antes de liberar.`);
+                        toast(formato === 'carrossel'
+                            ? `${lido.cartoes.length} card${lido.cartoes.length > 1 ? 's' : ''} ${lido.legenda ? 'e a legenda ' : ''}no roteiro.`
+                            : `${lido.blocos.length} bloco(s) criado(s). Confira os tipos antes de liberar.`);
                         recarregar();
                     } catch (e) {
                         console.error('[roteiro] falha ao colar:', e);
@@ -1193,6 +1299,10 @@ export const renderRoteiro = async (container, conteudoId) => {
                 };
 
                 gravarBtn.addEventListener('click', gravar);
+                // A dica e o exemplo do campo saem daqui, e não do HTML: são
+                // dois textos por formato, e ter uma versão no molde e outra na
+                // troca de aba é a receita para as duas discordarem.
+                trocarFormato('video');
                 campo.focus();
             },
         });
@@ -1559,6 +1669,85 @@ function injectEstilosPainel() {
         .rt-modo__op strong { font-size: var(--text-sm); font-weight: 600; color: var(--text-primary); }
         .rt-modo__op span span, .rt-modo__op span { font-size: var(--text-xs); line-height: var(--leading-body); }
 
+        /* ── As duas leituras ─────────────────────────────────────────────
+           Abas e não os mesmos cartões grandes do "substituir/acrescentar":
+           aquela escolha é destrutiva e precisa de explicação; esta é só um
+           jeito de olhar, e trocar de aba não mexe em nada do que já existe. */
+        .rt-formato {
+            display: flex; gap: 4px; padding: 4px;
+            border: 1px solid var(--glass-border); border-radius: var(--radius-md);
+            background: rgba(255, 255, 255, 0.04);
+        }
+        .rt-formato__op {
+            flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+            min-height: 36px; padding: 0 var(--space-3);
+            border: none; border-radius: var(--radius-sm);
+            background: transparent; color: var(--text-secondary);
+            font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 600;
+            cursor: pointer;
+            transition: background-color var(--dur-fast), color var(--dur-fast);
+        }
+        .rt-formato__op i, .rt-formato__op svg { width: 15px; height: 15px; }
+        .rt-formato__op:hover { color: var(--text-primary); }
+        .rt-formato__op.is-active { background: var(--accent-muted); color: var(--accent); }
+
+        /* ── A prévia do carrossel ────────────────────────────────────────
+           Telas na proporção 4:5, roláveis de lado: é o formato do post e é a
+           única maneira de a pergunta "isso cabe?" ter resposta antes de
+           alguém abrir o editor de imagem. */
+        .rt-carrossel { display: flex; flex-direction: column; gap: var(--space-3); }
+        .rt-pista {
+            display: flex; gap: var(--space-3);
+            overflow-x: auto; padding-bottom: var(--space-2);
+            scroll-snap-type: x mandatory;
+        }
+        .rt-card {
+            flex: 0 0 168px; aspect-ratio: 4 / 5;
+            display: flex; flex-direction: column; gap: var(--space-2);
+            padding: var(--space-3);
+            border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+            background: var(--surface-2);
+            scroll-snap-align: start;
+            overflow: hidden;
+        }
+        .rt-card__topo { display: flex; align-items: center; gap: 6px; }
+        .rt-card__n {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 20px; height: 20px; flex-shrink: 0;
+            border-radius: 50%; background: var(--accent-muted); color: var(--accent);
+            font-size: 11px; font-weight: 700;
+        }
+        .rt-card__n i, .rt-card__n svg { width: 11px; height: 11px; }
+        .rt-card__tipo {
+            display: inline-flex; align-items: center; gap: 4px; min-width: 0;
+            font-size: 10px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.06em; color: var(--text-tertiary);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .rt-card__tipo i, .rt-card__tipo svg { width: 11px; height: 11px; flex-shrink: 0; }
+        .rt-card__texto {
+            flex: 1; margin: 0; overflow: hidden;
+            font-size: var(--text-xs); line-height: 1.45; color: var(--text-primary);
+        }
+        .rt-card__pe { font-size: 10px; color: var(--text-disabled); }
+
+        /* O card comprido demais fica marcado na prévia, e não só contado no
+           aviso: é mais rápido ver qual é do que ler que existe um. */
+        .rt-card.is-longo { border-color: var(--warning); }
+        .rt-card.is-longo .rt-card__pe { color: var(--warning); font-weight: 600; }
+        /* A legenda não é uma tela: ela é o texto embaixo do post, e o desenho
+           diz isso — sem proporção de imagem e com o tracejado de anexo. */
+        .rt-card--legenda {
+            flex: 0 0 220px; aspect-ratio: auto;
+            border-style: dashed; background: var(--surface-1);
+        }
+
+        .rt-avisos { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+        .rt-avisos li {
+            display: flex; align-items: flex-start; gap: 6px;
+            font-size: var(--text-xs); line-height: var(--leading-body); color: var(--warning);
+        }
+        .rt-avisos i, .rt-avisos svg { width: 13px; height: 13px; flex-shrink: 0; margin-top: 2px; }
         /* ── Prévia ───────────────────────────────────────────────────────
            Aparece enquanto se cola e some quando o campo esvazia. É o que
            transforma "confie no parser" em "veja o que ele entendeu". */

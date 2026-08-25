@@ -752,6 +752,219 @@ export const lerRoteiroUnico = (texto) => {
 
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   CARROSSEL — o roteiro que não é falado, é folheado.
+
+   Um roteiro de vídeo é um texto contínuo que alguém vai ler em voz alta. Um
+   carrossel é o contrário: pedaços independentes, cada um com o tamanho de
+   uma tela, e a ordem entre eles é o conteúdo. Ler um com o parser do outro
+   dá exatamente errado — o de vídeo junta parágrafos vizinhos em falas e
+   desmancha justamente o recorte que a social mídia já fez.
+
+   ── COMO ELE DESCOBRE ONDE UM CARD TERMINA ────────────────────────────────
+   Não existe um formato só, e exigir um seria empurrar para a social mídia o
+   trabalho que este leitor deveria fazer. Então ele PROCURA a convenção: conta
+   quantas linhas casam com cada padrão conhecido e usa o que mais aparece.
+
+     Card 1 / CARD 2:        o mais comum em briefing de design
+     Slide 1 / Tela 3        quem pensa em apresentação
+     1) 2) 3) sozinhos       quem escreve rápido
+     --- ou ***              quem separa por régua
+
+   Nenhum deles? Cai no parágrafo: linha em branco separa card. É o formato de
+   quem só escreveu o texto sem pensar em marcação, e funciona porque um card
+   de carrossel é curto por natureza.
+
+   ── A LEGENDA É PARTE DO POST, E NÃO UM CARD ──────────────────────────────
+   Todo carrossel tem uma legenda, e ela chega colada no mesmo texto. Sem
+   separá-la, ela virava o último card — um card com 1.200 caracteres e trinta
+   hashtags, que ninguém desenha. Ela sai reconhecida e vai para o fim, com
+   nome próprio.
+
+   ── OS AVISOS ─────────────────────────────────────────────────────────────
+   Dois são limite do Instagram (20 cards, 2.200 caracteres de legenda) e um é
+   opinião nossa: acima de ~220 caracteres o texto não cabe legível numa tela
+   de celular. Todos são AVISO e nenhum impede de gravar — quem está montando
+   o post sabe de coisa que o sistema não sabe.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const MAX_CARTOES    = 20;      // limite do Instagram para carrossel
+const LIMITE_LEGENDA = 2200;    // limite do Instagram para legenda
+const MAX_HASHTAGS   = 30;      // limite do Instagram por publicação
+const CARTAO_LONGO   = 220;     // legibilidade numa tela de celular, não regra da rede
+
+const SEPARADORES = [
+    { id: 'card',   rotulo: 'Card N',
+      re: /^(?:card|cartão|cartao)\s*#?\s*(\d{1,2})\s*[.):\-–—]*\s*(.*)$/i },
+    { id: 'slide',  rotulo: 'Slide N',
+      re: /^(?:slide|tela|p[áa]gina|page)\s*#?\s*(\d{1,2})\s*[.):\-–—]*\s*(.*)$/i },
+    { id: 'post',   rotulo: 'Post N',
+      re: /^(?:post|foto|imagem|arte)\s*#?\s*(\d{1,2})\s*[.):\-–—]*\s*(.*)$/i },
+    /* Número sozinho na linha, e SÓ sozinho: "3." no meio de um parágrafo é
+       enumeração de conteúdo, não divisa de card. */
+    { id: 'numero', rotulo: 'número na linha',
+      re: /^(\d{1,2})\s*[.):\-–—]?\s*$/ },
+    /* A régua SEPARA; os outros ROTULAM. A diferença decide onde cai o texto
+       que vem ANTES da primeira marca: com "Card 1:" o que veio antes é sobra
+       de cabeçalho e entra no primeiro card; com uma régua, o que veio antes
+       JÁ É o primeiro card — a régua está ali justamente para dizer que ele
+       terminou. Sem esta distinção, a capa do carrossel era grudada no card
+       seguinte e o post inteiro nascia com um card a menos. */
+    { id: 'regua',  rotulo: 'linha de separação', separa: true,
+      re: /^[-–—=*_~·•]{3,}\s*$/ },
+];
+
+const MARCA_LEGENDA = /^(?:legenda|caption|descri[çc][ãa]o|texto do post|copy)\s*[:\-–—]?\s*(.*)$/i;
+
+const contarHashtags = (texto) => (String(texto || '').match(/#[\wÀ-ÿ]+/g) || []).length;
+
+/** A linha é uma divisa de card? Devolve o resto da linha, quando há. */
+const divisa = (linha, sep) => {
+    const m = linha.match(sep.re);
+    if (!m) return null;
+    return { resto: (m[2] || '').trim() };
+};
+
+/**
+ * Lê um carrossel colado e devolve os cards já separados.
+ *
+ * @returns {{titulo, blocos, cartoes, legenda, separador, avisos}}
+ */
+export const lerCarrossel = (texto) => {
+    const linhas = String(texto || '').split('\n').map(l => l.replace(/\s+$/, ''));
+
+    /* ── 1. Título e legenda saem antes de tudo ─────────────────────────── */
+    let titulo = null;
+    let legenda = null;
+    const corpo = [];
+
+    let dentroDaLegenda = false;
+    const legendaLinhas = [];
+
+    for (const bruta of linhas) {
+        const linha = bruta.trim();
+
+        if (dentroDaLegenda) { legendaLinhas.push(bruta); continue; }
+
+        const m = linha.match(MARCA_LEGENDA);
+        if (m) {
+            dentroDaLegenda = true;
+            if (m[1]) legendaLinhas.push(m[1]);
+            continue;
+        }
+
+        if (!titulo && !corpo.some(l => l.trim())) {
+            const t = tituloDeclarado(linha);
+            if (t) { titulo = t; continue; }
+        }
+
+        corpo.push(bruta);
+    }
+
+    legenda = legendaLinhas.join(String.fromCharCode(10)).trim() || null;
+
+    /* ── 2. Qual convenção o texto usa ──────────────────────────────────── */
+    const naoVazias = corpo.filter(l => l.trim());
+    let separador = null;
+    let maisAchados = 0;
+
+    for (const sep of SEPARADORES) {
+        const achados = naoVazias.filter(l => sep.re.test(l.trim())).length;
+        if (achados > maisAchados) { maisAchados = achados; separador = sep; }
+    }
+    // Uma ocorrência isolada não é convenção — é coincidência.
+    if (maisAchados < 2) separador = null;
+
+    /* ── 3. Corta em cards ──────────────────────────────────────────────── */
+    const cartoes = [];
+    let atual = [];
+
+    const fechar = () => {
+        const t = atual.map(l => semMarcacao(l.trim())).filter(Boolean).join(' ').trim();
+        atual = [];
+        if (t) cartoes.push(t);
+    };
+
+    if (separador) {
+        let comecou = false;
+        for (const bruta of corpo) {
+            const linha = bruta.trim();
+            const d = linha ? divisa(linha, separador) : null;
+            if (d) {
+                if (comecou || separador.separa) fechar();
+                comecou = true;
+                if (d.resto) atual.push(d.resto);
+                continue;
+            }
+            // Antes da primeira divisa, o que existe é preâmbulo — entra no
+            // primeiro card em vez de ser jogado fora.
+            if (linha) atual.push(linha);
+        }
+        fechar();
+    } else {
+        // Sem convenção: parágrafo é card.
+        for (const bruta of corpo) {
+            if (!bruta.trim()) { fechar(); continue; }
+            atual.push(bruta.trim());
+        }
+        fechar();
+    }
+
+    /* ── 4. Tipo de cada card ───────────────────────────────────────────── */
+    /* A capa é o gancho: é ela que para o dedo. O último vira chamada quando
+       PEDE alguma coisa — e um carrossel que termina sem pedir nada é comum
+       demais para forçar o tipo. O miolo é bloco livre, que é o que um card
+       é: um título curto e um texto. */
+    const lidos = cartoes.map((texto, i) => {
+        const ultimo = i === cartoes.length - 1;
+        const tipo = i === 0 ? 'gancho'
+                   : ultimo && SINAIS_CTA.test(texto) ? 'cta'
+                   : 'bloco';
+        return {
+            n: i + 1,
+            tipo,
+            texto,
+            caracteres: texto.length,
+            longo: texto.length > CARTAO_LONGO,
+        };
+    });
+
+    /* ── 5. Blocos, prontos para gravar ─────────────────────────────────── */
+    const blocos = lidos.map(c => ({
+        tipo: c.tipo,
+        titulo: `Card ${c.n}`,
+        texto: c.texto,
+    }));
+
+    if (legenda) {
+        blocos.push({
+            tipo: 'bloco',
+            titulo: 'Legenda',
+            texto: legenda,
+        });
+    }
+
+    /* ── 6. Avisos ──────────────────────────────────────────────────────── */
+    const avisos = [];
+    if (lidos.length > MAX_CARTOES) {
+        avisos.push(`${lidos.length} cards — o Instagram aceita ${MAX_CARTOES} por carrossel.`);
+    }
+    const longos = lidos.filter(c => c.longo).length;
+    if (longos) {
+        avisos.push(`${longos} card${longos === 1 ? '' : 's'} com mais de ${CARTAO_LONGO} caracteres — `
+            + 'nesse tamanho a letra fica pequena demais na tela do celular.');
+    }
+    if (legenda && legenda.length > LIMITE_LEGENDA) {
+        avisos.push(`A legenda tem ${legenda.length} caracteres e o limite do Instagram é ${LIMITE_LEGENDA}.`);
+    }
+    const tags = contarHashtags(legenda);
+    if (tags > MAX_HASHTAGS) {
+        avisos.push(`${tags} hashtags na legenda — o Instagram aceita ${MAX_HASHTAGS}.`);
+    }
+
+    return { titulo, blocos, cartoes: lidos, legenda, separador, avisos };
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
    CRONOGRAMA JÁ MONTADO
 
    O documento de temas é matéria-prima: o sistema é que decide em que dia cada

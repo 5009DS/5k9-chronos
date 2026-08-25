@@ -370,6 +370,48 @@ trouxer rótulos explícitos (`Gancho:`, `CTA:`, `[câmera]`), eles têm priorid
 A prévia mostra o que foi entendido, bloco a bloco, **antes** de gravar. Com
 roteiro já existente aparecem duas saídas: substituir ou acrescentar ao fim.
 
+#### O mesmo campo lê carrossel
+
+Um roteiro de vídeo é fala contínua; um carrossel é tela por tela. Lido pelo
+leitor de vídeo, um carrossel chega errado — parágrafos vizinhos viram uma fala
+só e o recorte que a social mídia já fez é desmanchado. Por isso o painel tem
+duas abas, e a escolha fica **antes** do campo: ela é sobre como ler o que vai
+ser colado.
+
+O leitor de carrossel não exige formato: ele PROCURA a convenção, contando
+quantas linhas casam com cada padrão conhecido e usando o que mais aparece.
+
+| Reconhece | Exemplo |
+|---|---|
+| `Card N` | `Card 1:`, `CARD 2 —` |
+| `Slide N` | `Slide 3`, `Tela 2`, `Página 4` |
+| `Post N` | `Post 1`, `Imagem 2`, `Arte 3` |
+| número sozinho | uma linha com só `1)` |
+| régua | `---`, `***`, `===` |
+
+Nenhuma delas? Cada parágrafo vira um card — que é o formato de quem só
+escreveu o texto, e funciona porque card de carrossel é curto por natureza.
+
+Uma distinção que parece detalhe e não é: a régua **separa**, os outros
+**rotulam**. Com `Card 1:`, o texto que vier antes da primeira marca é sobra de
+cabeçalho e entra no primeiro card; com uma régua, o que veio antes já É o
+primeiro card. Sem separar os dois casos, a capa do carrossel nascia grudada no
+card seguinte.
+
+A **legenda** (`Legenda:`, `Caption:`, `Descrição:`) sai reconhecida e não vira
+card — sem isso ela entrava como um último card de mil caracteres e trinta
+hashtags, que ninguém desenha. Cada card vira um bloco chamado `Card 1`,
+`Card 2`…, o primeiro como **gancho**, o último como **chamada para ação** se
+pedir algo. E é isso que faz o cliente poder comentar **um card específico**,
+não o post inteiro.
+
+A prévia aqui não é lista: são telas na proporção 4:5, roláveis de lado como o
+post vai ser, cada uma com sua contagem de caracteres. O card comprido demais
+fica marcado em amarelo — é mais rápido ver qual é do que ler que existe um. Os
+avisos cobrem os limites do Instagram (20 cards, 2.200 caracteres de legenda,
+30 hashtags) e um que é opinião nossa: acima de ~220 caracteres o texto não cabe
+legível numa tela de celular. Nenhum deles impede de gravar.
+
 O menu de cada bloco (`⋯`) troca o tipo, duplica logo abaixo do original e
 exclui com desfazer. Ele fecha sozinho quando o botão sai da tela — é o mesmo
 comportamento dos outros menus do estúdio, e evita um popover flutuando solto
