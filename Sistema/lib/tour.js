@@ -239,10 +239,11 @@ export const iniciarTour = ({ cliente, irPara, aoFim }) => {
         {
             tela: 'conteudo',
             alvo: () => document.querySelector('.cl-roteiro'),
-            titulo: 'O roteiro, como vai ser gravado',
-            texto: 'Falado, na ordem. O gancho é a primeira frase, a chamada para ação é a '
-                 + 'última, e o tempo estimado de fala aparece no topo. Leia como se estivesse '
-                 + 'na frente da câmera — é assim que ele vai soar.',
+            titulo: 'O roteiro, na ordem em que vai ao ar',
+            texto: 'O gancho é a primeira parte, a chamada para ação é a última. Quando o '
+                 + 'conteúdo é vídeo, o tempo estimado aparece no topo e vale ler em voz alta '
+                 + 'para sentir como vai soar; quando é carrossel, cada card vem numerado na '
+                 + 'ordem em que a pessoa vai deslizar.',
         },
         {
             tela: 'conteudo',
@@ -282,7 +283,7 @@ export const iniciarTour = ({ cliente, irPara, aoFim }) => {
             tela: 'conteudo',
             alvo: () => document.querySelector('[data-tour="fio"]') || document.querySelector('.cl-fala'),
             titulo: 'A resposta volta aqui',
-            texto: 'Quando a equipe mexe no que você pediu, o retorno aparece grudado na fala — '
+            texto: 'Quando a equipe mexe no que você pediu, o retorno aparece grudado no trecho — '
                  + 'com o que foi feito e quando. Nada de procurar a diferença relendo o roteiro. '
                  + 'Se ficou bom, um toque encerra o assunto.',
             antes: () => montarFioFalso(cliente),

@@ -33,8 +33,11 @@ export const TIPOS = [
         nome: 'Gancho',
         icone: 'zap',
         falado: true,
-        descricao: 'Os primeiros segundos. É o que decide se alguém continua assistindo.',
-        placeholder: 'A frase que abre o vídeo…',
+        /* Sem "assistindo" e sem "vídeo": o gancho é o mesmo papel nos dois
+           formatos — no reels são os primeiros segundos, no carrossel é a capa
+           — e o tipo é usado pelos dois. */
+        descricao: 'O começo. É o que decide se alguém continua.',
+        placeholder: 'A frase que abre…',
     },
     {
         id: 'fala',
@@ -131,6 +134,28 @@ export const segundosTotais = (blocos) =>
     falados(blocos).reduce((t, b) => t + segundosDeFala(b.texto), 0);
 
 export const duracaoTotal = (blocos) => duracao(segundosTotais(blocos));
+
+/* ── ESTA PEÇA VAI SER FALADA? ────────────────────────────────────────────
+   O campo `formato` é texto livre, escrito por gente: "Reels", "carrossel",
+   "Story", "Carrossel + Reels". Não dá para tratá-lo como opção de lista, e
+   também não dá para ignorá-lo — é a única coisa no sistema que sabe se a peça
+   vai ter voz.
+
+   A pergunta que ele responde aqui é estreita de propósito: vale mostrar o
+   tempo estimado de fala? Um carrossel com "8s em vídeo" no cabeçalho não está
+   errado por pouco, está errado por inteiro — ninguém vai falar aquilo.
+
+   Na dúvida, SIM. Formato vazio é o caso mais comum (a maioria dos conteúdos
+   nasce sem ele), e esconder a estimativa de todos eles tiraria um número útil
+   de quem trabalha com vídeo o dia inteiro. A palavra só desliga a estimativa
+   quando ela aparece — o silêncio não decide nada. */
+/* A lista é curta de propósito e só tem o que é MUDO com certeza. "Story" e
+   "post" ficaram de fora depois de olhar o uso real: story é vídeo falado na
+   maior parte das vezes, e "post" não diz nada. Palavra ambígua aqui esconde
+   um número certo; palavra ausente mostra um número inofensivo. */
+const SEM_VOZ = /carro?ss?el|carousel|est[áa]tico|imagem|foto|arte|infogr[áa]fico/i;
+
+export const temFala = (formato) => !SEM_VOZ.test(String(formato || ''));
 
 /**
  * Agrupa os blocos pelas seções declaradas.

@@ -17,7 +17,7 @@ import {
 } from '../lib/conversa.js';
 import {
     TIPOS, tipo as tipoBloco, ordenar, mover, renumerar, blocoNovo, proximaOrdem,
-    duracaoTotal, contarPalavras, avisosDeEstrutura, paraTexto,
+    duracaoTotal, contarPalavras, avisosDeEstrutura, paraTexto, temFala,
 } from '../lib/roteiro.js';
 import {
     chipFase, chipStatus, cartaoLeitura, explicacaoObjetivo, avisosHTML,
@@ -239,7 +239,7 @@ export const renderRoteiro = async (container, conteudoId) => {
                 <div class="vz-secao__cabeca">
                     <div>
                         <h2 class="ds-card-title">Roteiro</h2>
-                        <span class="ds-card-sub" id="rt-medida">${esc(medida(blocos))}</span>
+                        <span class="ds-card-sub" id="rt-medida">${esc(medida(blocos, c.formato))}</span>
                     </div>
                     <div class="rt-acoes-topo">
                         ${blocos.length ? `
@@ -1399,10 +1399,13 @@ const rotuloAvancar = (c) => {
     return `Mover para ${proxima}`;
 };
 
-const medida = (blocos) => {
+/* O tempo estimado só entra quando a peça vai ser falada (ver temFala, em
+   lib/roteiro.js). A contagem de palavras fica sempre: ela serve para os dois
+   formatos, e num carrossel é o número que diz se o texto cabe. */
+const medida = (blocos, formato) => {
     if (!blocos.length) return 'Nenhum bloco ainda';
-    return `${blocos.length} bloco${blocos.length > 1 ? 's' : ''} · ${contarPalavras(blocos)} palavras · `
-         + `~${duracaoTotal(blocos)} de fala (estimado)`;
+    return `${blocos.length} bloco${blocos.length > 1 ? 's' : ''} · ${contarPalavras(blocos)} palavras`
+         + (temFala(formato) ? ` · ~${duracaoTotal(blocos)} de fala (estimado)` : '');
 };
 
 const blocoEditavel = (b, i, total, conversa = null, selecionando = false, marcada = false) => {
@@ -1618,7 +1621,7 @@ const mensagemDeAviso = (c, cliente, fio, link) => {
         '',
         link,
         '',
-        'Qualquer coisa, comenta direto na fala que a gente ajusta de novo.',
+        'Qualquer coisa, comenta direto no trecho que a gente ajusta de novo.',
     ].join('\n');
 };
 

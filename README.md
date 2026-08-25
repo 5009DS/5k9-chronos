@@ -302,6 +302,21 @@ O sistema estima a duração de fala enquanto se digita (150 palavras/minuto, e 
 tela diz que é estimativa) e avisa quando há dois CTAs, quando falta gancho ou
 quando um bloco passa de 45 segundos.
 
+**A estimativa só aparece quando a peça vai ser falada.** O campo `formato` é
+texto livre — "Reels", "carrossel", "Story" —, e é a única coisa no sistema que
+sabe se vai haver voz. Quando ele diz carrossel, imagem ou arte, o tempo some e
+fica a contagem de palavras, que serve aos dois formatos. Na dúvida (campo
+vazio, palavra ambígua) a estimativa aparece: formato em branco é o caso mais
+comum, e esconder o número de todos eles tiraria a informação de quem trabalha
+com vídeo o dia inteiro. A lista de palavras mudas está em `lib/roteiro.js` e é
+curta de propósito — "story" ficou de fora porque story é vídeo falado na maior
+parte das vezes.
+
+O resto do vocabulário da tela também parou de assumir vídeo: o cliente lê
+"toque em um **trecho**", não "toque em uma **fala**". A palavra precisa servir
+para uma frase dita na câmera e para o texto de um card, e "trecho" é a única
+que serve às duas sem ficar vaga.
+
 ### Teleprompter
 
 O roteiro existe para ser falado, e só podia ser lido numa tela de trabalho —
@@ -492,20 +507,20 @@ nada ao ser tocado. Botão morto ensina que os botões desta tela podem não
 responder — e esta tela tem só dois.
 
 Agora a barra inteira vira uma mensagem: *Roteiro aprovado — você já aprovou.
-Agora é conferir o texto final; se algo ainda precisar mudar, toque na fala.*
+Agora é conferir o texto final; se algo ainda precisar mudar, toque no trecho.*
 
 **Sem botões.** "Pedir ajuste" ao lado do selo era um convite a desfazer o que
 a pessoa acabou de decidir e, no celular, disputava espaço com a única
 informação que importa naquele momento.
 
-Mudar de ideia continua possível, por um caminho melhor: **tocar na fala**.
+Mudar de ideia continua possível, por um caminho melhor: **tocar no trecho**.
 Quem relê e vê algo errado sabe qual frase está errada, e o pedido chega
 apontando para ela em vez de vir solto sobre o conteúdo inteiro. Quem fecha de
 vez é a gravação.
 
 ## O cliente comenta a fala, não só o conteúdo
 
-Na tela do cliente, **tocar numa fala** a seleciona e abre o campo de comentário
+Na tela do cliente, **tocar num trecho** o seleciona e abre o campo de comentário
 logo abaixo dela — não num painel que cobre a tela, porque o texto que ele está
 criticando precisa continuar visível enquanto ele escreve a crítica.
 

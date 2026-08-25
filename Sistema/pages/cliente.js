@@ -4,7 +4,7 @@ import { navegar } from '../lib/rotas.js';
 import { usarDiretorio, objetivo, nomeFase, fase } from '../lib/diretorio.js';
 import { mesEmSemanas, cobertura, porData, proximo, retornosDe } from '../lib/cronograma.js';
 import { chipFase, cartaoLeitura, explicacaoObjetivo, roteiroHTML, vazioHTML } from '../lib/pecas.js';
-import { ordenar, duracaoTotal } from '../lib/roteiro.js';
+import { ordenar, duracaoTotal, temFala } from '../lib/roteiro.js';
 import {
     esc, mesExtenso, somarMeses, chaveMes, semanaCurta, semanaAtual,
     nomeDiaCurto, diaCurto, quandoRelativo, dataBR, hoje,
@@ -433,7 +433,7 @@ const desenharConteudo = (container, token, visao, conteudoId) => {
                     <p class="cl-quando">
                         ${esc(dataBR(c.data))} · ${esc(quandoRelativo(c.data))}
                         ${c.formato ? ` · ${esc(c.formato)}` : ''}
-                        ${meus.length ? ` · ${esc(duracaoTotal(meus))} de fala (estimado)` : ''}
+                        ${meus.length && temFala(c.formato) ? ` · ${esc(duracaoTotal(meus))} de fala (estimado)` : ''}
                     </p>
                     ${etiquetasPublicas(c.etiquetas).length ? `
                         <div class="cl-etiquetas">
@@ -494,7 +494,7 @@ const desenharConteudo = (container, token, visao, conteudoId) => {
                     ${meus.length && podeResponder ? `
                         <p class="cl-roteiro__dica">
                             <i data-lucide="pointer"></i>
-                            Toque em uma fala para comentar só nela.
+                            Toque em um trecho para comentar só nele.
                         </p>` : ''}
                     ${meus.length
                         ? roteiroHTML(meus)
@@ -569,7 +569,7 @@ function ligarFalas(container, token, conteudo, blocos, historico) {
         el.classList.add('cl-fala');
         el.setAttribute('role', 'button');
         el.setAttribute('tabindex', '0');
-        el.setAttribute('aria-label', 'Comentar nesta fala');
+        el.setAttribute('aria-label', 'Comentar neste trecho');
 
         const abrir = () => {
             if (aberto === id) { fechar(); return; }
@@ -581,7 +581,7 @@ function ligarFalas(container, token, conteudo, blocos, historico) {
             const caixa = document.createElement('div');
             caixa.className = 'cl-comentario';
             caixa.innerHTML = `
-                <label class="cl-comentario__rotulo" for="cl-cmt">O que muda nesta fala?</label>
+                <label class="cl-comentario__rotulo" for="cl-cmt">O que muda neste trecho?</label>
                 <textarea class="ds-input cl-comentario__campo" id="cl-cmt" rows="3"
                           placeholder="Ex.: essa palavra ficou dura demais, prefiro algo mais acolhedor."></textarea>
                 <input class="ds-input cl-comentario__nome" id="cl-cmt-nome" type="text"
@@ -623,7 +623,7 @@ function ligarFalas(container, token, conteudo, blocos, historico) {
                 const erro = caixa.querySelector('#cl-cmt-erro');
 
                 if (!texto) {
-                    erro.textContent = 'Escreva o que precisa mudar nesta fala.';
+                    erro.textContent = 'Escreva o que precisa mudar neste trecho.';
                     erro.hidden = false;
                     campo.focus();
                     return;
@@ -843,18 +843,18 @@ const seloBarra = (titulo, texto) => `
     </div>`;
 
 const seloGravado = () => seloBarra('Conteúdo gravado',
-    'O roteiro fica aqui como registro do que combinamos.');
+    'O texto fica aqui como registro do que combinamos.');
 
 /* Aprovado tira os botões da barra e fica só com a mensagem. O "Pedir ajuste"
    ali era um convite a desfazer o que a pessoa acabou de decidir — e, no
    celular, disputava espaço com a única informação que importa naquele
    momento.
 
-   Mudar de ideia continua possível, e por um caminho melhor: tocar na fala.
-   Quem relê e vê algo errado sabe QUAL frase está errada, e o pedido chega
-   apontando para ela em vez de vir solto sobre o conteúdo inteiro. */
+   Mudar de ideia continua possível, e por um caminho melhor: tocar no trecho.
+   Quem relê e vê algo errado sabe QUAL pedaço está errado, e o pedido chega
+   apontando para ele em vez de vir solto sobre o conteúdo inteiro. */
 const seloAprovado = () => seloBarra('Roteiro aprovado',
-    'Você já aprovou. Agora é conferir o texto final — se algo ainda precisar mudar, toque na fala.');
+    'Você já aprovou. Agora é conferir o texto final — se algo ainda precisar mudar, toque no trecho.');
 
 const barraAcao = (c) => `
     <div class="cl-barra">
