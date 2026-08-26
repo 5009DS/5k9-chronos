@@ -67,6 +67,24 @@ export const local = {
             gravar('retornos', ler('retornos').filter(r => r.conteudo_id !== id));
         }
 
+        /* O primeiro degrau da mesma cascata, que faltava: vz_conteudos aponta
+           para vz_clientes com `on delete cascade`, então apagar um cliente
+           lá leva o cronograma inteiro dele. Aqui ele deixava tudo para trás —
+           conteúdos, roteiros e conversas de um cliente que não existe mais,
+           invisíveis e ocupando lugar.
+
+           Apareceu quando o cache do store passou a espelhar a cascata do
+           esquema: o cache dizia zero blocos e o armazenamento local dizia
+           320. Quem estava errado era este arquivo. */
+        if (colecao === 'clientes') {
+            const orfaos = new Set(ler('conteudos').filter(c => c.cliente_id === id).map(c => c.id));
+            if (orfaos.size) {
+                gravar('conteudos', ler('conteudos').filter(c => !orfaos.has(c.id)));
+                gravar('blocos',   ler('blocos').filter(b => !orfaos.has(b.conteudo_id)));
+                gravar('retornos', ler('retornos').filter(r => !orfaos.has(r.conteudo_id)));
+            }
+        }
+
         /* E aqui o Postgres faz o outro lado: `bloco_id references vz_blocos
            on delete set null`. Sem esta parte o comentário continuaria
            apontando para um bloco que não existe mais — e sumiria das duas

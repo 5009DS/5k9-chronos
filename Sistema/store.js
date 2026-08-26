@@ -39,27 +39,111 @@ const cache = new Map();
 const comCache = async (chave, buscar) => {
     const guardado = cache.get(chave);
     if (guardado && Date.now() - guardado.em < TTL) return guardado.dados;
-    // Guarda a PROMESSA, não o resultado: duas telas pedindo o mesmo
-    // compartilham a ida ao banco em vez de disparar duas.
+
+    /* Guarda a PROMESSA, não o resultado: duas telas pedindo o mesmo
+       compartilham a ida ao banco em vez de disparar duas. Quando ela resolve,
+       a lista toma o lugar da promessa na MESMA entrada — é o que permite
+       remendar o cache depois (ver mexerNoCache). */
     const promessa = buscar();
-    cache.set(chave, { dados: promessa, em: Date.now() });
-    try { return await promessa; }
-    catch (e) { cache.delete(chave); throw e; }
+    const entrada = { dados: promessa, em: Date.now() };
+    cache.set(chave, entrada);
+    try {
+        const lista = await promessa;
+        /* Só troca se ninguém mexeu no meio do voo: uma escrita pode ter
+           apagado esta entrada, e ressuscitá-la seria devolver dado velho. */
+        if (cache.get(chave) === entrada) entrada.dados = lista;
+        return lista;
+    } catch (e) {
+        if (cache.get(chave) === entrada) cache.delete(chave);
+        throw e;
+    }
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   O CACHE ACOMPANHA A ESCRITA, EM VEZ DE SE JOGAR FORA
+
+   Toda escrita derrubava a coleção inteira. Correto e caro: trocar o status de
+   UM conteúdo obrigava a próxima tela a reler os 240 conteúdos do estúdio, e
+   apagar UMA fala, a reler os 1.900 blocos de todos os clientes. Medido antes
+   de mexer, com um estúdio de seis clientes.
+
+   Agora a escrita aplica no cache o que aplicou no banco: a linha salva entra
+   no lugar dela, a excluída sai. A leitura seguinte não vai ao banco e devolve
+   exatamente o que o banco tem.
+
+   ── O QUE NÃO MUDA, E É O PONTO DELICADO ─────────────────────────────────
+   `em` fica intacto. O TTL conta desde a LEITURA, não desde a última escrita —
+   senão uma aba ocupada nunca releria, e mudança feita por outra pessoa
+   demoraria para aparecer. O remendo economiza rede; ele não estende a
+   validade do que está guardado.
+
+   ── CASCATA ──────────────────────────────────────────────────────────────
+   O banco apaga em cascata (db/schema.sql): conteúdo leva blocos e retornos,
+   cliente leva conteúdos. Um cache que não soubesse disso guardaria filhos de
+   um pai que não existe mais — e a tela mostraria roteiro de conteúdo apagado
+   até o TTL vencer. A cascata está espelhada aqui, com a mesma regra do
+   esquema, inclusive o `on delete set null` do bloco no retorno: o comentário
+   sobrevive à fala, órfão.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const mexerNoCache = (nome, transformar) => {
+    const guardado = cache.get(nome);
+    if (!guardado) return;
+    /* Ainda voando: a lista nem chegou, e remendar promessa é convite a erro.
+       Jogar fora é o que o código fazia sempre, e continua correto. */
+    if (!Array.isArray(guardado.dados)) { cache.delete(nome); return; }
+    guardado.dados = transformar(guardado.dados);
+};
+
+const cascatearNoCache = (nome, id) => {
+    if (nome === "conteudos") {
+        mexerNoCache("blocos",   (l) => l.filter(b => b.conteudo_id !== id));
+        mexerNoCache("retornos", (l) => l.filter(r => r.conteudo_id !== id));
+    }
+    if (nome === "blocos") {
+        // on delete set null: o retorno fica, sem a fala que ele comentava.
+        mexerNoCache("retornos", (l) => l.map(r => r.bloco_id === id ? { ...r, bloco_id: null } : r));
+    }
+    if (nome === "clientes") {
+        const guardado = cache.get("conteudos");
+        // Os filhos precisam ser lidos ANTES de sumirem da lista.
+        const filhos = Array.isArray(guardado?.dados)
+            ? guardado.dados.filter(c => c.cliente_id === id).map(c => c.id)
+            : null;
+        mexerNoCache("conteudos", (l) => l.filter(c => c.cliente_id !== id));
+        if (filhos) filhos.forEach(idFilho => cascatearNoCache("conteudos", idFilho));
+        // Sem saber quais conteúdos eram, reler é mais honesto que adivinhar.
+        else { cache.delete("blocos"); cache.delete("retornos"); }
+    }
 };
 
 const COLECOES = ['clientes', 'conteudos', 'blocos', 'retornos'];
 
 const colecao = (nome) => ({
     listar: () => comCache(nome, () => db.listar(nome)),
+
     salvar: async (registro) => {
         const linha = await db.salvar(nome, registro);
-        cache.delete(nome);
+        /* A linha vem do BANCO, não do que foi enviado: ela traz id gerado,
+           carimbo de criação e o que mais o servidor tenha decidido. */
+        mexerNoCache(nome, (lista) => {
+            const i = lista.findIndex(x => x.id === linha.id);
+            if (i < 0) return [linha, ...lista];   // nova entra na frente, como o banco devolve
+            const nova = [...lista];
+            nova[i] = linha;
+            return nova;
+        });
         return linha;
     },
+
     excluir: async (id) => {
         await db.excluir(nome, id);
-        cache.delete(nome);
+        mexerNoCache(nome, (lista) => lista.filter(x => x.id !== id));
+        cascatearNoCache(nome, id);
     },
+
+    /* Substituir troca a coleção inteira e só é usada pela restauração de
+       backup, que limpa o cache logo depois. Remendar aqui seria escrever
+       regra para um caso que já é resolvido de forma mais simples. */
     substituir: async (linhas) => {
         await db.substituir(nome, linhas);
         cache.delete(nome);
