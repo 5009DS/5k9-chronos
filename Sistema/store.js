@@ -91,11 +91,34 @@ export const store = {
     modo: db.modo,
     exigeLogin: CONFIGURADO,
 
+    /* ── A SESSÃO AVISA MUITO MAIS DO QUE MUDA ────────────────────────────
+       O supabase-js dispara onAuthStateChange em situações que não têm nada a
+       ver com trocar de usuário: assim que a assinatura é feita
+       (INITIAL_SESSION), a cada renovação de token, quando a aba volta a ficar
+       visível e — o caso que incomoda — quando OUTRA aba renova a sessão e a
+       sincroniza pelo armazenamento local.
+
+       Como cada aviso limpava o cache e mandava as telas se redesenharem, a
+       aba que estava parada no fundo piscava sozinha: ela apagava e remontava
+       a página inteira porque a outra aba renovou um token. E toda abertura de
+       página já nascia com um redesenho a mais, de graça (medido: um aviso por
+       carregamento, mesmo deslogado).
+
+       Agora o gatilho é o que a assinatura sempre quis dizer: MUDOU DE PESSOA.
+       Comparar o id cobre os dois casos reais — entrou em outra aba (null → id)
+       e saiu em outra aba (id → null) — e ignora renovação, foco e eco entre
+       abas, onde o id é o mesmo.
+
+       Entrar e sair NESTA aba não dependem daqui: as duas telas navegam por
+       conta própria depois da chamada (pages/login.js e components/topnav.js). */
     iniciarSessao: async () => {
         usuario = await db.sessao();
         if (db.aoMudarSessao) {
             await db.aoMudarSessao(async () => {
+                const antes = usuario?.id ?? null;
                 usuario = await db.sessao();
+                if ((usuario?.id ?? null) === antes) return;
+
                 cache.clear();
                 ouvintes.forEach(fn => fn(usuario));
             });
