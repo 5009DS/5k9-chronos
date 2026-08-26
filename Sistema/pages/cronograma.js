@@ -50,6 +50,23 @@ const FILTROS = [
     { id: 'ajuste',     rotulo: 'Com ajuste' },
 ];
 
+/* ── O SEGUNDO FILTRO, E POR QUE ELE É SEPARADO ───────────────────────────
+   Status e formato respondem perguntas diferentes — "o que está esperando" e
+   "o que é" — e quem monta um mês pergunta as duas juntas: "quais carrosséis
+   ainda estão em rascunho?". Uma fileira só, com as duas coisas misturadas,
+   obrigaria a escolher entre elas.
+
+   Os nomes saem da esteira (lib/etiquetas.js), e não do texto do campo: um
+   filtro que casasse a palavra exata deixaria "Reels 9:16" e "carrossel (5
+   cards)" de fora, que é justo o jeito como formato é escrito na vida real.
+   Por isso "Vídeo" e não "Reels": o grupo é o mesmo da esteira e inclui
+   story, vídeo e reels — o que ele diz é "vai ser falado". */
+const FORMATOS = [
+    { id: 'tudo',      rotulo: 'Todo formato', icone: null },
+    { id: 'video',     rotulo: 'Vídeo',        icone: 'video' },
+    { id: 'carrossel', rotulo: 'Carrossel',    icone: 'gallery-horizontal-end' },
+];
+
 /* ── ONDE A PESSOA ESTAVA ─────────────────────────────────────────────────
    Mês e filtro sobrevivem à ida e volta para uma demanda. Sem isso, o fluxo
    real virava um labirinto: trocar de mês, filtrar por "em revisão", abrir uma
@@ -110,8 +127,9 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
     const lembrado = ULTIMO.get(clienteId) || {};
     let mes = mesInicial || lembrado.mes || mesDeAbertura(conteudos);
     let filtro = lembrado.filtro || 'tudo';
+    let formato = lembrado.formato || 'tudo';
 
-    const lembrar = () => ULTIMO.set(clienteId, { mes, filtro });
+    const lembrar = () => ULTIMO.set(clienteId, { mes, filtro, formato });
     let soltarArraste = null;
 
     const { content } = renderShell(container, {
@@ -171,6 +189,24 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
         const doMes = conteudos.filter(c => chaveMes(c.data) === mes);
         const rascunhos = doMes.filter(c => c.status === 'rascunho');
 
+        // A contagem fica no botão: decidir se vale clicar não pode custar
+        // um clique. Conta o MÊS, não a semana, que é o escopo da tela.
+        const porFormato = { video: 0, carrossel: 0 };
+        for (const c of doMes) porFormato[esteiraDe(c.formato)]++;
+
+        /* A fileira só aparece quando há os dois formatos no mês — e um filtro
+           que não aparece não pode continuar filtrando. Sem esta linha, quem
+           filtrasse carrossel em agosto e trocasse para um setembro só de
+           vídeo via o mês inteiro vazio, sem nada na tela para desfazer. */
+        const doisFormatos = porFormato.video > 0 && porFormato.carrossel > 0;
+        if (!doisFormatos && formato !== 'tudo') { formato = 'tudo'; lembrar(); }
+
+        /* Os dois filtros num predicado só, montado UMA vez e passado para
+           baixo. Cada semana aplicando as regras por conta própria seria a
+           terceira cópia da mesma pergunta neste arquivo. */
+        const passa = (c) => (filtro === 'tudo' || c.status === filtro)
+                          && (formato === 'tudo' || esteiraDe(c.formato) === formato);
+
         content.innerHTML = `
             <article class="ds-card vz-barra">
                 <div class="vz-mes">
@@ -184,6 +220,16 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
                         <button class="vz-filtro ${f.id === filtro ? 'is-active' : ''}"
                                 data-filtro="${f.id}" aria-pressed="${f.id === filtro}">${f.rotulo}</button>`).join('')}
                 </div>
+
+                ${doisFormatos ? `
+                    <div class="vz-filtros cr-formatos" id="cr-formatos">
+                        ${FORMATOS.map(f => `
+                            <button class="vz-filtro ${f.id === formato ? 'is-active' : ''}"
+                                    data-formato="${f.id}" aria-pressed="${f.id === formato}">
+                                ${f.icone ? `<i data-lucide="${f.icone}"></i>` : ''}${f.rotulo}
+                                ${f.id !== 'tudo' ? `<span class="cr-filtro__conta">${porFormato[f.id]}</span>` : ''}
+                            </button>`).join('')}
+                    </div>` : ''}
             </article>
 
             ${rascunhos.length ? `
@@ -199,7 +245,7 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
 
             <div class="cr-semanas">
                 ${doMes.length
-                    ? semanas.map(s => semanaHTML(s, filtro, conteudos)).join('')
+                    ? semanas.map(s => semanaHTML(s, passa, conteudos)).join('')
                     : vazioHTML('calendar-plus', 'Nenhum conteúdo neste mês',
                         'Crie o primeiro e a semana começa a se montar sozinha.',
                         `<button class="ds-btn ds-btn--primary" id="cr-novo-vazio">Novo conteúdo</button>`)}
@@ -209,6 +255,14 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
         // ── Eventos ─────────────────────────────────────────────────────
         content.querySelector('#cr-anterior').addEventListener('click', () => { mes = somarMeses(mes, -1); lembrar(); desenhar(); });
         content.querySelector('#cr-proximo').addEventListener('click', () => { mes = somarMeses(mes, 1); lembrar(); desenhar(); });
+
+        content.querySelector('#cr-formatos')?.addEventListener('click', (e) => {
+            const b = e.target.closest('[data-formato]');
+            if (!b) return;
+            formato = b.dataset.formato;
+            lembrar();
+            desenhar();
+        });
 
         content.querySelector('#cr-filtros').addEventListener('click', (e) => {
             const b = e.target.closest('[data-filtro]');
@@ -348,11 +402,11 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
 
 // ─────────────────────────────────────────────────────────────────────────
 
-const semanaHTML = ({ segunda, conteudos }, filtro, todos) => {
+const semanaHTML = ({ segunda, conteudos }, passa, todos) => {
     const atual = segunda === semanaAtual();
     const cob = cobertura(conteudos);
     const alertas = alertasDaSemana({ conteudos });
-    const visiveis = filtro === 'tudo' ? conteudos : conteudos.filter(c => c.status === filtro);
+    const visiveis = conteudos.filter(passa);
 
     return `
         <section class="vz-semana ${atual ? 'vz-semana--atual' : ''}">
@@ -1419,6 +1473,19 @@ const ESTILOS = `
 
 .cr-etiquetas { display: flex; flex-wrap: wrap; gap: 5px; margin-top: var(--space-2); }
 .cr-dia--alerta { color: var(--warning) !important; }
+
+/* A segunda fileira de filtros quebra para a linha de baixo quando não cabe,
+   e é por isso que ela é um bloco à parte e não mais botões na mesma fileira:
+   misturados, o primeiro grupo se partia no meio ao encolher a janela. */
+.cr-formatos { margin-top: var(--space-2); }
+.cr-formatos .vz-filtro { display: inline-flex; align-items: center; gap: 6px; }
+.cr-formatos .vz-filtro i, .cr-formatos .vz-filtro svg { width: 14px; height: 14px; }
+.cr-filtro__conta {
+    min-width: 17px; padding: 0 5px; border-radius: var(--radius-pill);
+    background: var(--surface-3); color: var(--text-tertiary);
+    font-size: 10px; font-weight: 700;
+}
+.vz-filtro.is-active .cr-filtro__conta { background: var(--accent); color: var(--surface-0); }
 
 .cr-liberar {
     display: flex; align-items: center; justify-content: space-between;

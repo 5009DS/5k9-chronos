@@ -225,6 +225,18 @@ Quem decide a esteira é o campo de formato, que é texto livre. Na dúvida, ví
 é o que a maioria das peças é, e é o que o sistema fazia antes de existir a
 segunda esteira — formato em branco não muda o comportamento de ninguém.
 
+O cronograma filtra por formato numa segunda fileira, ao lado do filtro de
+status: as duas perguntas — "o que está esperando" e "o que é" — se combinam,
+e "quais carrosséis ainda estão em rascunho?" é a pergunta de quem monta um
+mês. A fileira só aparece quando o mês tem os dois formatos, e some junto com o
+filtro: um filtro invisível que continuasse filtrando deixaria a pessoa diante
+de um mês vazio sem nada na tela para desfazer.
+
+O botão diz **Vídeo**, e não "Reels", porque o grupo é o da esteira — reels,
+story e vídeo caem todos nele. O casamento é pelo mesmo padrão da esteira, não
+pela palavra exata: "Reels 9:16" e "carrossel (5 cards)" entram nos grupos
+certos, que é como formato é escrito na vida real.
+
 O quadro de Produção mostra **uma esteira por vez**, com um seletor no topo e a
 contagem de cada uma. As duas juntas dariam treze colunas, e o quadro existe
 para caber num olhar; além disso, quem grava e quem diagrama são pessoas
