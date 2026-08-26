@@ -311,8 +311,16 @@ export const statusParaEtapa = (statusAtual, nomeEtapa) => {
     const podeSubir = ['rascunho', 'em_revisao'].includes(statusAtual);
 
     if (meta.nome === 'publicado' && statusAtual !== 'publicado') return 'publicado';
-    // 3 = "a gravar": a partir daí, o roteiro já passou pelo cliente.
-    if (meta.etapa >= 3 && podeSubir) return 'aprovado';
+
+    /* 3 = "a gravar" / "a diagramar": a peça saiu da mão do cliente e entrou na
+       da equipe. Antes isto virava "aprovado", e era mentira sempre que ninguém
+       tinha aprovado nada — a tela do cliente passava a dizer "aprovado por
+       você" numa peça que ele nunca leu. "Em desenvolvimento" diz o que está
+       acontecendo de verdade: está sendo produzida, e não há o que ele responda.
+
+       Peça que ele REALMENTE aprovou não passa por aqui: o status dela já é
+       "aprovado", que não está em podeSubir. */
+    if (meta.etapa >= 3 && podeSubir) return 'desenvolvimento';
     return null;
 };
 
@@ -351,6 +359,10 @@ export const etiquetasParaStatus = (status, etiquetas, esteira = 'video') => {
         // uma peça ainda não liberada é o estado mais normal que existe.
         if (status === 'rascunho')  return atual?.nome === ETAPA_APROVACAO ? null : undefined;
         if (status === 'aprovado')  return !atual || atual.nome === ETAPA_APROVACAO ? produzir : undefined;
+        /* "Em desenvolvimento" não escolhe etapa: ele vale tanto para quem está
+           escrevendo quanto para quem está diagramando, e adivinhar qual das
+           duas seria trocar a informação de quem marcou por um palpite. */
+        if (status === 'desenvolvimento') return undefined;
         if (['em_revisao', 'ajuste'].includes(status)) return atual ? undefined : ETAPA_APROVACAO;
         return undefined;
     })();

@@ -170,10 +170,17 @@ export const auditar = (conteudos, blocos, retornos) => {
 
         // Rascunho com o roteiro sendo escrito é o começo normal de tudo.
         if (c.status === 'rascunho' && etapa && etapa.nome !== ETAPA_ESCRITA) {
+            /* O conserto depende de onde a peça está. Na etapa de aprovação,
+               liberar quer dizer "o cliente precisa ler" — em revisão. Depois
+               dela, a peça está sendo PRODUZIDA, e mandá-la para revisão
+               pediria uma resposta que ninguém espera: aí é "em
+               desenvolvimento", que aparece no link dele sem cobrar nada. */
+            const destino = etapa.etapa <= 1 ? 'em_revisao' : 'desenvolvimento';
             achados.push(problema('grave', 'rascunho-em-producao', c,
                 'Em produção, mas invisível para o cliente',
                 `Está marcado como ${etapa.nome} e o status é rascunho — ele não vê esta peça.`,
-                { rotulo: 'Liberar para o cliente', campo: 'status', valor: 'em_revisao' }));
+                { rotulo: destino === 'em_revisao' ? 'Liberar para o cliente' : 'Marcar como em desenvolvimento',
+                  campo: 'status', valor: destino }));
         }
 
         if (c.banco_em && etapa) {
@@ -186,11 +193,17 @@ export const auditar = (conteudos, blocos, retornos) => {
            para trás. Na tela dele, uma peça já gravada pedindo aprovação de
            roteiro. */
         if (etapa && etapa.etapa >= 3 && ['rascunho', 'em_revisao'].includes(c.status)) {
+            /* Quem aprovou decide o conserto: com aprovação no histórico, o
+               status honesto é "aprovado"; sem ela, dizer aprovado inventaria
+               uma resposta que o cliente nunca deu — e o estado verdadeiro é
+               "em desenvolvimento", que é o que a peça está fazendo. */
+            const destino = aprovou ? 'aprovado' : 'desenvolvimento';
             achados.push(problema('grave', 'etapa-sem-status', c,
                 `Já está em "${etapa.nome}" e ainda consta como ${c.status === 'rascunho' ? 'rascunho' : 'em revisão'}`,
-                'A produção avançou e o status ficou para trás. O cliente vê uma peça já gravada '
+                'A produção avançou e o status ficou para trás. O cliente vê uma peça já em produção '
               + 'pedindo aprovação de roteiro.',
-                { rotulo: 'Marcar como aprovado', campo: 'status', valor: 'aprovado' }));
+                { rotulo: aprovou ? 'Marcar como aprovado' : 'Marcar como em desenvolvimento',
+                  campo: 'status', valor: destino }));
         }
 
         /* O espelho do caso acima: a etapa diz que o roteiro está com o

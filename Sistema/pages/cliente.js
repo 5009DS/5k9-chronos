@@ -378,6 +378,8 @@ const estadoCurto = (c) => {
     if (c.status === 'ajuste')    return `<span class="cl-estado cl-estado--ajuste">ajuste pedido</span>`;
     if (c.status === 'publicado') return `<span class="cl-estado">publicado</span>`;
     if (c.status === 'em_revisao') return `<span class="cl-estado cl-estado--espera">aguardando você</span>`;
+    // Sem tom de espera: é justamente o estado em que ele não deve nada.
+    if (c.status === 'desenvolvimento') return `<span class="cl-estado">em produção</span>`;
     return '';
 };
 

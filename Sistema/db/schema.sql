@@ -108,7 +108,11 @@ create table if not exists vz_conteudos (
     -- o sistema descobre quem está ocupando a posição original dele. Ver
     -- db/migracao-posicao.sql para o raciocínio inteiro.
     data_original date,
-    status      text not null default 'rascunho',      -- rascunho | em_revisao | aprovado | ajuste | publicado
+    -- Sem CHECK de propósito: a lista vive em lib/pecas.js, e um valor novo
+    -- (como 'desenvolvimento') precisa entrar sem migração. O que o banco
+    -- garante é só o recorte que importa para o link público: rascunho não sai.
+    status      text not null default 'rascunho',
+    -- rascunho | desenvolvimento | em_revisao | aprovado | ajuste | publicado
     -- O que a equipe quer que ESTE conteúdo faça, em uma frase. Complementa a
     -- explicação automática do objetivo, não a substitui.
     intencao    text,

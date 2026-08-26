@@ -68,6 +68,11 @@
     background: var(--surface-3); color: var(--text-tertiary);
 }
 .vz-status i, .vz-status svg { width: 12px; height: 12px; }
+/* Âmbar como o "ajuste": a escala das etiquetas usa essa cor para "o trabalho
+   é nosso", e é exatamente o que os dois estados dizem. O que separa um do
+   outro é o ícone e o rótulo — a cor responde outra pergunta, a de quem está
+   com a bola. */
+.vz-status--desenvolvimento { background: var(--warning-muted); color: var(--warning); }
 .vz-status--em_revisao { background: var(--info-muted);    color: var(--info); }
 .vz-status--aprovado   { background: var(--success-muted); color: var(--success); }
 .vz-status--ajuste     { background: var(--warning-muted); color: var(--warning); }

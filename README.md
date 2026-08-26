@@ -171,8 +171,25 @@ não vê, o cartão pinta de tal cor, a função do banco move para tal estado �
 mudar a dinâmica passaria a exigir migração, deploy e revisão das telas.
 
 `status` continua sendo o que sempre foi: **a conversa com o cliente**
-(rascunho → em revisão → aprovado/ajuste → publicado). São cinco porque a tela
-pública depende de cada um.
+(rascunho → em desenvolvimento → em revisão → aprovado/ajuste → publicado). São
+seis, e cada um existe porque a tela pública se comporta diferente com ele.
+
+**"Em desenvolvimento" é o mais novo, e ele cobre o meio do caminho:** a peça
+está sendo produzida — o carrossel sendo diagramado, o vídeo esperando a câmera
+— e não há nada para o cliente fazer. Sem ele só havia escolha ruim: rascunho
+esconde a peça do link dele, "em revisão" a põe na lista do que ele precisa
+responder, e marcar como aprovado inventa uma aprovação que ele nunca deu — era
+literalmente o que o sistema fazia ao mover uma peça para "a gravar" ou "a
+diagramar".
+
+Agora essa passagem escreve **em desenvolvimento**, e a peça aparece no link do
+cliente, na lista "em produção", com data e tema, sem barra de aprovar e sem
+cobrança. Quem já aprovou de verdade não passa por ali: o status dela é
+"aprovado", e nada o rebaixa.
+
+A conferência acompanha: numa peça adiantada com status atrasado, o conserto
+oferecido é "aprovado" quando existe aprovação no histórico e "em
+desenvolvimento" quando não existe.
 
 **Etiqueta é a outra metade**: o estado interno, que só a equipe vê e que o
 sistema não interpreta. Texto livre, sem cadastro, sem ordem, sem transição

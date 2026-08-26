@@ -16,8 +16,25 @@ import { tipo as tipoBloco, agruparPorSecao } from './roteiro.js';
    com o clique.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* ── A ORDEM AQUI É A ORDEM DOS MENUS ─────────────────────────────────────
+   O objeto é percorrido como está escrito, e as três telas que oferecem troca
+   de status mostram nesta sequência. Ela segue a vida da peça: some da vista
+   do cliente, aparece sendo feita, vai para ele, volta.
+
+   ── POR QUE "EM DESENVOLVIMENTO" EXISTE ──────────────────────────────────
+   Faltava o estado mais comum do meio do caminho: a peça está sendo PRODUZIDA
+   — o carrossel sendo diagramado, o vídeo esperando a câmera — e não há nada
+   para o cliente fazer. Sem ele só havia escolha ruim: rascunho esconde a peça
+   do link dele, e "em revisão" a põe na lista de coisas que ele precisa
+   responder. Marcar como aprovado era pior ainda — inventa uma aprovação que
+   ele nunca deu.
+
+   Este status aparece no link do cliente e não pede nada: a peça entra em "em
+   produção" no painel dele, com data e tema, e a barra de aprovar nem existe. */
 export const STATUS = {
     rascunho:   { rotulo: 'Rascunho',   icone: 'pencil',       dica: 'Só a equipe vê. Não aparece no link do cliente.' },
+    desenvolvimento: { rotulo: 'Em desenvolvimento', icone: 'pencil-ruler',
+                       dica: 'A equipe está produzindo. O cliente vê e não precisa fazer nada.' },
     em_revisao: { rotulo: 'Em revisão', icone: 'eye',          dica: 'Enviado ao cliente, aguardando resposta.' },
     aprovado:   { rotulo: 'Aprovado',   icone: 'check',        dica: 'O cliente aprovou este conteúdo.' },
     ajuste:     { rotulo: 'Ajuste',     icone: 'message-circle-warning', dica: 'O cliente pediu uma alteração.' },
