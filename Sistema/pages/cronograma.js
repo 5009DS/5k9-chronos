@@ -59,11 +59,12 @@ const FILTROS = [
    Os nomes saem da esteira (lib/etiquetas.js), e não do texto do campo: um
    filtro que casasse a palavra exata deixaria "Reels 9:16" e "carrossel (5
    cards)" de fora, que é justo o jeito como formato é escrito na vida real.
-   Por isso "Vídeo" e não "Reels": o grupo é o mesmo da esteira e inclui
-   story, vídeo e reels — o que ele diz é "vai ser falado". */
+   O rótulo é "Reels" porque é a palavra que a equipe usa — o grupo é o da
+   esteira e inclui story e vídeo solto, mas nomear pelo caso comum é o que faz
+   o botão ser encontrado sem ler. */
 const FORMATOS = [
     { id: 'tudo',      rotulo: 'Todo formato', icone: null },
-    { id: 'video',     rotulo: 'Vídeo',        icone: 'video' },
+    { id: 'video',     rotulo: 'Reels',        icone: 'video' },
     { id: 'carrossel', rotulo: 'Carrossel',    icone: 'gallery-horizontal-end' },
 ];
 
@@ -1474,10 +1475,24 @@ const ESTILOS = `
 .cr-etiquetas { display: flex; flex-wrap: wrap; gap: 5px; margin-top: var(--space-2); }
 .cr-dia--alerta { color: var(--warning) !important; }
 
-/* A segunda fileira de filtros quebra para a linha de baixo quando não cabe,
-   e é por isso que ela é um bloco à parte e não mais botões na mesma fileira:
-   misturados, o primeiro grupo se partia no meio ao encolher a janela. */
-.cr-formatos { margin-top: var(--space-2); }
+/* Os dois grupos ficam na MESMA linha de base. A margem superior que havia aqui
+   supunha que o segundo caísse embaixo do primeiro — e na largura de desktop
+   eles ficam lado a lado, então ele só empurrava o grupo de formato uns pixels
+   para baixo: dois botões ativos, um mais alto que o outro.
+
+   O que separa os grupos agora é um fio, que diz "outra pergunta" sem mexer no
+   alinhamento. Ele some quando a barra quebra em duas linhas, onde a quebra já
+   faz esse trabalho. */
+.cr-formatos { position: relative; padding-left: var(--space-3); }
+.cr-formatos::before {
+    content: ""; position: absolute; left: 0; top: 50%;
+    transform: translateY(-50%);
+    width: 1px; height: 18px; background: var(--border-subtle);
+}
+@media (max-width: 720px) {
+    .cr-formatos { padding-left: 0; }
+    .cr-formatos::before { display: none; }
+}
 .cr-formatos .vz-filtro { display: inline-flex; align-items: center; gap: 6px; }
 .cr-formatos .vz-filtro i, .cr-formatos .vz-filtro svg { width: 14px; height: 14px; }
 .cr-filtro__conta {
@@ -1485,7 +1500,13 @@ const ESTILOS = `
     background: var(--surface-3); color: var(--text-tertiary);
     font-size: 10px; font-weight: 700;
 }
-.vz-filtro.is-active .cr-filtro__conta { background: var(--accent); color: var(--surface-0); }
+/* Fundo cheio de accent com número escuro por cima virou uma pastilha roxa sem
+   número legível. A contagem é informação secundária: ela acompanha a cor do
+   botão em vez de disputar com ela. */
+.vz-filtro.is-active .cr-filtro__conta {
+    background: color-mix(in oklch, var(--accent) 22%, transparent);
+    color: var(--accent);
+}
 
 .cr-liberar {
     display: flex; align-items: center; justify-content: space-between;

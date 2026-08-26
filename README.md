@@ -232,8 +232,9 @@ mês. A fileira só aparece quando o mês tem os dois formatos, e some junto com
 filtro: um filtro invisível que continuasse filtrando deixaria a pessoa diante
 de um mês vazio sem nada na tela para desfazer.
 
-O botão diz **Vídeo**, e não "Reels", porque o grupo é o da esteira — reels,
-story e vídeo caem todos nele. O casamento é pelo mesmo padrão da esteira, não
+O botão diz **Reels** porque é a palavra que a equipe usa; o grupo é o da
+esteira e inclui story e vídeo solto, mas nomear pelo caso comum é o que faz o
+botão ser encontrado sem ler. O casamento é pelo mesmo padrão da esteira, não
 pela palavra exata: "Reels 9:16" e "carrossel (5 cards)" entram nos grupos
 certos, que é como formato é escrito na vida real.
 
