@@ -591,16 +591,40 @@ reclamou disto aqui".
 O cliente não vê o mesmo comentário duas vezes: o que é sobre uma fala aparece
 grudado nela, e a lista "Suas respostas" mostra só o que é do conteúdo inteiro.
 
-## Apagar mais de uma fala
+## Mexer em mais de uma fala
 
 **Selecionar**, no cabeçalho do roteiro, põe uma caixa em cada bloco. Marque as
-que vão sair e apague de uma vez. Apagar pelo menu `⋯` continua ali e serve
-para um engano; não serve para o caso real, que é a roteirista mandar a versão
-nova inteira e sete falas antigas precisarem sair juntas.
+que interessam e a barra oferece as duas ações em lote: **trocar o tipo** de
+todas e **excluir** todas. Fazer pelo menu `⋯` continua ali e serve para um
+engano; não serve para o caso real, que é a roteirista mandar a versão nova
+inteira e sete falas antigas precisarem sair juntas — ou um roteiro colado sair
+todo como "fala" e oito blocos precisarem virar frase curta.
+
+O menu em lote não oferece **Seção**. Seção é só título: virar seção esconderia
+o texto de todos os blocos marcados de uma vez, que é um susto coletivo. Ela
+continua no menu de um bloco, que é como divisória se cria.
 
 A contagem se atualiza no lugar, sem redesenhar a página — redesenhar devolveria
 a rolagem ao topo, e marcar sete falas exigiria rolar sete vezes até o mesmo
 ponto.
+
+### Excluir não renumera
+
+Apagar um bloco custava uma ida ao banco por bloco RESTANTE. O código apagava e
+depois chamava `renumerar()`, que reescreve a ordem de todos em passos de 10 —
+e gravava os catorze. Num roteiro de catorze falas, apagar uma eram catorze
+escritas em série; no banco de verdade, catorze voltas de rede, uma esperando a
+outra. Era esse o atraso.
+
+E era trabalho para nada: tirar o bloco de ordem 30 deixa 10, 20, 40, 50…, que
+continua estritamente crescente. O buraco não aparece em lugar nenhum —
+`ordenar()` só compara, `proximaOrdem()` usa o maior. Renumerar existe para
+**mover**, onde a ordem muda de dono de verdade; e mover, quando acontece,
+fecha os buracos de graça.
+
+Medido: apagar um bloco num roteiro de catorze passou de **14 escritas para 1**;
+apagar três, de 10 para 3. O desfazer seguiu junto — ele grava só o que voltou,
+não o roteiro inteiro.
 
 **Excluir roteiro** apaga tudo, e é o único que pergunta antes. Não é
 inconsistência: a seleção é uma escolha feita item por item, e o desfazer cobre

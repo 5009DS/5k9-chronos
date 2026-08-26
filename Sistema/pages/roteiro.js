@@ -305,14 +305,19 @@ export const renderRoteiro = async (container, conteudoId) => {
         const n = selecionadas.size;
         const conta = content.querySelector('#rt-sel-conta');
         const excluir = content.querySelector('#rt-sel-excluir');
+        const trocar = content.querySelector('#rt-sel-tipo');
         const todas = content.querySelector('#rt-sel-todas');
         if (!conta) return;
         conta.textContent = n
             ? `${n} de ${blocos.length} selecionada${n > 1 ? 's' : ''}`
-            : 'Marque as falas que vão sair';
+            : 'Marque as falas para trocar o tipo ou excluir';
         if (excluir) {
             excluir.disabled = !n;
             excluir.querySelector('span').textContent = n > 1 ? `Excluir ${n}` : 'Excluir';
+        }
+        if (trocar) {
+            trocar.disabled = !n;
+            trocar.querySelector('span').textContent = n > 1 ? `Trocar tipo de ${n}` : 'Trocar tipo';
         }
         if (todas) todas.textContent = n === blocos.length ? 'Limpar seleção' : 'Selecionar todas';
     }
@@ -403,6 +408,50 @@ export const renderRoteiro = async (container, conteudoId) => {
                 caixa.closest('[data-bloco]').classList.toggle('rt-bloco--marcada', !todas);
             });
             atualizarBarra();
+        });
+
+        /* ── TROCAR O TIPO DE VÁRIOS ──────────────────────────────────────
+           Um roteiro colado sai quase todo como "fala", e acertar oito
+           blocos um a um é oito vezes o mesmo caminho: abrir menu, escolher,
+           esperar. Aqui é um menu só para todos os marcados.
+
+           As escritas vão em PARALELO. A regra da casa é gravar em série por
+           causa do adaptador local, que reescreve a coleção inteira a cada
+           salvar — mas isso vale para `substituir`, que troca a coleção, não
+           para `salvar`, cujo corpo roda inteiro sem await no meio. Medido
+           antes de escrever esta linha: oito gravações simultâneas, as oito
+           chegaram, nenhuma linha perdida. */
+        content.querySelector('#rt-sel-tipo')?.addEventListener('click', (e) => {
+            e.stopPropagation();   // ver a explicação no menu de status
+            const escolhidos = blocos.filter(b => selecionadas.has(b.id));
+            if (!escolhidos.length) return;
+
+            /* Seção fica de fora: ela é só título, e virar seção esconderia o
+               texto de todos os blocos de uma vez — um susto coletivo. Ela
+               continua no menu de UM bloco, que é como divisória se cria. */
+            abrirMenu(e.target.closest('button'), TIPOS.filter(t => t.id !== 'secao').map(t => ({
+                id: `lote-${t.id}`, label: `Virar ${t.nome.toLowerCase()}`, icon: t.icone,
+                onClick: async () => {
+                    const antes = escolhidos.map(b => ({ ...b }));
+                    await Promise.all(escolhidos.map(b => store.blocos.salvar({ ...b, tipo: t.id })));
+
+                    const ids = new Set(escolhidos.map(b => b.id));
+                    blocos = blocos.map(b => ids.has(b.id) ? { ...b, tipo: t.id } : b);
+                    selecionadas.clear();
+                    selecionando = false;
+
+                    toast(`${escolhidos.length} bloco${escolhidos.length > 1 ? 's viraram' : ' virou'} ${t.nome.toLowerCase()}.`, {
+                        label: 'Desfazer',
+                        onClick: async () => {
+                            await Promise.all(antes.map(b => store.blocos.salvar(b)));
+                            const volta = new Map(antes.map(b => [b.id, b]));
+                            blocos = blocos.map(b => volta.get(b.id) || b);
+                            desenhar();
+                        },
+                    });
+                    desenhar();
+                },
+            })));
         });
 
         content.querySelector('#rt-sel-excluir')?.addEventListener('click', async (e) => {
@@ -550,20 +599,33 @@ export const renderRoteiro = async (container, conteudoId) => {
                     {
                         id: 'excluir', label: 'Excluir bloco', icon: 'trash-2',
                         variante: 'danger', separadorAntes: true,
+                        /* ── EXCLUIR NÃO RENUMERA ─────────────────────────
+                           Aqui havia um renumerar() seguido de gravar TODOS os
+                           blocos restantes, um a um. Num roteiro de catorze
+                           falas, apagar uma custava catorze idas ao banco — e
+                           no banco de verdade cada ida é uma volta de rede.
+                           Era esse o atraso.
+
+                           E era trabalho para nada: tirar o bloco de ordem 30
+                           deixa 10, 20, 40, 50… que continua estritamente
+                           crescente. O buraco não aparece em lugar nenhum —
+                           ordenar() só compara, e proximaOrdem() usa o maior.
+                           Renumerar existe para MOVER, onde a ordem realmente
+                           muda de dono.
+
+                           Desfazer também ficou de uma escrita só: o bloco
+                           volta com a ordem que tinha, e ela ainda cabe no
+                           buraco que ele deixou. */
                         onClick: async () => {
                             const apagado = { ...b };
-                            const posicao = i;
                             await store.blocos.excluir(id);
-                            blocos = renumerar(blocos.filter(x => x.id !== id));
-                            for (const x of blocos) await store.blocos.salvar(x);
+                            blocos = blocos.filter(x => x.id !== id);
 
                             toast('Bloco excluído.', {
                                 label: 'Desfazer',
                                 onClick: async () => {
-                                    blocos = renumerar([
-                                        ...blocos.slice(0, posicao), apagado, ...blocos.slice(posicao),
-                                    ]);
-                                    for (const x of blocos) await store.blocos.salvar(x);
+                                    await store.blocos.salvar(apagado);
+                                    blocos = ordenar([...blocos, apagado]);
                                     desenhar();
                                 },
                             });
@@ -924,9 +986,11 @@ export const renderRoteiro = async (container, conteudoId) => {
         const ids = new Set(apagados.map(b => b.id));
         const comentarios = historico.filter(r => ids.has(r.bloco_id)).map(r => ({ ...r }));
 
+        // Sem renumerar, pelo mesmo motivo do menu de um bloco só: o buraco
+        // na sequência não incomoda ninguém, e gravar o roteiro inteiro para
+        // fechá-lo era o atraso que a exclusão tinha.
         for (const b of apagados) await store.blocos.excluir(b.id);
-        blocos = renumerar(blocos.filter(x => !ids.has(x.id)));
-        for (const x of blocos) await store.blocos.salvar(x);
+        blocos = blocos.filter(x => !ids.has(x.id));
 
         /* ── O ROTEIRO ACABOU: A CONVERSA ACABA JUNTO ────────────────────
            Enquanto sobra um bloco, o histórico continua de pé — ele fala de
@@ -964,6 +1028,7 @@ export const renderRoteiro = async (container, conteudoId) => {
             label: 'Desfazer',
             onClick: async () => {
                 for (const b of apagados) await store.blocos.salvar(b);
+                blocos = ordenar([...blocos, ...apagados]);
                 // Os comentários voltam a apontar para a fala que criticam.
                 for (const r of comentarios) await store.retornos.salvar(r);
                 // E a conversa inteira volta, com o estado que o conteúdo
@@ -1577,10 +1642,14 @@ const barraSelecao = (blocos, selecionadas) => {
     return `
         <div class="rt-selecao">
             <span class="rt-selecao__conta" id="rt-sel-conta">
-                ${n ? `${n} de ${blocos.length} selecionada${n > 1 ? 's' : ''}` : 'Marque as falas que vão sair'}
+                ${n ? `${n} de ${blocos.length} selecionada${n > 1 ? 's' : ''}`
+                    : 'Marque as falas para trocar o tipo ou excluir'}
             </span>
             <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-sel-todas">
                 ${n === blocos.length ? 'Limpar seleção' : 'Selecionar todas'}
+            </button>
+            <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-sel-tipo" ${n ? '' : 'disabled'}>
+                <i data-lucide="shapes"></i> <span>${n > 1 ? `Trocar tipo de ${n}` : 'Trocar tipo'}</span>
             </button>
             <button class="ds-btn ds-btn--sm rt-btn-perigo" id="rt-sel-excluir" ${n ? '' : 'disabled'}>
                 <i data-lucide="trash-2"></i> <span>${n > 1 ? `Excluir ${n}` : 'Excluir'}</span>
