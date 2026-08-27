@@ -8,7 +8,7 @@ import { ordenar, duracaoTotal, temFala } from '../lib/roteiro.js';
 import { esteiraDe } from '../lib/etiquetas.js';
 import {
     esc, mesExtenso, somarMeses, chaveMes, semanaCurta, semanaAtual,
-    nomeDiaCurto, diaCurto, quandoRelativo, dataBR, hoje,
+    nomeDiaCurto, diaCurto, quandoRelativo, dataBR, hoje, semanasDoMes, somarDias,
 } from '../lib/formato.js';
 import { openDrawer, closeDrawer } from '../components/drawer.js';
 import { toast } from '../components/toast.js';
@@ -155,7 +155,7 @@ const desenharCronograma = (container, token, visao) => {
                             ? vazioHTML('calendar-off', 'Nada programado neste mês',
                                 'Quando a equipe publicar o cronograma, ele aparece aqui.')
                             : visao_ === 'calendario'
-                                ? calendarioHTML(doMes, mesVisto, token, comRoteiro, diaAberto)
+                                ? calendarioHTML(conteudos, mesVisto, token, comRoteiro, diaAberto)
                                 : semanas.map(s => semanaHTML(s, token, comRoteiro)).join('')}
                     </div>
 
@@ -399,27 +399,37 @@ const painelDoCliente = (conteudos, token, retornos) => {
    ═══════════════════════════════════════════════════════════════════════════ */
 const DIAS_CABECA = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom'];
 
-const calendarioHTML = (doMes, mes, token, comRoteiro, diaAberto) => {
-    const [ano, m] = mes.split('-').map(Number);
-    const diasNoMes = new Date(Date.UTC(ano, m, 0)).getUTCDate();
-    // getUTCDay devolve 0 no domingo; a grade começa na segunda.
-    const vazias = (new Date(Date.UTC(ano, m - 1, 1)).getUTCDay() + 6) % 7;
+const calendarioHTML = (conteudos, mes, token, comRoteiro, diaAberto) => {
+    /* ── A GRADE COBRE AS MESMAS SEMANAS QUE A LISTA ──────────────────────
+       Aqui morava um defeito que só aparecia em certos meses: a grade era
+       desenhada com os dias 1 a 31, e a lista por semana mostra as SEMANAS
+       inteiras que tocam o mês — a de agosto de 2026 começa em 27 de julho.
 
-    const doDia = (data) => doMes.filter(c => c.data === data);
-    const dataDe = (d) => `${mes}-${String(d).padStart(2, '0')}`;
+       Quem pagava eram as peças de FUNDO de funil, que caem na segunda e na
+       terça: elas apareciam na lista e sumiam do calendário sempre que a
+       primeira segunda do mês ficava no mês anterior. Duas telas do mesmo mês
+       mostrando conteúdos diferentes.
+
+       Agora a grade nasce de semanasDoMes(), a mesma função da lista. Os dias
+       vizinhos entram apagados, como em qualquer calendário — e clicáveis,
+       porque o conteúdo deles é real. */
+    const dias = semanasDoMes(mes).flatMap(segunda =>
+        Array.from({ length: 7 }, (_, i) => somarDias(segunda, i)));
+
+    const doDia = (data) => (conteudos || []).filter(c => c.data === data);
 
     // O primeiro dia com conteúdo abre sozinho quando ninguém escolheu nada.
-    const primeiroCheio = Array.from({ length: diasNoMes }, (_, i) => dataDe(i + 1))
-        .find(data => doDia(data).length);
+    const primeiroCheio = dias.find(data => doDia(data).length);
     const aberto = diaAberto || primeiroCheio;
     const daLista = aberto ? doDia(aberto) : [];
 
-    const casa = (d) => {
-        const data = dataDe(d);
+    const casa = (data) => {
         const pecas = doDia(data);
+        const d = Number(data.slice(8));
         const classes = [
             'cl-dia',
             pecas.length ? 'is-cheio' : '',
+            chaveMes(data) === mes ? '' : 'cl-dia--vizinho',
             data === hoje() ? 'is-hoje' : '',
             data === aberto ? 'is-aberto' : '',
         ].filter(Boolean).join(' ');
@@ -427,7 +437,7 @@ const calendarioHTML = (doMes, mes, token, comRoteiro, diaAberto) => {
         return `
             <button type="button" class="${classes}" data-dia="${data}"
                     ${pecas.length ? '' : 'disabled'}
-                    aria-label="${d} — ${pecas.length ? `${pecas.length} publicação${pecas.length > 1 ? 'ões' : ''}` : 'sem publicação'}">
+                    aria-label="${esc(dataBR(data))} — ${pecas.length ? `${pecas.length} publicação${pecas.length > 1 ? 'ões' : ''}` : 'sem publicação'}">
                 <span class="cl-dia__n">${d}</span>
                 <span class="cl-dia__pontos">
                     ${pecas.slice(0, 3).map(c => `<span class="vz-ponto vz-ponto--${esc(c.fase || '')}"></span>`).join('')}
@@ -440,8 +450,7 @@ const calendarioHTML = (doMes, mes, token, comRoteiro, diaAberto) => {
         <section class="cl-calendario">
             <div class="cl-grade" id="cl-grade">
                 ${DIAS_CABECA.map(d => `<span class="cl-grade__cabeca">${d}</span>`).join('')}
-                ${'<span class="cl-dia cl-dia--fora"></span>'.repeat(vazias)}
-                ${Array.from({ length: diasNoMes }, (_, i) => casa(i + 1)).join('')}
+                ${dias.map(casa).join('')}
             </div>
 
             ${aberto ? `
@@ -1295,7 +1304,9 @@ function injectStyles() {
             font-family: var(--font-sans); cursor: default;
             transition: border-color var(--dur-fast), background-color var(--dur-fast);
         }
-        .cl-dia--fora { background: transparent; }
+        /* Dia do mês vizinho: aparece, conta e clica — só não chama atenção.
+           Escondê-lo era o defeito; apagá-lo é a informação certa. */
+        .cl-dia--vizinho { opacity: 0.45; }
         .cl-dia__n { font-size: var(--text-sm); font-weight: 600; line-height: 1; }
         .cl-dia__pontos { display: flex; align-items: center; gap: 2px; min-height: 8px; }
         .cl-dia__mais { font-size: 9px; font-weight: 700; color: var(--text-disabled); }
