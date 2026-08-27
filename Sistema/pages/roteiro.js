@@ -4,7 +4,7 @@ import { abrirMenu } from '../components/menu.js';
 import { openDrawer, closeDrawer } from '../components/drawer.js';
 import { lerRoteiroUnico, lerCarrossel } from '../lib/importar.js';
 import { toast } from '../components/toast.js';
-import { acharPorEndereco, caminhoDoConteudo } from '../lib/rotas.js';
+import { acharPorEndereco, caminhoDoConteudo, parecidosComEndereco } from '../lib/rotas.js';
 import { esc, dataBR, quandoRelativo, nomeDia, duracao, segundosDeFala } from '../lib/formato.js';
 import { objetivo, classificar, nomeFase } from '../lib/diretorio.js';
 import { retornosDe } from '../lib/cronograma.js';
@@ -66,12 +66,30 @@ export const renderRoteiro = async (container, conteudoId) => {
         }
     }
     if (!c) {
+        /* O endereço tem o título dentro dele, então "não achei" é quase
+           sempre "o título mudou" — e o conteúdo está ali do lado. */
+        const parecidos = parecidosComEndereco(conteudos, conteudoId);
         const { content } = renderShell(container, {
             path: '/', title: 'Conteúdo não encontrado',
-            subtitle: 'Ele pode ter sido excluído.',
+            subtitle: parecidos.length
+                ? 'O título pode ter mudado depois que este link foi criado.'
+                : 'Ele pode ter sido excluído, ou o endereço está errado.',
             actions: `<a href="/" class="ds-btn ds-btn--primary">Voltar aos clientes</a>`,
         });
-        content.innerHTML = '';
+        content.innerHTML = parecidos.length ? `
+            <article class="ds-card vz-secao">
+                <h2 class="ds-card-title">Talvez seja um destes</h2>
+                <div class="rt-parecidos">
+                    ${parecidos.map(x => `
+                        <a class="rt-parecido" href="${esc(caminhoDoConteudo(x))}">
+                            <span class="vz-ponto vz-ponto--${esc(x.fase || '')}"></span>
+                            <span class="rt-parecido__titulo">${esc(x.titulo)}</span>
+                            <span class="rt-parecido__data">${esc(dataBR(x.data))}</span>
+                            <i data-lucide="chevron-right"></i>
+                        </a>`).join('')}
+                </div>
+            </article>` : '';
+        if (window.lucide) lucide.createIcons();
         return;
     }
 
@@ -2023,6 +2041,18 @@ const ESTILOS = `
 .rt-chips { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 /* flex-wrap: com quatro botões, o último era cortado pela borda numa tela de
    trabalho estreita — o mesmo defeito que já custou a barra do celular. */
+.rt-parecidos { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-3); }
+.rt-parecido {
+    display: flex; align-items: center; gap: var(--space-3);
+    min-height: 46px; padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-md); background: var(--surface-1);
+    color: var(--text-primary); text-decoration: none;
+}
+.rt-parecido:hover { background: var(--surface-3); }
+.rt-parecido__titulo { flex: 1; font-size: var(--text-sm); font-weight: 600; }
+.rt-parecido__data { font-size: var(--text-xs); color: var(--text-tertiary); white-space: nowrap; }
+.rt-parecido i, .rt-parecido svg { width: 15px; height: 15px; color: var(--text-disabled); }
+
 .rt-orfao {
     display: flex; align-items: flex-start; gap: var(--space-2); margin: 0 0 var(--space-4);
     padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);

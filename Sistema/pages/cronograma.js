@@ -412,9 +412,11 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
             }));
 
         content.querySelectorAll('[data-conteudo]').forEach(el =>
-            el.addEventListener('click', () => {
-                const alvo = conteudos.find(x => x.id === el.dataset.conteudo);
-                if (alvo) navegar(caminhoDoConteudo(alvo));
+            el.addEventListener('click', (e) => {
+                /* O cartão é um link: o roteador cuida do clique normal e o
+                   navegador cuida do botão do meio. Aqui só resta impedir que
+                   um clique que veio de um ARRASTE navegue. */
+                if (e.defaultPrevented) return;
             }));
 
         content.querySelector('#cr-liberar')?.addEventListener('click',
@@ -535,9 +537,17 @@ const cartaoHTML = (c, todos) => {
        cartão abre, a caixa guarda, e nenhum dos dois alcança a área do outro. */
     return `
         <div class="cr-item">
-        <button class="vz-conteudo ${etapa ? `cr-etapa cr-etapa--${esc(etapa.tom)}` : ''}"
-                data-conteudo="${esc(c.id)}"
-                data-arrastavel="${esc(c.id)}" data-solta="${esc(c.id)}">
+        ${/* LINK DE VERDADE, e não botão: é o que dá botão do meio, ctrl+clique
+              e "abrir em nova aba" no menu do botão direito — de graça, porque
+              o roteador já respeita essas teclas (ver app.js).
+
+              draggable="false" porque o navegador arrasta link sozinho, com
+              fantasma e tudo, e isso brigaria com o arraste de verdade do
+              cartão. O arraste nosso é por evento de ponteiro e continua. */''}
+        <a class="vz-conteudo ${etapa ? `cr-etapa cr-etapa--${esc(etapa.tom)}` : ''}"
+           href="${esc(caminhoDoConteudo(c))}" draggable="false"
+           data-conteudo="${esc(c.id)}"
+           data-arrastavel="${esc(c.id)}" data-solta="${esc(c.id)}">
             <span class="vz-fita vz-fita--${esc(c.fase || '')}"></span>
             <div class="vz-conteudo__corpo">
                 <div class="vz-conteudo__topo">
@@ -563,7 +573,7 @@ const cartaoHTML = (c, todos) => {
                 ${seloDeslocado(desl)}
             </div>
             <i class="cr-seta" data-lucide="chevron-right"></i>
-        </button>
+        </a>
 
         <button class="cr-guardar" data-guardar="${esc(c.id)}"
                 title="Mandar para o banco de temas" aria-label="Mandar para o banco de temas">

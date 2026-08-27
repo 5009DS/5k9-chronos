@@ -52,6 +52,31 @@ export const acharPorEndereco = (conteudos, referencia) => {
     return { conteudo: achado, exato: !!doMes.length };
 };
 
+/* ── QUANDO O ENDEREÇO NÃO ACHA NADA ──────────────────────────────────────
+   Título muda, e o endereço velho para de casar. Antes isso terminava numa
+   tela morta: "Conteúdo não encontrado. Ele pode ter sido excluído." — a
+   frase mais assustadora possível para quem acabou de ver o link funcionar.
+
+   Agora a tela oferece os parecidos. A conta é boba de propósito: quantas
+   palavras o apelido do endereço tem em comum com o apelido do título. Duas
+   já bastam para trazer o conteúdo renomeado para a frente, e palavra de até
+   três letras fica de fora porque "de", "que" e "por" ligam tudo com tudo. */
+export const parecidosComEndereco = (conteudos, referencia) => {
+    const palavras = new Set(String(referencia || '').split('/').pop()
+        .split('-').filter(p => p.length > 3));
+    if (!palavras.size) return [];
+
+    return (conteudos || [])
+        .map(c => ({
+            c,
+            comuns: apelidoDeTexto(c.titulo).split('-').filter(p => palavras.has(p)).length,
+        }))
+        .filter(x => x.comuns >= 2)
+        .sort((a, b) => b.comuns - a.comuns)
+        .slice(0, 6)
+        .map(x => x.c);
+};
+
 /** O endereço canônico de um conteúdo, o que a barra deve mostrar. */
 export const caminhoDoConteudo = (c) => `/conteudo/${apelidoDeConteudo(c)}`;
 
