@@ -81,6 +81,13 @@ const FORMATOS = [
    mês corrente. */
 const ULTIMO = new Map();
 
+/** Quantos meses separam duas chaves de mês. Negativo = a primeira é antes. */
+const distanciaEmMeses = (a, b) => {
+    const [anoA, mesA] = String(a).split('-').map(Number);
+    const [anoB, mesB] = String(b).split('-').map(Number);
+    return (anoA - anoB) * 12 + (mesA - mesB);
+};
+
 /* ── EM QUE MÊS A TELA ABRE ───────────────────────────────────────────────
    No mês corrente, sempre que ele tiver conteúdo. Abria no mês do PRÓXIMO
    conteúdo a publicar, e isso jogava para setembro no dia 23 de agosto só
@@ -199,6 +206,17 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
            que não aparece não pode continuar filtrando. Sem esta linha, quem
            filtrasse carrossel em agosto e trocasse para um setembro só de
            vídeo via o mês inteiro vazio, sem nada na tela para desfazer. */
+        /* ── NADA SOME EM SILÊNCIO ────────────────────────────────────────
+          Esta tela mostra UM mês, e ainda filtra dentro dele. A do cliente
+          lista tudo que está pendente, de qualquer mês. As duas estão certas
+          e mostram coisas diferentes — e essa diferença já pareceu perda de
+          dado: um carrossel de setembro aparecia no painel dele e "sumia" do
+          cronograma aberto em agosto.
+
+          A partir daqui a tela diz o que está escondendo e por quê, com o
+          desfazer ao lado. Filtro que esconde sem avisar é indistinguível de
+          conteúdo apagado, e a diferença entre as duas coisas é grande demais
+          para depender de a pessoa lembrar que filtrou. */
         const doisFormatos = porFormato.video > 0 && porFormato.carrossel > 0;
         if (!doisFormatos && formato !== 'tudo') { formato = 'tudo'; lembrar(); }
 
@@ -207,6 +225,13 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
            terceira cópia da mesma pergunta neste arquivo. */
         const passa = (c) => (filtro === 'tudo' || c.status === filtro)
                           && (formato === 'tudo' || esteiraDe(c.formato) === formato);
+
+        /* A conta vem DEPOIS do predicado — ela depende dele. Escrita antes,
+           quebrava a tela inteira com "Cannot access 'passa' before
+           initialization": const não é hoisted como função. */
+        const visiveisNoMes = doMes.filter(passa);
+        const escondidos = doMes.length - visiveisNoMes.length;
+        const foraDoMes = conteudos.length - doMes.length;
 
         content.innerHTML = `
             <article class="ds-card vz-barra">
@@ -244,18 +269,56 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
                     </button>
                 </article>` : ''}
 
+            ${escondidos ? `
+                <p class="cr-escondidos">
+                    <i data-lucide="filter"></i>
+                    <span><strong>${escondidos}</strong> conteúdo${escondidos > 1 ? 's' : ''} deste mês
+                    ${escondidos > 1 ? 'estão escondidos' : 'está escondido'} pelo filtro.</span>
+                    <button type="button" class="ds-btn ds-btn--ghost ds-btn--sm" id="cr-limpar-filtros">
+                        Mostrar tudo
+                    </button>
+                </p>` : ''}
+
             <div class="cr-semanas">
                 ${doMes.length
                     ? semanas.map(s => semanaHTML(s, passa, conteudos)).join('')
                     : vazioHTML('calendar-plus', 'Nenhum conteúdo neste mês',
-                        'Crie o primeiro e a semana começa a se montar sozinha.',
-                        `<button class="ds-btn ds-btn--primary" id="cr-novo-vazio">Novo conteúdo</button>`)}
+                        foraDoMes
+                            // vazioHTML escapa este texto: nada de HTML aqui.
+                            ? `Este cliente tem ${foraDoMes} conteúdo${foraDoMes > 1 ? 's' : ''} em outros meses.`
+                            : 'Crie o primeiro e a semana começa a se montar sozinha.',
+                        (foraDoMes
+                            ? `<button class="ds-btn ds-btn--ghost" id="cr-achar">
+                                 <i data-lucide="calendar-search"></i> Ir para o mês mais próximo com conteúdo
+                               </button>`
+                            : '')
+                        + `<button class="ds-btn ds-btn--primary" id="cr-novo-vazio">Novo conteúdo</button>`)}
             </div>
         `;
 
         // ── Eventos ─────────────────────────────────────────────────────
         content.querySelector('#cr-anterior').addEventListener('click', () => { mes = somarMeses(mes, -1); lembrar(); desenhar(); });
         content.querySelector('#cr-proximo').addEventListener('click', () => { mes = somarMeses(mes, 1); lembrar(); desenhar(); });
+
+        content.querySelector('#cr-limpar-filtros')?.addEventListener('click', () => {
+            filtro = 'tudo';
+            formato = 'tudo';
+            lembrar();
+            desenhar();
+        });
+
+        /* Vai para o mês com conteúdo mais perto do que está aberto — para a
+           frente ou para trás, o que estiver mais próximo. */
+        content.querySelector('#cr-achar')?.addEventListener('click', () => {
+            const meses = [...new Set(conteudos.map(c => chaveMes(c.data)))]
+                .sort((a, b) => Math.abs(distanciaEmMeses(a, mes)) - Math.abs(distanciaEmMeses(b, mes)));
+            if (!meses.length) return;
+            mes = meses[0];
+            filtro = 'tudo';
+            formato = 'tudo';
+            lembrar();
+            desenhar();
+        });
 
         content.querySelector('#cr-formatos')?.addEventListener('click', (e) => {
             const b = e.target.closest('[data-formato]');
@@ -1510,6 +1573,18 @@ const ESTILOS = `
     background: color-mix(in oklch, var(--accent) 22%, transparent);
     color: var(--accent);
 }
+
+/* O aviso de filtro fica ENTRE a barra e as semanas, onde o olho passa antes
+   de concluir que o mês está vazio. Discreto, mas com o desfazer junto. */
+.cr-escondidos {
+    display: flex; align-items: center; gap: var(--space-3); margin: 0 0 var(--space-4);
+    padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
+    background: var(--surface-2); border: 1px solid var(--border-subtle);
+    font-size: var(--text-sm); color: var(--text-secondary);
+}
+.cr-escondidos i, .cr-escondidos svg { width: 15px; height: 15px; flex-shrink: 0; color: var(--text-tertiary); }
+.cr-escondidos span { flex: 1; }
+.cr-escondidos strong { color: var(--text-primary); }
 
 .cr-liberar {
     display: flex; align-items: center; justify-content: space-between;
