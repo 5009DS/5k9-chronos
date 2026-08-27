@@ -311,15 +311,28 @@ const painelDoCliente = (conteudos, token, retornos) => {
        "esperando você". Ver lib/consistencia.js. */
     const esperando = conteudos.filter(c => precisaDoCliente(c, retornos));
 
+    /* ── O QUE JÁ ESTÁ PRONTO ─────────────────────────────────────────────
+       Ficava perdido no meio de "em produção", com uma etiqueta cinza igual às
+       outras — a peça mais alegre da tela tratada como as que ainda dão
+       trabalho. Ela ganhou bloco próprio: é a única boa notícia que a tela
+       tem, e ela não pede nada de ninguém.
+
+       Vale pelo status OU pela etapa. As duas dizem a mesma coisa, e quem
+       marcou uma sem a outra continua vendo a peça no lugar certo. */
+    const ehPronto = (c) => c.status === 'pronto'
+                         || etapaAtual(c.etiquetas)?.nome === 'pronto para publicar';
+    const prontos = conteudos.filter(c => !esperando.includes(c) && ehPronto(c));
+
     /* "Em produção" é o que já passou por ele e ainda não foi ao ar. Publicado
-       sai da lista: virou passado, e o lugar dele é o mês. */
+       sai da lista: virou passado, e o lugar dele é o mês. E pronto sai também
+       — ele tem bloco próprio logo acima. */
     const andando = conteudos.filter(c => {
         const etapa = etapaAtual(c.etiquetas);
-        if (!etapa || esperando.includes(c)) return false;
+        if (!etapa || esperando.includes(c) || prontos.includes(c)) return false;
         return etapa.nome !== 'publicado';
     });
 
-    if (!esperando.length && !andando.length) return '';
+    if (!esperando.length && !andando.length && !prontos.length) return '';
 
     /* ── O QUE É CADA PEÇA, SEM PRECISAR ABRIR ────────────────────────────
        A lista dizia em que PÉ a peça está ("a diagramar", "gravado") e não
@@ -360,6 +373,17 @@ const painelDoCliente = (conteudos, token, retornos) => {
                     </h2>
                     <p class="cl-bloco__dica">Abra, leia e diga se pode seguir.</p>
                     ${esperando.map(c => linha(c, false)).join('')}
+                </div>` : ''}
+
+            ${prontos.length ? `
+                <div class="cl-bloco cl-bloco--pronto">
+                    <h2 class="cl-bloco__titulo">
+                        <i data-lucide="rocket"></i>
+                        Pronto para publicar
+                        <span class="cl-bloco__conta">${prontos.length}</span>
+                    </h2>
+                    <p class="cl-bloco__dica">Está tudo aprovado e finalizado. Agora é só a data chegar.</p>
+                    ${prontos.map(c => linha(c, false)).join('')}
                 </div>` : ''}
 
             ${andando.length ? `
@@ -1567,6 +1591,30 @@ function injectStyles() {
             background: var(--surface-2);
         }
         .cl-bloco--voce { border-color: var(--accent-border); background: var(--accent-muted); }
+
+        /* ── O bloco do "já pode postar" ──────────────────────────────────
+           Verde do design system, e uma pulsação lenta na borda. A animação é
+           de 3 segundos e mexe só na sombra: nada salta, nada muda de posição,
+           e o olho pega o movimento sem ser puxado por ele. É a diferença
+           entre "olha isso" e um alarme.
+
+           Quem pediu menos movimento no sistema operacional não recebe
+           nenhum: a borda verde continua lá, parada, dizendo a mesma coisa. */
+        .cl-bloco--pronto {
+            border-color: var(--success); background: var(--success-muted);
+            animation: cl-respira 3s ease-in-out infinite;
+        }
+        .cl-bloco--pronto .cl-bloco__titulo { color: var(--success); }
+        .cl-bloco--pronto .cl-bloco__conta {
+            background: var(--success); color: var(--surface-0);
+        }
+        @keyframes cl-respira {
+            0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--success) 40%, transparent); }
+            50%      { box-shadow: 0 0 0 6px color-mix(in oklch, var(--success) 0%, transparent); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .cl-bloco--pronto { animation: none; }
+        }
         .cl-bloco__titulo {
             display: flex; align-items: center; gap: var(--space-2); margin: 0;
             font-size: var(--text-sm); font-weight: 700;
