@@ -7,7 +7,7 @@ import {
     apelidoSugerido, criticarApelido, temSufixoAleatorio, linkDoCliente,
 } from '../lib/apelido.js';
 import { toast } from '../components/toast.js';
-import { navegar } from '../lib/rotas.js';
+import { navegar, caminhoDoConteudo } from '../lib/rotas.js';
 import { marcarAtivo } from '../lib/ui.js';
 import {
     esc, mesExtenso, somarMeses, chaveMes, semanaCurta, semanaAtual,
@@ -326,7 +326,7 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
                             },
                         })),
                     { id: 'abrir', label: 'Abrir o roteiro', icon: 'file-text', separadorAntes: true,
-                      onClick: () => navegar(`/conteudo/${alvo.id}`) },
+                      onClick: () => navegar(caminhoDoConteudo(alvo)) },
                 ]);
             }));
 
@@ -349,7 +349,10 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
             }));
 
         content.querySelectorAll('[data-conteudo]').forEach(el =>
-            el.addEventListener('click', () => navegar(`/conteudo/${el.dataset.conteudo}`)));
+            el.addEventListener('click', () => {
+                const alvo = conteudos.find(x => x.id === el.dataset.conteudo);
+                if (alvo) navegar(caminhoDoConteudo(alvo));
+            }));
 
         content.querySelector('#cr-liberar')?.addEventListener('click',
             () => abrirLiberar(cliente, rascunhos, recarregar));

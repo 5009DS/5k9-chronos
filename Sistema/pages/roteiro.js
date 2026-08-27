@@ -4,6 +4,7 @@ import { abrirMenu } from '../components/menu.js';
 import { openDrawer, closeDrawer } from '../components/drawer.js';
 import { lerRoteiroUnico, lerCarrossel } from '../lib/importar.js';
 import { toast } from '../components/toast.js';
+import { acharPorEndereco, caminhoDoConteudo } from '../lib/rotas.js';
 import { esc, dataBR, quandoRelativo, nomeDia, duracao, segundosDeFala } from '../lib/formato.js';
 import { objetivo, classificar, nomeFase } from '../lib/diretorio.js';
 import { retornosDe } from '../lib/cronograma.js';
@@ -53,7 +54,17 @@ export const renderRoteiro = async (container, conteudoId) => {
         store.blocos.listar(), store.retornos.listar(),
     ]);
 
-    const c = conteudos.find(x => x.id === conteudoId);
+    /* O endereço pode ser o id cru (link antigo), o apelido com o mês certo,
+       ou o apelido de um mês que a peça já não ocupa. Os três abrem; quando o
+       endereço não é o canônico, a barra se corrige sem recarregar nada — o
+       link velho funciona E a pessoa passa a ver o novo. */
+    const { conteudo: c, exato } = acharPorEndereco(conteudos, conteudoId);
+    if (c) {
+        const canonico = caminhoDoConteudo(c);
+        if (!exato && window.location.pathname !== canonico) {
+            history.replaceState({}, '', canonico);
+        }
+    }
     if (!c) {
         const { content } = renderShell(container, {
             path: '/', title: 'Conteúdo não encontrado',

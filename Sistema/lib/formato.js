@@ -183,6 +183,41 @@ export const semAcento = (s) => String(s ?? '')
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '');
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   ENDEREÇO LEGÍVEL
+
+   /conteudo/9cf09abe-3eec-4b0b-bbb3-6e10202d40ef não diz nada a ninguém. O
+   mesmo conteúdo em /conteudo/ago/como-saber-se-voce-esta-perdendo-gordura diz
+   duas coisas antes de a página abrir: quando sai e do que se trata.
+
+   ── O QUE O MÊS RESOLVE E O QUE ELE NÃO RESOLVE ──────────────────────────
+   Ele informa e separa a maior parte dos homônimos — dois "3 erros comuns" em
+   meses diferentes viram endereços diferentes. NÃO resolve dois no mesmo mês,
+   nem o mesmo mês em anos diferentes, e não é estável: mover a peça de agosto
+   para novembro muda o endereço dela.
+
+   Por isso o endereço é uma ETIQUETA, não uma chave. Quem resolve de verdade
+   é a busca (ver lib/rotas.js): o id antigo continua abrindo, o apelido de um
+   mês antigo continua abrindo, e a barra de endereço se corrige sozinha. O
+   preço de um link bonito não pode ser um link que morre.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const MAX_APELIDO = 80;
+
+/** Texto virado endereço: sem acento, sem maiúscula, o resto vira hífen. */
+export const apelidoDeTexto = (texto) => (semAcento(texto)
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, MAX_APELIDO)
+    .replace(/-+$/, '')) || 'sem-titulo';
+
+/** A abreviação do mês de uma data ISO: "2026-08-27" vira "ago".
+    Não confundir com mesCurto(), que recebe CHAVE de mês e devolve "ago/26". */
+export const abrevMes = (iso) => MESES_CURTOS[Number(String(iso || '').slice(5, 7)) - 1] || '';
+
+/** O apelido completo de um conteúdo: "ago/como-saber-se-voce-esta...". */
+export const apelidoDeConteudo = (c) =>
+    `${abrevMes(c?.data)}/${apelidoDeTexto(c?.titulo)}`;
+
 /** Escapa texto vindo do usuário antes de entrar em template de HTML. */
 export const esc = (texto) => String(texto ?? '').replace(/[&<>"']/g,
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

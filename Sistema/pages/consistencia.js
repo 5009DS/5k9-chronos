@@ -1,7 +1,7 @@
 import { store } from '../store.js';
 import { renderShell } from '../components/pageshell.js';
 import { toast } from '../components/toast.js';
-import { navegar } from '../lib/rotas.js';
+import { navegar, caminhoDoConteudo } from '../lib/rotas.js';
 import { esc, dataBR } from '../lib/formato.js';
 import { vazioHTML } from '../lib/pecas.js';
 import { auditar, resumoAuditoria } from '../lib/consistencia.js';
@@ -153,7 +153,10 @@ export const renderConsistencia = async (container) => {
     }
 
     content.querySelectorAll('[data-ir]').forEach(b =>
-        b.addEventListener('click', () => navegar(`/conteudo/${b.dataset.ir}`)));
+        b.addEventListener('click', () => {
+            const alvo = conteudos.find(x => x.id === b.dataset.ir);
+            if (alvo) navegar(caminhoDoConteudo(alvo));
+        }));
 
     content.querySelectorAll('[data-consertar]').forEach(b =>
         b.addEventListener('click', () => {

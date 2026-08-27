@@ -3,7 +3,7 @@ import { renderShell } from '../components/pageshell.js';
 import { abrirFormulario } from '../components/campos.js';
 import { abrirMenu } from '../components/menu.js';
 import { toast } from '../components/toast.js';
-import { navegar } from '../lib/rotas.js';
+import { navegar, caminhoDoConteudo } from '../lib/rotas.js';
 import { openDrawer, closeDrawer } from '../components/drawer.js';
 import { lerCartela, PONTE_LIGADA } from '../lib/gestor.js';
 import { linkDoCliente } from '../lib/apelido.js';
@@ -98,7 +98,10 @@ export const renderPainel = async (container) => {
         el.addEventListener('click', () => navegar(`/cliente/${el.dataset.abrir}`)));
 
     content.querySelectorAll('[data-conteudo]').forEach(el =>
-        el.addEventListener('click', () => navegar(`/conteudo/${el.dataset.conteudo}`)));
+        el.addEventListener('click', () => {
+            const alvo = conteudos.find(x => x.id === el.dataset.conteudo);
+            if (alvo) navegar(caminhoDoConteudo(alvo));
+        }));
 
     content.querySelectorAll('[data-copiar]').forEach(botao =>
         botao.addEventListener('click', (e) => {

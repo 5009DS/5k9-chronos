@@ -41,7 +41,11 @@ theme.init();
 const ROTAS = [
     ['/',                  () => renderPainel(app)],
     ['/cliente/:id',       (id) => renderCronograma(app, id)],
+    /* Duas rotas para a mesma tela, e as duas continuam valendo: o endereço de
+       hoje é /conteudo/ago/como-saber-..., e o id cru é o que está em todo
+       link salvo antes disto. Quem resolve qual é qual é acharPorEndereco. */
     ['/conteudo/:id',      (id) => renderRoteiro(app, id)],
+    ['/conteudo/:mes/:apelido', (mes, apelido) => renderRoteiro(app, `${mes}/${apelido}`)],
     ['/quadro/:id',        (id) => renderQuadro(app, id)],
     ['/producao/:id',      (id) => renderProducao(app, id)],
     ['/conferencia',       () => renderConsistencia(app)],

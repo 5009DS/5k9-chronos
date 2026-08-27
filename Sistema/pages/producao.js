@@ -1,7 +1,7 @@
 import { store } from '../store.js';
 import { renderShell } from '../components/pageshell.js';
 import { toast } from '../components/toast.js';
-import { navegar } from '../lib/rotas.js';
+import { navegar, caminhoDoConteudo } from '../lib/rotas.js';
 import { esc, dataBR, diaCurto, nomeDiaCurto } from '../lib/formato.js';
 import { chipFase, vazioHTML, STATUS } from '../lib/pecas.js';
 import { etapasDa, etapaAtual, esteiraDe, injectEstilosEtiqueta } from '../lib/etiquetas.js';
@@ -170,7 +170,10 @@ export const renderProducao = async (container, clienteId) => {
             </article>`;
 
         content.querySelectorAll('[data-abrir]').forEach(b =>
-            b.addEventListener('click', () => navegar(`/conteudo/${b.dataset.abrir}`)));
+            b.addEventListener('click', () => {
+                const alvo = conteudos.find(x => x.id === b.dataset.abrir);
+                if (alvo) navegar(caminhoDoConteudo(alvo));
+            }));
 
         content.querySelector('#pr-troca')?.addEventListener('click', (e) => {
             const b = e.target.closest('[data-esteira]');

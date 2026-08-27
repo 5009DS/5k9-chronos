@@ -2,7 +2,7 @@ import { store } from '../store.js';
 import { abrirBancoDeTemas } from './cronograma.js';
 import { renderShell } from '../components/pageshell.js';
 import { toast } from '../components/toast.js';
-import { navegar } from '../lib/rotas.js';
+import { navegar, caminhoDoConteudo } from '../lib/rotas.js';
 import { ativarArraste } from '../lib/arrastar.js';
 import { nomeFase, noDiaCerto } from '../lib/diretorio.js';
 import { chipEtiqueta, injectEstilosEtiqueta } from '../lib/etiquetas.js';
@@ -355,7 +355,10 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
         content.querySelector('#qd-proximo').addEventListener('click', () => { mes = somarMeses(mes, 1); selecionado = null; desenhar(); });
 
         content.querySelectorAll('[data-abrir]').forEach(b =>
-            b.addEventListener('click', () => navegar(`/conteudo/${b.dataset.abrir}`)));
+            b.addEventListener('click', () => {
+                const alvo = conteudos.find(x => x.id === b.dataset.abrir);
+                if (alvo) navegar(caminhoDoConteudo(alvo));
+            }));
 
         content.querySelectorAll('[data-fixar]').forEach(b =>
             b.addEventListener('click', async () => {
