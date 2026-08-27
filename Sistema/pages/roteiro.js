@@ -76,7 +76,15 @@ export const renderRoteiro = async (container, conteudoId) => {
     }
 
     const cliente = clientes.find(x => x.id === c.cliente_id);
-    let blocos = ordenar(todosBlocos.filter(b => b.conteudo_id === conteudoId));
+    /* ── conteudoId É O ENDEREÇO, NÃO A CHAVE ─────────────────────────────
+       Desde que o endereço virou legível, `conteudoId` chega aqui como
+       "set/por-que-medicamento-nao-substitui..." — e este filtro comparava
+       essa string com a chave estrangeira dos blocos. Nenhum bloco casava, e
+       o roteiro abria VAZIO: o texto estava no banco o tempo todo.
+
+       Daqui para baixo, quem manda é `c.id`. O endereço serve para achar o
+       conteúdo, uma vez, e nunca mais. */
+    let blocos = ordenar(todosBlocos.filter(b => b.conteudo_id === c.id));
     const historico = retornosDe(retornos, c.id);
     /* A leitura das conversas sai de lib/conversa.js e é a MESMA que a tela do
        cliente usa. Duas leituras do mesmo histórico acabariam discordando, e o
@@ -97,12 +105,20 @@ export const renderRoteiro = async (container, conteudoId) => {
        Sem conversa, o sistema não mexe em nada. A contradição continua sendo
        apontada em /conferencia, com o conserto ao lado, onde a decisão é de
        quem está olhando. */
-    if (!blocos.length && historico.length) {
-        for (const r of historico) await store.retornos.excluir(r.id);
-        if (c.status !== 'rascunho') await store.conteudos.salvar({ ...c, status: 'rascunho' });
-        toast('Este conteúdo estava sem roteiro: a conversa e o estado antigos saíram junto.');
-        return renderRoteiro(container, conteudoId);
-    }
+    /* ── E POR QUE ESTA LIMPEZA DEIXOU DE APAGAR SOZINHA ──────────────────
+       Ela apagava a conversa inteira do cliente quando a lista de blocos vinha
+       vazia. A intenção era limpar órfão de verdade; o efeito, com o defeito
+       acima, era apagar histórico de um roteiro que existia e só não tinha
+       sido encontrado.
+
+       Uma lista vazia tem duas causas possíveis — não há nada, ou não foi
+       achado — e código nenhum consegue distinguir as duas de dentro. Entre
+       apagar por engano e deixar uma contradição de pé, a segunda é sempre a
+       escolha certa: a contradição aparece em /conferencia e alguém decide;
+       o apagado não volta.
+
+       Então a tela AVISA e não mexe em nada. */
+    const orfao = !blocos.length && historico.length;
 
     const fio = conversas(historico);
 
@@ -154,7 +170,7 @@ export const renderRoteiro = async (container, conteudoId) => {
     container.insertAdjacentHTML('beforeend', ESTILOS);
     injectEstilosEtiqueta();
 
-    const recarregar = () => renderRoteiro(container, conteudoId);
+    const recarregar = () => renderRoteiro(container, c.id);
 
     const desenhar = () => {
         const avisos = avisosDeEstrutura(blocos);
@@ -188,6 +204,14 @@ export const renderRoteiro = async (container, conteudoId) => {
                     </div>` : ''}
                 ${cartaoLeitura(c.fase, c.objetivo)}
                 ${avisosHTML(c.fase, c.objetivo)}
+                ${orfao ? `
+                    <p class="rt-orfao">
+                        <i data-lucide="triangle-alert"></i>
+                        <span>Este conteúdo tem <strong>${historico.length} registro${historico.length > 1 ? 's' : ''}</strong>
+                        de conversa com o cliente e nenhum bloco de roteiro. Confira em
+                        <a href="/conferencia">conferência</a> antes de decidir o que fazer —
+                        o sistema não apaga nada por conta própria.</span>
+                    </p>` : ''}
                 ${sugestaoDeFase(c, blocos)}
                 ${explicacaoObjetivo(c.fase, c.objetivo)}
                 ${c.nota ? `<p class="rt-interna"><i data-lucide="lock"></i> ${esc(c.nota)}</p>` : ''}
@@ -519,7 +543,7 @@ export const renderRoteiro = async (container, conteudoId) => {
         // ── Adicionar bloco ─────────────────────────────────────────────
         content.querySelectorAll('[data-novo]').forEach(botao =>
             botao.addEventListener('click', async () => {
-                const b = blocoNovo(conteudoId, botao.dataset.novo, blocos);
+                const b = blocoNovo(c.id, botao.dataset.novo, blocos);
                 await store.blocos.salvar(b);
                 blocos = ordenar([...blocos, b]);
                 desenhar();
@@ -1353,7 +1377,7 @@ export const renderRoteiro = async (container, conteudoId) => {
                         let ordem = modo === 'substituir' ? 10 : proximaOrdem(blocos);
                         for (const bloco of lido.blocos) {
                             await store.blocos.salvar({
-                                conteudo_id: conteudoId,
+                                conteudo_id: c.id,
                                 tipo: bloco.tipo,
                                 titulo: bloco.titulo || null,
                                 texto: bloco.texto || null,
@@ -1999,6 +2023,15 @@ const ESTILOS = `
 .rt-chips { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 /* flex-wrap: com quatro botões, o último era cortado pela borda numa tela de
    trabalho estreita — o mesmo defeito que já custou a barra do celular. */
+.rt-orfao {
+    display: flex; align-items: flex-start; gap: var(--space-2); margin: 0 0 var(--space-4);
+    padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
+    background: var(--warning-muted); color: var(--warning);
+    font-size: var(--text-sm); line-height: var(--leading-body);
+}
+.rt-orfao i, .rt-orfao svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 2px; }
+.rt-orfao a { color: inherit; font-weight: 600; }
+
 .rt-acoes-topo, .rt-status-troca { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 
 /* Excluir o roteiro fica ao lado de "Copiar texto" e precisa não se parecer
