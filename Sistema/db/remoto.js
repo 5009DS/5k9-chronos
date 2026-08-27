@@ -185,11 +185,48 @@ export const remoto = {
         s.auth.onAuthStateChange(() => fn());
     },
 
+    /* ── LER A TABELA INTEIRA, E NÃO A PRIMEIRA PÁGINA DELA ───────────────
+       Um select sem faixa não devolve necessariamente tudo: o PostgREST tem um
+       teto de linhas por resposta, configurado no projeto, e o que passa dele
+       simplesmente não vem. Sem erro, sem aviso — a resposta chega com 200 e
+       menos linhas do que existe.
+
+       O sintoma disso é cruel: um conteúdo existe no banco, aparece na tela do
+       cliente (que é montada por uma função, num select só, sem essa regra) e
+       some das telas internas, que leem a tabela. Duas telas, dois caminhos,
+       uma delas cortada em silêncio.
+
+       Então a leitura pede em páginas até a página vir curta. Uma tabela menor
+       que o teto continua custando UMA consulta — o laço só paga por si mesmo
+       quando existe mais dado do que cabe na primeira resposta.
+
+       A ordem é a mesma de antes, e ela é o que torna a paginação segura: sem
+       ORDER BY, o banco não promete estabilidade entre páginas e a mesma linha
+       pode aparecer duas vezes ou nenhuma. */
     listar: async (colecao) => {
         const s = await cliente();
-        const data = await executar(`listar(${colecao})`,
-            () => s.from(tabela(colecao)).select('*').order('criado_em', { ascending: false }));
-        return data || [];
+        const PAGINA = 1000;
+        const tudo = [];
+
+        for (let inicio = 0; ; inicio += PAGINA) {
+            const pagina = await executar(`listar(${colecao})`,
+                () => s.from(tabela(colecao)).select('*')
+                    .order('criado_em', { ascending: false })
+                    .range(inicio, inicio + PAGINA - 1));
+
+            if (!pagina?.length) break;
+            tudo.push(...pagina);
+            if (pagina.length < PAGINA) break;
+
+            /* Trava de segurança: uma coleção que não termina é sinal de que a
+               faixa não está sendo respeitada, e é melhor parar com o que se
+               tem do que girar para sempre num navegador. */
+            if (tudo.length >= 50_000) {
+                console.warn(`[db] listar(${colecao}): parei em ${tudo.length} linhas`);
+                break;
+            }
+        }
+        return tudo;
     },
 
     salvar: async (colecao, registro) => {
