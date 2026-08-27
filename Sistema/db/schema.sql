@@ -297,7 +297,8 @@ as $$
                             -- esteira de carrossel
                             'a diagramar', 'arte pronta', 'arte aguardando aprovação',
                             -- comuns
-                            'publicado', 'aguardando data', 'aguardando material'
+                            'pronto para publicar', 'publicado',
+                            'aguardando data', 'aguardando material'
                         ])
                    )), '[]'::jsonb))
             ) from itens i), '[]'::jsonb),
@@ -418,7 +419,7 @@ begin
                                 'roteiro em aprovação', 'roteiro aprovado',
                                 'a gravar', 'gravado', 'em edição', 'gravação aguardando aprovação',
                                 'a diagramar', 'arte pronta', 'arte aguardando aprovação',
-                                'revisão', 'publicado'
+                                'revisão', 'pronto para publicar', 'publicado'
                             )
                        -- A etapa que entra depende da esteira da peça, e quem
                        -- decide é o campo `formato`. O mesmo padrão vive em

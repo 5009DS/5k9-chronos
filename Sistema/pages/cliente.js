@@ -5,6 +5,7 @@ import { usarDiretorio, objetivo, nomeFase, fase } from '../lib/diretorio.js';
 import { mesEmSemanas, cobertura, porData, proximo, retornosDe } from '../lib/cronograma.js';
 import { chipFase, cartaoLeitura, explicacaoObjetivo, roteiroHTML, vazioHTML } from '../lib/pecas.js';
 import { ordenar, duracaoTotal, temFala } from '../lib/roteiro.js';
+import { esteiraDe } from '../lib/etiquetas.js';
 import {
     esc, mesExtenso, somarMeses, chaveMes, semanaCurta, semanaAtual,
     nomeDiaCurto, diaCurto, quandoRelativo, dataBR, hoje,
@@ -102,6 +103,19 @@ const desenharCronograma = (container, token, visao) => {
        parece um sistema quebrado. */
     if (!mesVisto) mesVisto = chaveMes(proximo(conteudos)?.data || hoje());
 
+    /* ── DUAS MANEIRAS DE OLHAR O MESMO MÊS ───────────────────────────────
+       A lista por semana responde "o que vem pela frente"; o calendário
+       responde "o que sai no dia 12". A segunda é a pergunta de quem não
+       trabalha com cronograma — e é a forma que todo mundo já sabe ler, sem
+       ninguém explicar.
+
+       A escolha fica guardada no aparelho: quem prefere calendário abre no
+       calendário da próxima vez. A lista continua sendo o padrão porque é o
+       que já existia, e mudar o padrão de quem já usa não é decisão de uma
+       tela nova. */
+    let visao_ = lerVisao(token);
+    let diaAberto = null;
+
     const desenhar = () => {
         const semanas = mesEmSemanas(conteudos, mesVisto);
         const doMes = conteudos.filter(c => chaveMes(c.data) === mesVisto);
@@ -124,11 +138,25 @@ const desenharCronograma = (container, token, visao) => {
                         </button>
                     </div>
 
+                    ${doMes.length ? `
+                        <div class="cl-visoes" id="cl-visoes" role="tablist">
+                            <button type="button" class="cl-visao ${visao_ === 'lista' ? 'is-active' : ''}"
+                                    data-visao="lista" role="tab" aria-selected="${visao_ === 'lista'}">
+                                <i data-lucide="list"></i> Por semana
+                            </button>
+                            <button type="button" class="cl-visao ${visao_ === 'calendario' ? 'is-active' : ''}"
+                                    data-visao="calendario" role="tab" aria-selected="${visao_ === 'calendario'}">
+                                <i data-lucide="calendar-days"></i> Calendário
+                            </button>
+                        </div>` : ''}
+
                     <div class="cl-semanas" id="semanas">
-                        ${doMes.length
-                            ? semanas.map(s => semanaHTML(s, token, comRoteiro)).join('')
-                            : vazioHTML('calendar-off', 'Nada programado neste mês',
-                                'Quando a equipe publicar o cronograma, ele aparece aqui.')}
+                        ${!doMes.length
+                            ? vazioHTML('calendar-off', 'Nada programado neste mês',
+                                'Quando a equipe publicar o cronograma, ele aparece aqui.')
+                            : visao_ === 'calendario'
+                                ? calendarioHTML(doMes, mesVisto, token, comRoteiro, diaAberto)
+                                : semanas.map(s => semanaHTML(s, token, comRoteiro)).join('')}
                     </div>
 
                     ${legenda()}
@@ -141,6 +169,25 @@ const desenharCronograma = (container, token, visao) => {
         container.querySelector('#cl-proximo').addEventListener('click', () => {
             mesVisto = somarMeses(mesVisto, 1); desenhar();
         });
+        container.querySelector('#cl-visoes')?.addEventListener('click', (e) => {
+            const b = e.target.closest('[data-visao]');
+            if (!b || b.dataset.visao === visao_) return;
+            visao_ = b.dataset.visao;
+            guardarVisao(token, visao_);
+            diaAberto = null;   // trocar de visão recomeça a leitura
+            desenhar();
+        });
+
+        /* O dia clicado abre a lista embaixo do calendário, e o redesenho é da
+           tela toda: são poucos elementos, e um caminho só de desenho vale mais
+           que a economia de repintar uma parte. */
+        container.querySelector('#cl-grade')?.addEventListener('click', (e) => {
+            const dia = e.target.closest('[data-dia]');
+            if (!dia) return;
+            diaAberto = dia.dataset.dia === diaAberto ? null : dia.dataset.dia;
+            desenhar();
+        });
+
         container.querySelector('#cl-tour')?.addEventListener('click', () => abrirTour(container, token, visao));
         ligarTema(container);
         if (window.lucide) lucide.createIcons();
@@ -274,10 +321,28 @@ const painelDoCliente = (conteudos, token, retornos) => {
 
     if (!esperando.length && !andando.length) return '';
 
+    /* ── O QUE É CADA PEÇA, SEM PRECISAR ABRIR ────────────────────────────
+       A lista dizia em que PÉ a peça está ("a diagramar", "gravado") e não
+       dizia o que ela É. São perguntas diferentes, e a segunda é a que a
+       pessoa faz primeiro: reels e carrossel se preparam de formas diferentes,
+       e olhar onze linhas iguais para descobrir isso é trabalho que a tela
+       pode fazer.
+
+       O texto vem do campo `formato`, escrito pela equipe, e não de uma
+       tradução nossa: se lá está "Story", é isso que o cliente lê. O ícone é
+       que sai da esteira, e ele é quem faz a leitura rápida — vídeo ou arte,
+       reconhecível antes de ler. */
+    const chipFormato = (c) => {
+        if (!c.formato) return '';
+        const icone = esteiraDe(c.formato) === 'carrossel' ? 'gallery-horizontal-end' : 'video';
+        return `<span class="cl-linha__formato"><i data-lucide="${icone}"></i>${esc(c.formato)}</span>`;
+    };
+
     const linha = (c, comEtapa) => `
         <a class="cl-linha" href="/c/${esc(token)}/${esc(c.id)}">
             <span class="vz-ponto vz-ponto--${esc(c.fase || '')}"></span>
             <span class="cl-linha__titulo">${esc(c.titulo)}</span>
+            ${chipFormato(c)}
             ${comEtapa && etapaAtual(c.etiquetas)
                 ? `<span class="cl-linha__etapa">${esc(etapaAtual(c.etiquetas).nome)}</span>`
                 : `<span class="cl-linha__quando">${esc(diaCurto(c.data))}</span>`}
@@ -312,6 +377,90 @@ const painelDoCliente = (conteudos, token, retornos) => {
                     ${andando.map(c => linha(c, true)).join('')}
                 </div>` : ''}
         </section>`;
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   O CALENDÁRIO
+
+   Um mês desenhado como todo mundo já viu: sete colunas, segunda a domingo, na
+   mesma ordem da semana que a lista usa. Ele não mostra mais informação que a
+   lista — mostra a MESMA, na forma que não precisa ser aprendida.
+
+   ── O QUE CABE NUMA CASA DE CALENDÁRIO NO CELULAR ────────────────────────
+   Título não cabe. Então a casa carrega o que dá para ler de relance — um
+   ponto por peça, na cor da fase — e o texto vive embaixo, no dia aberto. É a
+   troca honesta: a grade responde "tem coisa nesse dia?", a lista de baixo
+   responde "o quê".
+
+   ── POR QUE UM DIA JÁ VEM ABERTO ─────────────────────────────────────────
+   Calendário com nada embaixo parece quebrado para quem não sabe que os dias
+   são clicáveis. O primeiro dia com conteúdo abre sozinho: a tela mostra o
+   resultado do gesto antes de a pessoa precisar descobrir o gesto.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const DIAS_CABECA = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom'];
+
+const calendarioHTML = (doMes, mes, token, comRoteiro, diaAberto) => {
+    const [ano, m] = mes.split('-').map(Number);
+    const diasNoMes = new Date(Date.UTC(ano, m, 0)).getUTCDate();
+    // getUTCDay devolve 0 no domingo; a grade começa na segunda.
+    const vazias = (new Date(Date.UTC(ano, m - 1, 1)).getUTCDay() + 6) % 7;
+
+    const doDia = (data) => doMes.filter(c => c.data === data);
+    const dataDe = (d) => `${mes}-${String(d).padStart(2, '0')}`;
+
+    // O primeiro dia com conteúdo abre sozinho quando ninguém escolheu nada.
+    const primeiroCheio = Array.from({ length: diasNoMes }, (_, i) => dataDe(i + 1))
+        .find(data => doDia(data).length);
+    const aberto = diaAberto || primeiroCheio;
+    const daLista = aberto ? doDia(aberto) : [];
+
+    const casa = (d) => {
+        const data = dataDe(d);
+        const pecas = doDia(data);
+        const classes = [
+            'cl-dia',
+            pecas.length ? 'is-cheio' : '',
+            data === hoje() ? 'is-hoje' : '',
+            data === aberto ? 'is-aberto' : '',
+        ].filter(Boolean).join(' ');
+
+        return `
+            <button type="button" class="${classes}" data-dia="${data}"
+                    ${pecas.length ? '' : 'disabled'}
+                    aria-label="${d} — ${pecas.length ? `${pecas.length} publicação${pecas.length > 1 ? 'ões' : ''}` : 'sem publicação'}">
+                <span class="cl-dia__n">${d}</span>
+                <span class="cl-dia__pontos">
+                    ${pecas.slice(0, 3).map(c => `<span class="vz-ponto vz-ponto--${esc(c.fase || '')}"></span>`).join('')}
+                    ${pecas.length > 3 ? `<span class="cl-dia__mais">+${pecas.length - 3}</span>` : ''}
+                </span>
+            </button>`;
+    };
+
+    return `
+        <section class="cl-calendario">
+            <div class="cl-grade" id="cl-grade">
+                ${DIAS_CABECA.map(d => `<span class="cl-grade__cabeca">${d}</span>`).join('')}
+                ${'<span class="cl-dia cl-dia--fora"></span>'.repeat(vazias)}
+                ${Array.from({ length: diasNoMes }, (_, i) => casa(i + 1)).join('')}
+            </div>
+
+            ${aberto ? `
+                <div class="cl-dia-aberto">
+                    <h3 class="cl-dia-aberto__titulo">${esc(dataBR(aberto))} · ${esc(nomeDiaCurto(aberto))}</h3>
+                    ${daLista.map(c => cartaoConteudo(c, token, comRoteiro)).join('')}
+                </div>` : ''}
+        </section>`;
+};
+
+/* A visão escolhida vive no aparelho de quem usa, como o nome de quem responde
+   na tela da equipe: é conveniência, e se sumir a tela volta ao padrão. */
+const CHAVE_VISAO = '5k9_visualizador_visao';
+const lerVisao = (token) => {
+    try { return localStorage.getItem(`${CHAVE_VISAO}_${token}`) || 'lista'; }
+    catch { return 'lista'; }
+};
+const guardarVisao = (token, visao) => {
+    try { localStorage.setItem(`${CHAVE_VISAO}_${token}`, visao); } catch { /* sem localStorage */ }
 };
 
 const semanaHTML = ({ segunda, conteudos }, token, comRoteiro) => {
@@ -380,6 +529,7 @@ const estadoCurto = (c) => {
     if (c.status === 'em_revisao') return `<span class="cl-estado cl-estado--espera">aguardando você</span>`;
     // Sem tom de espera: é justamente o estado em que ele não deve nada.
     if (c.status === 'desenvolvimento') return `<span class="cl-estado">em produção</span>`;
+    if (c.status === 'pronto') return `<span class="cl-estado cl-estado--ok">pronto para publicar</span>`;
     return '';
 };
 
@@ -513,7 +663,8 @@ const desenharConteudo = (container, token, visao, conteudoId) => {
                 <div class="cl-espaco-barra"></div>
             </main>
 
-            ${gravado ? seloGravado()
+            ${c.status === 'pronto' ? seloPronto(c)
+              : gravado ? seloGravado()
               : c.status === 'aprovado' ? seloAprovado()
               : podeResponder ? barraAcao(c) : ''}
         </div>`;
@@ -844,6 +995,12 @@ const seloBarra = (titulo, texto) => `
         </div>
     </div>`;
 
+/* O desfecho mais alegre da tela: não há nada a fazer, e a data está logo ali.
+   Vem ANTES do selo de gravado na escolha porque é o estado mais recente — uma
+   peça pronta também é uma peça gravada. */
+const seloPronto = (c) => seloBarra('Pronto para publicar',
+    `Está tudo certo e finalizado. Vai ao ar em ${esc(dataBR(c.data))}.`);
+
 const seloGravado = () => seloBarra('Conteúdo gravado',
     'O texto fica aqui como registro do que combinamos.');
 
@@ -1097,6 +1254,72 @@ function injectStyles() {
         .cl-mes__rotulo { font-size: var(--text-h3); font-weight: 600; letter-spacing: var(--tracking-tight); }
         .cl-mes__rotulo::first-letter { text-transform: uppercase; }
 
+        /* ── As duas visões ───────────────────────────────────────────────
+           Abas largas e com ícone: o alvo de toque é o dedo de quem está no
+           celular, e o ícone diz o que é antes de a palavra ser lida. */
+        .cl-visoes {
+            display: flex; gap: 4px; padding: 4px; margin-bottom: var(--space-4);
+            border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+            background: var(--surface-1);
+        }
+        .cl-visao {
+            flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+            min-height: 42px; padding: 0 var(--space-3);
+            border: none; border-radius: var(--radius-sm);
+            background: transparent; color: var(--text-secondary);
+            font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 600;
+            cursor: pointer;
+            transition: background-color var(--dur-fast), color var(--dur-fast);
+        }
+        .cl-visao i, .cl-visao svg { width: 16px; height: 16px; }
+        .cl-visao.is-active { background: var(--accent-muted); color: var(--accent); }
+
+        /* ── O calendário ─────────────────────────────────────────────────
+           Sete colunas iguais, casas quadradas. A proporção fixa em vez de
+           altura fixa: a grade encolhe com a largura da tela sem que ninguém
+           precise recalcular nada. */
+        .cl-calendario { display: flex; flex-direction: column; gap: var(--space-5); }
+        .cl-grade {
+            display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+        }
+        .cl-grade__cabeca {
+            padding-bottom: var(--space-2); text-align: center;
+            font-size: 10px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.08em; color: var(--text-disabled);
+        }
+        .cl-dia {
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+            aspect-ratio: 1; padding: 2px;
+            border: 1px solid transparent; border-radius: var(--radius-md);
+            background: var(--surface-1); color: var(--text-tertiary);
+            font-family: var(--font-sans); cursor: default;
+            transition: border-color var(--dur-fast), background-color var(--dur-fast);
+        }
+        .cl-dia--fora { background: transparent; }
+        .cl-dia__n { font-size: var(--text-sm); font-weight: 600; line-height: 1; }
+        .cl-dia__pontos { display: flex; align-items: center; gap: 2px; min-height: 8px; }
+        .cl-dia__mais { font-size: 9px; font-weight: 700; color: var(--text-disabled); }
+
+        /* Dia com conteúdo é o único clicável, e o desenho diz isso: fundo mais
+           claro, número em cor cheia, cursor de mão. Dia vazio não responde ao
+           toque — e não deve parecer que responde. */
+        .cl-dia.is-cheio {
+            background: var(--surface-2); color: var(--text-primary); cursor: pointer;
+        }
+        .cl-dia.is-cheio:hover { border-color: var(--accent-border); }
+        .cl-dia.is-hoje { border-color: var(--border-strong, var(--border-subtle)); }
+        .cl-dia.is-hoje .cl-dia__n { color: var(--accent); }
+        .cl-dia.is-aberto {
+            background: var(--accent-muted); border-color: var(--accent);
+        }
+        .cl-dia.is-aberto .cl-dia__n { color: var(--accent); }
+
+        .cl-dia-aberto { display: flex; flex-direction: column; gap: var(--space-3); }
+        .cl-dia-aberto__titulo {
+            margin: 0; font-size: var(--text-xs); font-weight: 700;
+            text-transform: uppercase; letter-spacing: var(--tracking-wide);
+            color: var(--text-tertiary);
+        }
         .cl-semanas { display: flex; flex-direction: column; gap: var(--space-6); }
         .cl-semana-vazia {
             margin: 0; padding: var(--space-4);
@@ -1363,6 +1586,21 @@ function injectStyles() {
         }
         .cl-linha__etapa, .cl-linha__quando {
             font-size: var(--text-xs); color: var(--text-tertiary); white-space: nowrap;
+        }
+        /* O formato encosta no título, não na etapa: ele fala do conteúdo, e
+           a etapa fala do andamento. No celular ele encolhe até o ícone antes
+           de deixar o título ser cortado — o ícone sozinho já responde. */
+        .cl-linha__formato {
+            display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;
+            padding: 2px var(--space-2); border-radius: var(--radius-pill);
+            background: var(--surface-3); color: var(--text-secondary);
+            font-size: 10px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.04em; white-space: nowrap;
+        }
+        .cl-linha__formato i, .cl-linha__formato svg { width: 11px; height: 11px; color: currentColor; }
+        @media (max-width: 520px) {
+            .cl-linha__formato { font-size: 0; gap: 0; padding: 4px; }
+            .cl-linha__formato i, .cl-linha__formato svg { width: 13px; height: 13px; }
         }
         .cl-linha i, .cl-linha svg { width: 15px; height: 15px; flex-shrink: 0; color: var(--text-disabled); }
 

@@ -201,7 +201,12 @@ export const iniciarTour = ({ cliente, irPara, aoFim }) => {
         },
         {
             tela: 'cronograma',
-            alvo: () => document.querySelector('.vz-semana--atual') || document.querySelector('.vz-semana'),
+            /* O calendário entra na lista de alvos porque a tela pode estar
+               nele: quem escolheu calendário não tem `.vz-semana` na página, e
+               o passo ficaria apontando para o nada. */
+            alvo: () => document.querySelector('.vz-semana--atual')
+                     || document.querySelector('.vz-semana')
+                     || document.querySelector('.cl-calendario'),
             titulo: 'A semana inteira, de uma vez',
             texto: 'Cada bloco datado é uma semana de publicação. Ver os três conteúdos juntos '
                  + 'é o que mostra se ela está equilibrada — e as bolinhas no canto dizem quais '

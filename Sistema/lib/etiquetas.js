@@ -108,7 +108,7 @@ export const ETIQUETAS = [
       dica: 'Na mesa de corte.' },
 
     { nome: 'gravação aguardando aprovação', publica: true, etapa: 6, esteira: 'video',
-      proxima: 'publicado', esperaCliente: true,
+      proxima: 'pronto para publicar', esperaCliente: true,
       icone: 'monitor-play', tom: 'espera',
       dica: 'O vídeo pronto está com a médica.' },
 
@@ -133,7 +133,7 @@ export const ETIQUETAS = [
       dica: 'Cards diagramados.' },
 
     { nome: 'arte aguardando aprovação', publica: true, etapa: 6, esteira: 'carrossel',
-      proxima: 'publicado', esperaCliente: true,
+      proxima: 'pronto para publicar', esperaCliente: true,
       icone: 'image-check', tom: 'espera',
       dica: 'A arte pronta está com a médica.' },
 
@@ -143,6 +143,18 @@ export const ETIQUETAS = [
       proxima: { video: 'em edição', carrossel: 'a diagramar' },
       icone: 'rotate-ccw', tom: 'risco',
       dica: 'Não passou — volta para quem produz.' },
+
+    /* O degrau que faltava no fim: a peça está pronta, aprovada, e só espera
+       a data. Sem ele, o único jeito de dizer "acabou" era marcar publicado —
+       o que é mentira até o post existir — ou deixar em "aguardando
+       aprovação", que continua pedindo algo a quem já respondeu.
+
+       Vale para as duas esteiras: vídeo montado e carrossel diagramado chegam
+       ao mesmo lugar. */
+    { nome: 'pronto para publicar', publica: true, etapa: 6.8, esteira: 'ambas',
+      proxima: 'publicado',
+      icone: 'calendar-check', tom: 'ok',
+      dica: 'Aprovado e pronto. Só falta a data chegar.' },
 
     { nome: 'publicado', publica: true, etapa: 7, esteira: 'ambas',
       icone: 'send', tom: 'ok',
@@ -164,6 +176,7 @@ export const ETAPA_ESCRITA   = 'roteiro em desenvolvimento';
 export const ETAPA_APROVACAO = 'roteiro em aprovação';
 export const ETAPA_GRAVAR    = 'a gravar';
 export const ETAPA_DIAGRAMAR = 'a diagramar';
+export const ETAPA_PRONTO    = 'pronto para publicar';
 export const ETAPA_PUBLICADO = 'publicado';
 
 /** Todas as etapas, das duas esteiras, na ordem do caminho feliz. */
@@ -310,7 +323,9 @@ export const statusParaEtapa = (statusAtual, nomeEtapa) => {
 
     const podeSubir = ['rascunho', 'em_revisao'].includes(statusAtual);
 
-    if (meta.nome === 'publicado' && statusAtual !== 'publicado') return 'publicado';
+    if (meta.nome === ETAPA_PUBLICADO && statusAtual !== 'publicado') return 'publicado';
+    /* Pronto é aprovado com data pela frente: quem já publicou não volta. */
+    if (meta.nome === ETAPA_PRONTO && !['pronto', 'publicado'].includes(statusAtual)) return 'pronto';
 
     /* 3 = "a gravar" / "a diagramar": a peça saiu da mão do cliente e entrou na
        da equipe. Antes isto virava "aprovado", e era mentira sempre que ninguém
@@ -363,6 +378,10 @@ export const etiquetasParaStatus = (status, etiquetas, esteira = 'video') => {
            escrevendo quanto para quem está diagramando, e adivinhar qual das
            duas seria trocar a informação de quem marcou por um palpite. */
         if (status === 'desenvolvimento') return undefined;
+        /* Espelho do de cima: marcar "pronto para publicar" no status põe a
+           peça na etapa de mesmo nome, a não ser que ela já esteja no ar. */
+        if (status === 'pronto') return atual?.nome === ETAPA_PRONTO || atual?.nome === ETAPA_PUBLICADO
+            ? undefined : ETAPA_PRONTO;
         if (['em_revisao', 'ajuste'].includes(status)) return atual ? undefined : ETAPA_APROVACAO;
         return undefined;
     })();

@@ -38,6 +38,10 @@ export const STATUS = {
     em_revisao: { rotulo: 'Em revisão', icone: 'eye',          dica: 'Enviado ao cliente, aguardando resposta.' },
     aprovado:   { rotulo: 'Aprovado',   icone: 'check',        dica: 'O cliente aprovou este conteúdo.' },
     ajuste:     { rotulo: 'Ajuste',     icone: 'message-circle-warning', dica: 'O cliente pediu uma alteração.' },
+    /* Depois do ajuste de propósito: "pronto" é o fim da conversa, e ajuste é o
+       desvio que pode acontecer antes dele. A ordem do menu conta a história. */
+    pronto:     { rotulo: 'Pronto para publicar', icone: 'calendar-check',
+                  dica: 'Aprovado e finalizado. Só falta a data chegar.' },
     publicado:  { rotulo: 'Publicado',  icone: 'send',         dica: 'Já foi ao ar.' },
 };
 

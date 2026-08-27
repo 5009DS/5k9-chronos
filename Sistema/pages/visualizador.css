@@ -76,6 +76,10 @@
 .vz-status--em_revisao { background: var(--info-muted);    color: var(--info); }
 .vz-status--aprovado   { background: var(--success-muted); color: var(--success); }
 .vz-status--ajuste     { background: var(--warning-muted); color: var(--warning); }
+/* Verde como o "aprovado", porque é a mesma família de desfecho — o que
+   separa os dois é o ícone de calendário: um diz "passou por você", o outro
+   diz "e já está pronto, esperando o dia". */
+.vz-status--pronto     { background: var(--success-muted); color: var(--success); }
 .vz-status--publicado  { background: var(--accent-muted);  color: var(--accent); }
 
 /* ── Cartão de conteúdo ───────────────────────────────────────────────────
