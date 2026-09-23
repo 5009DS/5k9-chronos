@@ -2,6 +2,7 @@ import { navegar } from '../lib/rotas.js';
 import { store } from '../store.js';
 import { theme } from '../theme.js';
 import { renderTrocador } from './trocador.js';
+import { abrirBusca, ligarAtalhosBusca, rotuloAtalho } from './busca.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    TOPNAV — a mesma barra do 5K9 Forms e do Gestor, com os destinos daqui.
@@ -51,6 +52,12 @@ export const renderTopnav = (container, caminhoAtual) => {
             </nav>
 
             <div class="tn__actions">
+                <button class="tn__busca" id="tn-busca" aria-label="Buscar conteúdo (${rotuloAtalho()})">
+                    <i data-lucide="search"></i>
+                    <span class="tn__busca-rotulo">Buscar</span>
+                    <kbd class="tn__busca-kbd">${rotuloAtalho()}</kbd>
+                </button>
+
                 ${store.modo === 'local' ? `
                     <a href="/configuracoes" class="tn__modo" title="Os dados estão salvos apenas neste navegador. Clique para conectar um banco.">
                         <i data-lucide="hard-drive"></i> Modo local
@@ -89,6 +96,9 @@ export const renderTopnav = (container, caminhoAtual) => {
 
 // ─────────────────────────────────────────────────────────────────────────
 function ligarEventos(container, caminhoAtual) {
+    ligarAtalhosBusca();
+    container.querySelector('#tn-busca').addEventListener('click', () => abrirBusca());
+
     const menu   = container.querySelector('#tn-menu');
     const avatar = container.querySelector('#tn-avatar');
 
@@ -166,6 +176,25 @@ function injectStyles() {
         /* ── Ações ─────────────────────────────────────────────────────── */
         .tn__actions { display: flex; align-items: center; gap: var(--space-3); flex-shrink: 0; }
 
+        /* Busca. Parece um campo, mas é um botão: a digitação acontece na
+           paleta (components/busca.js), que tem espaço para os resultados. */
+        .tn__busca {
+            display: inline-flex; align-items: center; gap: var(--space-2);
+            height: 34px; min-width: 200px; padding: 0 6px 0 var(--space-3);
+            border: 1px solid var(--border-default); border-radius: var(--radius-pill);
+            background: var(--surface-2); color: var(--text-tertiary);
+            font-family: var(--font-sans); font-size: var(--text-sm);
+            cursor: pointer; transition: border-color var(--dur-fast), color var(--dur-fast);
+        }
+        .tn__busca:hover { border-color: var(--border-strong, var(--accent-border)); color: var(--text-secondary); }
+        .tn__busca i, .tn__busca svg { width: 15px; height: 15px; flex-shrink: 0; }
+        .tn__busca-rotulo { flex: 1; text-align: left; }
+        .tn__busca-kbd {
+            height: 22px; padding: 0 6px; display: inline-flex; align-items: center;
+            border: 1px solid var(--border-default); border-radius: var(--radius-pill);
+            font-family: var(--font-sans); font-size: 11px; font-weight: 600;
+        }
+
         /* Selo de modo local. Âmbar, não vermelho: não é erro, é um estado
            que a pessoa escolheu — mas precisa saber que está nele. */
         .tn__modo {
@@ -234,7 +263,16 @@ function injectStyles() {
            não há atalho para Cadastros; sumir com o menu deixaria seções
            inalcançáveis. Então a navegação desce para uma linha própria e
            rola na horizontal. */
-        @media (max-width: 1080px) { .tn__nav { gap: var(--space-4); } }
+        @media (max-width: 1080px) {
+            .tn__nav { gap: var(--space-4); }
+            .tn__busca { min-width: 0; }
+            .tn__busca-kbd { display: none; }
+        }
+        @media (max-width: 640px) {
+            /* No celular vira só a lupa, do mesmo tamanho do avatar. */
+            .tn__busca { width: 38px; height: 38px; padding: 0; justify-content: center; }
+            .tn__busca-rotulo { display: none; }
+        }
         @media (max-width: 900px)  {
             .tn { flex-wrap: wrap; height: auto; gap: var(--space-3); padding-bottom: var(--space-2); }
             /* O trocador SOBREVIVE ao celular, ao contrário do rótulo
