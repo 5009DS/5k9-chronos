@@ -57,7 +57,7 @@ export const renderProducao = async (container, clienteId) => {
 
     const { content } = renderShell(container, {
         path: '/',
-        crumbs: [{ href: '/', label: 'Clientes' }, { href: `/cliente/${clienteId}`, label: cliente.nome }],
+        crumbs: [{ href: '/', label: 'Clientes' }, { href: `/quadro/${clienteId}`, label: cliente.nome }],
         title: 'Produção',
         subtitle: `${cliente.nome} · ${conteudos.length} conteúdo${conteudos.length === 1 ? '' : 's'} fora do banco de temas`,
         actions: `

@@ -74,7 +74,7 @@ export const renderImportar = async (container, clienteId, modoInicial = 'temas'
         path: '/',
         crumbs: [
             { href: '/', label: 'Clientes' },
-            { href: `/cliente/${clienteId}`, label: cliente.nome },
+            { href: `/quadro/${clienteId}`, label: cliente.nome },
         ],
         title: 'Importar',
         subtitle: 'O arquivo é lido aqui no navegador e descartado. Só o texto entra no sistema.',

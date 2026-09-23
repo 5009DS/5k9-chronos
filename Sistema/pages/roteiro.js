@@ -157,7 +157,7 @@ export const renderRoteiro = async (container, conteudoId) => {
         const rotulos = { quadro: 'Quadro do mês', producao: 'Esteira', cliente: 'Cronograma' };
         return m && decodeURIComponent(m[2]) === c.cliente_id
             ? { href: de, rotulo: rotulos[m[1]] }
-            : { href: `/cliente/${c.cliente_id}`, rotulo: 'Cronograma' };
+            : { href: `/quadro/${c.cliente_id}`, rotulo: 'Quadro do mês' };
     })();
 
     const { content } = renderShell(container, {
@@ -168,7 +168,7 @@ export const renderRoteiro = async (container, conteudoId) => {
            de qual cliente é o conteúdo antes de a pessoa precisar perguntar. */
         crumbs: [
             { href: '/', label: 'Clientes' },
-            { href: `/cliente/${c.cliente_id}`, label: cliente?.nome || 'Cliente' },
+            { href: `/quadro/${c.cliente_id}`, label: cliente?.nome || 'Cliente' },
         ],
         title: c.titulo,
         subtitle: `${cliente?.nome || 'Cliente removido'} · ${nomeDia(c.data)}, ${dataBR(c.data)} · ${quandoRelativo(c.data)}`,

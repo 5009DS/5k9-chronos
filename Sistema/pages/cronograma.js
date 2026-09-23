@@ -43,7 +43,7 @@ import { sugerirObjetivo } from '../lib/importar.js';
    sempre tem algo na caixa de aviso ensina a ignorar a caixa de aviso.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-const FILTROS = [
+export const FILTROS = [
     { id: 'tudo',       rotulo: 'Tudo' },
     { id: 'rascunho',   rotulo: 'Rascunhos' },
     { id: 'em_revisao', rotulo: 'Com o cliente' },
@@ -62,7 +62,7 @@ const FILTROS = [
    O rótulo é "Reels" porque é a palavra que a equipe usa — o grupo é o da
    esteira e inclui story e vídeo solto, mas nomear pelo caso comum é o que faz
    o botão ser encontrado sem ler. */
-const FORMATOS = [
+export const FORMATOS = [
     { id: 'tudo',      rotulo: 'Todo formato', icone: null },
     { id: 'video',     rotulo: 'Reels',        icone: 'video' },
     { id: 'carrossel', rotulo: 'Carrossel',    icone: 'gallery-horizontal-end' },
@@ -650,7 +650,7 @@ const cartaoHTML = (c, todos) => {
 const destinoAoLiberar = (c, comRoteiro) =>
     etapaAtual(c.etiquetas)?.nome || etapaAoLiberar(comRoteiro.has(c.id));
 
-function abrirLiberar(cliente, rascunhos, comRoteiro, aoTerminar) {
+export function abrirLiberar(cliente, rascunhos, comRoteiro, aoTerminar) {
     /* NADA marcado ao abrir. Liberar o mês inteiro custa um clique a mais
        ("Marcar todos"), e é um preço justo: o erro que este painel existe para
        impedir é o de liberar sem querer o que estava recolhido de propósito.
@@ -811,7 +811,7 @@ function injectEstilosLiberar() {
     document.head.appendChild(style);
 }
 
-function abrirApagarCronograma(cliente, conteudos, mes, aoTerminar) {
+export function abrirApagarCronograma(cliente, conteudos, mes, aoTerminar) {
     const doMes = conteudos.filter(c => chaveMes(c.data) === mes);
     const escopos = {
         mes:  { lista: doMes,     rotulo: mesExtenso(mes) },

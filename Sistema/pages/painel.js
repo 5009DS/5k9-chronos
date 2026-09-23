@@ -95,7 +95,7 @@ export const renderPainel = async (container) => {
         () => abrirCartela(clientes, () => renderPainel(container)));
 
     content.querySelectorAll('[data-abrir]').forEach(el =>
-        el.addEventListener('click', () => navegar(`/cliente/${el.dataset.abrir}`)));
+        el.addEventListener('click', () => navegar(`/quadro/${el.dataset.abrir}`)));
 
     content.querySelectorAll('[data-conteudo]').forEach(el =>
         el.addEventListener('click', () => {
@@ -115,7 +115,7 @@ export const renderPainel = async (container) => {
             const cl = clientes.find(c => c.id === botao.dataset.menu);
             abrirMenu(botao, [
                 { id: 'ver', label: 'Abrir cronograma', icon: 'calendar-days',
-                  onClick: () => navegar(`/cliente/${cl.id}`) },
+                  onClick: () => navegar(`/quadro/${cl.id}`) },
                 { id: 'link', label: 'Copiar link do cliente', icon: 'link',
                   onClick: () => copiarLink(cl.id, clientes) },
                 { id: 'previa', label: 'Ver como o cliente vê', icon: 'external-link',

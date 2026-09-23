@@ -6,6 +6,9 @@ import { ativarArraste } from '../lib/arrastar.js';
 import { nomeFase, noDiaCerto } from '../lib/diretorio.js';
 import { injectEstilosEtiqueta, chipsEstado, etapaAtual, etiquetaMeta, chipEtiqueta, ETAPAS, etapaNaEsteira, esteiraDe } from '../lib/etiquetas.js';
 import { moverParaEtapa, mensagemDeMovimento, itensDeEtapa } from '../lib/etapas.js';
+import {
+    FILTROS, FORMATOS, formularioConteudo, abrirLinkDoCliente, abrirLiberar, abrirApagarCronograma,
+} from './cronograma.js';
 import { abrirMenu } from '../components/menu.js';
 import { chipFase, vazioHTML } from '../lib/pecas.js';
 import {
@@ -64,6 +67,10 @@ let aoEsc = null;
 /* O painel do banco fica aberto entre um movimento e outro: devolver cinco
    temas seguidos não pode exigir reabri-lo cinco vezes. */
 const BANCO_ABERTO = new Set();
+
+/* Filtro e formato por cliente, pelo mesmo motivo do mês: sobrevivem à ida e
+   volta para uma demanda. */
+const FILTRO_ABERTO = new Map();
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') aoEsc?.(); });
 
 const vagaDoDia = (iso) => VAGAS.find(v => v.dias.includes(indiceDia(iso))) || VAGAS[0];
@@ -75,7 +82,8 @@ const vagaDoDia = (iso) => VAGAS.find(v => v.dias.includes(indiceDia(iso))) || V
  *   movimento, e ela perdia o lugar no meio do trabalho.
  */
 export const renderQuadro = async (container, clienteId, mesInicial = null) => {
-    const { cliente, conteudos: todos } = await store.doCliente(clienteId);
+    const { cliente, conteudos: todos, blocos } = await store.doCliente(clienteId);
+    const comRoteiro = new Set((blocos || []).map(b => b.conteudo_id));
 
     // O banco de temas sai das contas do quadro pelo mesmo motivo que sai das
     // do cronograma: conteúdo guardado não ocupa vaga (ver cronograma.js).
@@ -107,22 +115,30 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
     aoEsc = () => { if (marcados.size) { marcados.clear(); desenhar(); } };
     let soltarArraste = null;
 
+    let { filtro = 'tudo', formato = 'tudo' } = FILTRO_ABERTO.get(clienteId) || {};
+    const lembrarFiltro = () => FILTRO_ABERTO.set(clienteId, { filtro, formato });
+
+    /* ── A TELA PRINCIPAL DO CLIENTE ───────────────────────────────────────
+       O quadro virou a porta de entrada do cliente — é a tela que mostra o
+       mês distribuído de uma vez. As ações da lista vieram junto, mas só duas
+       ficam à vista: as da rotina (banco e novo conteúdo). O resto mora no
+       menu "Mais", para o topo não virar uma parede de botões. */
     const { content } = renderShell(container, {
         path: '/',
-        crumbs: [
-            { href: '/', label: 'Clientes' },
-            { href: `/cliente/${clienteId}`, label: cliente.nome },
-        ],
-        title: 'Quadro do mês',
-        subtitle: 'Arraste para mover — um dia pode ter mais de um conteúdo. No toque, segure por um instante antes de arrastar.',
+        crumbs: [{ href: '/', label: 'Clientes' }],
+        title: esc(cliente.nome),
+        subtitle: 'Quadro do mês. Arraste para mover — um dia pode ter mais de um conteúdo.',
         actions: `
             <button class="ds-btn ds-btn--ghost" id="qd-banco" aria-pressed="${BANCO_ABERTO.has(clienteId)}">
                 <i data-lucide="archive"></i> Banco de temas
                 ${noBanco.length ? `<span class="cr-conta">${noBanco.length}</span>` : ''}
             </button>
-            <a class="ds-btn ds-btn--ghost" href="/cliente/${esc(clienteId)}">
-                <i data-lucide="list"></i> Ver em lista
-            </a>`,
+            <button class="ds-btn ds-btn--primary" id="qd-novo">
+                <i data-lucide="plus"></i> Novo conteúdo
+            </button>
+            <button class="ds-icon-btn" id="qd-mais-acoes" aria-label="Mais ações" aria-haspopup="menu" title="Mais ações">
+                <i data-lucide="ellipsis"></i>
+            </button>`,
     });
 
     container.insertAdjacentHTML('beforeend', ESTILOS);
@@ -138,6 +154,26 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
        devolver um tema exigia digitar a data — sem poder arrastar para a vaga
        que se está vendo. Com o painel ao lado, o tema vai do banco para o dia
        vago (ou de volta para o banco) no mesmo gesto do resto da tela. */
+    const etiquetasEmUso = [...new Set(todos.flatMap(c => c.etiquetas || []))];
+    document.getElementById('qd-novo')?.addEventListener('click',
+        () => formularioConteudo(null, cliente, mes, recarregar, etiquetasEmUso));
+
+    document.getElementById('qd-mais-acoes')?.addEventListener('click', (e) => {
+        e.stopPropagation();   // o menu se fecha em qualquer clique no documento
+        const linkCliente = `/c/${cliente.apelido || cliente.token}`;
+        abrirMenu(e.currentTarget, [
+            { id: 'lista', label: 'Ver em lista', icon: 'list', onClick: () => navegar(`/cliente/${clienteId}`) },
+            { id: 'producao', label: 'Produção', icon: 'kanban', onClick: () => navegar(`/producao/${clienteId}`) },
+            { id: 'importar', label: 'Importar', icon: 'file-up', onClick: () => navegar(`/importar/${clienteId}`) },
+            { id: 'link', label: 'Link do cliente', icon: 'link', separadorAntes: true,
+              onClick: () => abrirLinkDoCliente(cliente, recarregar) },
+            { id: 'ver', label: 'Ver como o cliente vê', icon: 'external-link',
+              onClick: () => window.open(linkCliente, '_blank', 'noopener') },
+            { id: 'apagar', label: 'Apagar cronograma…', icon: 'trash-2', separadorAntes: true,
+              onClick: () => abrirApagarCronograma(cliente, conteudos, mes, recarregar) },
+        ]);
+    });
+
     const botaoBanco = document.getElementById('qd-banco');
     botaoBanco?.addEventListener('click', () => {
         if (BANCO_ABERTO.has(clienteId)) BANCO_ABERTO.delete(clienteId); else BANCO_ABERTO.add(clienteId);
@@ -281,6 +317,13 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
         const semData = porData(conteudos.filter(aguardaData));
         const doMes = comData.filter(c => chaveMes(c.data) === mes);
         const deslocados = doMes.filter(deslocado);
+        const rascunhos = doMes.filter(c => c.status === 'rascunho');
+
+        const porFormato = { video: 0, carrossel: 0 };
+        for (const c of doMes) porFormato[esteiraDe(c.formato)]++;
+        // Filtro de formato que não aparece não pode continuar filtrando.
+        const doisFormatos = porFormato.video > 0 && porFormato.carrossel > 0;
+        if (!doisFormatos && formato !== 'tudo') { formato = 'tudo'; lembrarFiltro(); }
 
         content.innerHTML = `
             <article class="ds-card vz-barra">
@@ -290,8 +333,31 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
                     <button class="ds-icon-btn" id="qd-proximo" aria-label="Próximo mês"><i data-lucide="chevron-right"></i></button>
                 </div>
                 <span class="vz-barra__espaco"></span>
-                <span class="qd-conta">${doMes.length} conteúdo${doMes.length === 1 ? '' : 's'}</span>
+                <div class="vz-filtros">
+                    ${FILTROS.map(f => `
+                        <button class="vz-filtro ${f.id === filtro ? 'is-active' : ''}"
+                                data-filtro="${f.id}" aria-pressed="${f.id === filtro}">${f.rotulo}</button>`).join('')}
+                </div>
+                ${doisFormatos ? `
+                    <div class="vz-filtros qd-formatos">
+                        ${FORMATOS.map(f => `
+                            <button class="vz-filtro ${f.id === formato ? 'is-active' : ''}"
+                                    data-formato="${f.id}" aria-pressed="${f.id === formato}">
+                                ${f.icone ? `<i data-lucide="${f.icone}"></i>` : ''}${f.rotulo}
+                                ${f.id !== 'tudo' ? `<span class="cr-filtro__conta">${porFormato[f.id]}</span>` : ''}
+                            </button>`).join('')}
+                    </div>` : ''}
             </article>
+
+            ${/* O aviso de liberar, numa linha só: é lembrete, não cartão. */''}
+            ${rascunhos.length ? `
+                <p class="qd-liberar">
+                    <i data-lucide="eye-off"></i>
+                    <span><b>${rascunhos.length} em rascunho</b> neste mês — fora do link do cliente.</span>
+                    <button class="ds-btn ds-btn--ghost ds-btn--sm" id="qd-liberar">
+                        <i data-lucide="send"></i> Liberar para o cliente…
+                    </button>
+                </p>` : ''}
 
             ${selecionado ? barraSelecao() : ''}
 
@@ -330,7 +396,7 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
                     </div>`
                 : vazioHTML('layout-grid', 'Nada neste mês',
                     'Importe os temas ou crie um conteúdo para o quadro ter o que mostrar.',
-                    `<a class="ds-btn ds-btn--primary" href="/cliente/${esc(clienteId)}">Ir para o cronograma</a>`)}
+                    `<button class="ds-btn ds-btn--primary" id="qd-novo-vazio"><i data-lucide="plus"></i> Novo conteúdo</button>`)}
             </div>
 
             ${deslocados.length ? painelDeslocados(deslocados) : ''}
@@ -418,8 +484,22 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
             </div>`;
     };
 
+    /* O filtro APAGA em vez de esconder. Numa lista, esconder é o certo; numa
+       grade, um cartão que some muda a leitura da semana inteira — a vaga
+       parece vazia e não está. Apagado, o lugar continua ocupado à vista. */
+    const passa = (c) => (filtro === 'tudo' || c.status === filtro)
+                      && (formato === 'tudo' || esteiraDe(c.formato) === formato);
+
+    /* O formato ao lado da fase: com dois caminhos de produção, "é reels ou
+       carrossel?" é a primeira pergunta sobre uma demanda em aberto. */
+    const chipFormato = (c) => {
+        const f = FORMATOS.find(x => x.id === esteiraDe(c.formato));
+        return `<span class="qd-formato" title="${esc(c.formato || f.rotulo)}"><i data-lucide="${f.icone}"></i>${f.rotulo}</span>`;
+    };
+
     const cartao = (c, todos, { semData = false } = {}) => {
         const escolhido = selecionado === c.id;
+        const apagado = !passa(c) ? 'qd-cartao--apagado' : '';
         const href = esc(caminhoDoConteudo(c));
 
         /* PUBLICADO é passado: verde, apagado, só o essencial, sem botões e
@@ -427,7 +507,7 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
            ao ar é consulta comum —, mas nada nele convida a mexer. */
         if (etapaAtual(c.etiquetas)?.nome === 'publicado') {
             return `
-                <a class="qd-cartao qd-cartao--publicado" href="${href}" draggable="false" data-solta="dia:${esc(c.data)}">
+                <a class="qd-cartao qd-cartao--publicado ${apagado}" href="${href}" draggable="false" data-solta="dia:${esc(c.data)}">
                     <div class="qd-cartao__corpo">
                         <div class="qd-cartao__topo">
                             <span class="qd-cartao__dia">${esc(nomeDiaCurto(c.data))} ${esc(diaCurto(c.data))}</span>
@@ -447,7 +527,7 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
 
         const marcado = marcados.has(c.id);
         return `
-            <article class="qd-cartao ${escolhido ? 'is-escolhido' : ''} ${marcado ? 'is-marcado' : ''} ${foraDeFase ? 'qd-cartao--fora' : ''}"
+            <article class="qd-cartao ${escolhido ? 'is-escolhido' : ''} ${marcado ? 'is-marcado' : ''} ${foraDeFase ? 'qd-cartao--fora' : ''} ${apagado}"
                      data-arrastavel="${esc(c.id)}" data-cartao="${esc(c.id)}" data-solta="${semData ? 'semdata' : `dia:${esc(c.data)}`}"
                      ${marcado && marcados.size > 1 ? `data-lote="${marcados.size}"` : ''}>
                 <div class="qd-cartao__corpo">
@@ -461,6 +541,7 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
                         </button>
                         <span class="qd-cartao__dia">${semData ? 'sem data' : `${esc(nomeDiaCurto(c.data))} ${esc(diaCurto(c.data))}`}</span>
                         ${chipFase(c.fase, { curto: true })}
+                        ${chipFormato(c)}
                     </div>
                     ${/* O título é link de verdade (ctrl+clique, botão do meio);
                           o resto do cartão abre por clique, em ligarEventos —
@@ -617,6 +698,18 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
                 const alvo = conteudos.find(x => x.id === el.dataset.cartao);
                 if (alvo) navegar(caminhoDoConteudo(alvo));
             }));
+
+        content.querySelector('#qd-novo-vazio')?.addEventListener('click',
+            () => formularioConteudo(null, cliente, mes, recarregar, etiquetasEmUso));
+
+        // ── Filtros ──
+        content.querySelectorAll('[data-filtro]').forEach(b =>
+            b.addEventListener('click', () => { filtro = b.dataset.filtro; lembrarFiltro(); desenhar(); }));
+        content.querySelectorAll('[data-formato]').forEach(b =>
+            b.addEventListener('click', () => { formato = b.dataset.formato; lembrarFiltro(); desenhar(); }));
+        content.querySelector('#qd-liberar')?.addEventListener('click', () =>
+            abrirLiberar(cliente, conteudos.filter(c => chaveMes(c.data) === mes && c.status === 'rascunho' && !aguardaData(c)),
+                comRoteiro, recarregar));
 
         // ── Banco ──
         content.querySelector('#qd-banco-fechar')?.addEventListener('click', () => {
@@ -786,6 +879,26 @@ body.ar-arrastando .qd-doca { opacity: 1; transform: translate(-50%, 0); pointer
     body.ar-arrastando .qd-doca { transform: none; }
     .qd-doca__alvo { min-width: 0; flex: 1; }
 }
+
+/* ── Filtros, formato, liberar ───────────────────────────────────────── */
+.vz-barra { flex-wrap: wrap; row-gap: var(--space-2); }
+.qd-formatos .vz-filtro i, .qd-formatos .vz-filtro svg { width: 14px; height: 14px; }
+.qd-cartao.qd-cartao--apagado { opacity: 0.22; }
+.qd-cartao.qd-cartao--apagado:hover { opacity: 0.6; }
+.qd-formato {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: var(--radius-pill);
+    border: 1px solid var(--border-subtle); color: var(--text-secondary);
+    font-size: var(--text-xs); font-weight: 600; white-space: nowrap;
+}
+.qd-formato svg { width: 12px; height: 12px; }
+.qd-liberar {
+    display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
+    margin: 0; padding: var(--space-2) var(--space-4);
+    font-size: var(--text-sm); color: var(--text-tertiary);
+}
+.qd-liberar > svg { width: 16px; height: 16px; flex-shrink: 0; }
+.qd-liberar b { color: var(--text-secondary); font-weight: 600; }
 
 /* ── Painel do banco ──────────────────────────────────────────────────── */
 .qd-banco {
