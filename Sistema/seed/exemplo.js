@@ -1,5 +1,6 @@
 import { store } from '../store.js';
 import { semanaAtual, somarDias } from '../lib/formato.js';
+import { normalizarPeca } from '../lib/etiquetas.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    DADOS DE EXEMPLO
@@ -147,7 +148,7 @@ export const semearExemplo = async () => {
     await store.clientes.salvar(CLIENTE);
 
     for (const [id, titulo, tema, fase, objetivo, formato, sem, dia, status, intencao] of CONTEUDOS) {
-        await store.conteudos.salvar({
+        const peca = {
             id, cliente_id: CLIENTE.id, titulo, tema, fase, objetivo, formato,
             data: data(sem, dia), data_original: data(sem, dia), status, intencao,
             canal: 'Instagram',
@@ -155,7 +156,13 @@ export const semearExemplo = async () => {
             // que tudo está revisado esconderia o aviso de conformidade.
             revisado: status === 'publicado',
             nota: null,
-        });
+            etiquetas: [],
+        };
+        /* A lista acima escreve o STATUS de cada exemplo, que é o jeito mais
+           curto de dizer onde ela está. A etapa que corresponde a ele sai da
+           mesma conversão que as peças antigas usam — assim o exemplo nasce
+           no modelo de etapa única, sem uma segunda tabela para manter. */
+        await store.conteudos.salvar({ ...peca, ...(normalizarPeca(peca) || {}) });
     }
 
     for (const [id, conteudo_id, tipo, titulo, texto] of [...BLOCOS, ...BLOCOS_C4]) {

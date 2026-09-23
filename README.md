@@ -136,6 +136,35 @@ cartão aparece com o palpite e um botão que aplica:
 Aplicar tem desfazer, e o formulário de ficha aberto por essa tela recebe o
 mesmo texto: o palpite dele passa a ser o mesmo que o da página.
 
+## Etapa única: a etapa decide, o status acompanha
+
+Cada peça tem **um** estado que a equipe escolhe: a etapa. O que o cliente vê
+("em produção", "aguardando você", "aprovado", "pronto para publicar",
+"publicado") sai dela sozinho — não existe mais botão de status nem etiqueta
+livre.
+
+| Etapa | O cliente vê |
+|---|---|
+| rascunho (sem etapa) | nada — fora do link |
+| roteiro em desenvolvimento | em produção |
+| roteiro em aprovação | aguardando você (aprovar / pedir ajuste) |
+| roteiro aprovado | aprovado |
+| a gravar / a diagramar, gravado / arte pronta, em edição, revisão | aprovado, se ele aprovou o roteiro; senão, em produção |
+| gravação / arte aguardando aprovação | aguardando você |
+| pronto para publicar | pronto para publicar |
+| publicado | publicado |
+
+O que o cliente faz também move a peça: aprovar o roteiro leva para "a gravar"
+(ou "a diagramar"); aprovar a gravação ou a arte leva para "pronto para
+publicar"; pedir ajuste deixa a marca **ajuste pedido** sobre a etapa, e o
+próximo movimento da equipe é a resposta.
+
+"Aguardando data" e "aguardando material" continuam como **pendências**:
+marcas que convivem com qualquer etapa e não mudam nada além do aviso.
+
+A regra mora em `lib/etiquetas.js` (`statusDaEtapa`) e, do lado do cliente, em
+`db/migracao-etapa-unica.sql` — que também converte as peças antigas.
+
 ## Banco de temas
 
 Conteúdo novo entra em datas que já têm conteúdo. A saída era apagar o que

@@ -22,8 +22,8 @@ import {
     leitura, conferir, noDiaCerto, classificar,
 } from '../lib/diretorio.js';
 import { chipFase, chipStatus, seloDeslocado, vazioHTML, STATUS } from '../lib/pecas.js';
-import { chipEtiqueta, injectEstilosEtiqueta, etapaAtual, proximaEtapa, statusParaEtapa, esteiraDe } from '../lib/etiquetas.js';
-import { moverParaEtapa, mudarStatus } from '../lib/etapas.js';
+import { chipEtiqueta, injectEstilosEtiqueta, etapaAtual, proximaEtapa, etapasDa, esteiraDe, chipsEstado, etiquetaMeta, PENDENCIAS } from '../lib/etiquetas.js';
+import { moverParaEtapa, mensagemDeMovimento, etapaAoLiberar } from '../lib/etapas.js';
 import { ativarArraste } from '../lib/arrastar.js';
 import { timeSalvo } from '../lib/gestor.js';
 import { sugerirObjetivo } from '../lib/importar.js';
@@ -46,7 +46,7 @@ import { sugerirObjetivo } from '../lib/importar.js';
 const FILTROS = [
     { id: 'tudo',       rotulo: 'Tudo' },
     { id: 'rascunho',   rotulo: 'Rascunhos' },
-    { id: 'em_revisao', rotulo: 'Em revisão' },
+    { id: 'em_revisao', rotulo: 'Com o cliente' },
     { id: 'ajuste',     rotulo: 'Com ajuste' },
 ];
 
@@ -105,7 +105,8 @@ const mesDeAbertura = (conteudos) => {
 };
 
 export const renderCronograma = async (container, clienteId, mesInicial = null) => {
-    const { cliente, conteudos: todos } = await store.doCliente(clienteId);
+    const { cliente, conteudos: todos, blocos: blocosDoCliente } = await store.doCliente(clienteId);
+    const comRoteiro = new Set(blocosDoCliente.map(b => b.conteudo_id));
 
     /* ── O BANCO DE TEMAS ────────────────────────────────────────────────
        Conteúdo guardado continua existindo com tudo — título, fase, roteiro,
@@ -351,42 +352,34 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
 
                 const proxima = proximaEtapa(alvo.etiquetas, esteiraDe(alvo.formato));
 
+                const atual = etapaAtual(alvo.etiquetas);
+                const ir = async (nome) => {
+                    // A mesma função da demanda e da esteira.
+                    const { novoStatus, reabriu, desfazer } = await moverParaEtapa(alvo, nome);
+                    toast(mensagemDeMovimento(nome, novoStatus, reabriu), {
+                        label: 'Desfazer',
+                        onClick: async () => { await desfazer(); recarregar(); },
+                    });
+                    recarregar();
+                };
+
                 abrirMenu(botao, [
-                    /* A etapa vem primeiro: é a ação da rotina, e o rótulo diz
-                       o destino em vez de exigir que se lembre da ordem. */
+                    /* A próxima etapa vem primeiro: é a ação da rotina, e o
+                       rótulo diz o destino em vez de exigir que se lembre da
+                       ordem. Depois, todas as outras — é o único controle de
+                       estado que a peça tem. */
                     ...(proxima ? [{
                         id: 'etapa', label: `Mover para ${proxima}`, icon: 'arrow-right',
-                        onClick: async () => {
-                            // A mesma função da demanda e da esteira.
-                            const { novoStatus, reabriu, desfazer } = await moverParaEtapa(alvo, proxima);
-                            // O status muda junto quando a etapa exige — e a
-                            // mensagem diz, porque mudança calada é a que
-                            // ninguém entende depois.
-                            toast(`Agora: ${proxima}.`
-                                + (novoStatus ? ` Status: ${STATUS[novoStatus]?.rotulo || novoStatus}.` : '')
-                                + (reabriu ? ' A volta ficou registrada no histórico.' : ''), {
-                                label: 'Desfazer',
-                                onClick: async () => { await desfazer(); recarregar(); },
-                            });
-                            recarregar();
-                        },
+                        onClick: () => ir(proxima),
                     }] : []),
-                    ...Object.entries(STATUS)
-                        .filter(([id]) => id !== alvo.status)
-                        .map(([id, meta]) => ({
-                            id: `status-${id}`, label: `Status: ${meta.rotulo}`, icon: meta.icone,
-                            separadorAntes: id === 'rascunho',
-                            // A MESMA função da tela da demanda: o menu do
-                            // cartão não pode deixar a peça num estado que a
-                            // outra tela não produziria.
-                            onClick: async () => {
-                                const { mensagem, desfazer } = await mudarStatus(alvo, id);
-                                toast(mensagem, {
-                                    label: 'Desfazer',
-                                    onClick: async () => { await desfazer(); recarregar(); },
-                                });
-                                recarregar();
-                            },
+                    ...(atual ? [{ id: 'et-rascunho', label: 'rascunho (fora do link)', icon: 'pencil',
+                                   separadorAntes: true, onClick: () => ir(null) }] : []),
+                    ...etapasDa(esteiraDe(alvo.formato))
+                        .filter(et => et.nome !== atual?.nome && et.nome !== proxima)
+                        .map((et, i) => ({
+                            id: `et-${et.nome}`, label: et.nome, icon: et.icone,
+                            separadorAntes: !atual && i === 0,
+                            onClick: () => ir(et.nome),
                         })),
                     { id: 'abrir', label: 'Abrir o roteiro', icon: 'file-text', separadorAntes: true,
                       onClick: () => navegar(caminhoDoConteudo(alvo)) },
@@ -420,7 +413,7 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
             }));
 
         content.querySelector('#cr-liberar')?.addEventListener('click',
-            () => abrirLiberar(cliente, rascunhos, recarregar));
+            () => abrirLiberar(cliente, rascunhos, comRoteiro, recarregar));
 
         /* Arrastar um cartão sobre outro TROCA os dois de lugar. Na lista, o
            alvo é sempre outro conteúdo — não existe "vaga vazia" para receber,
@@ -555,7 +548,6 @@ const cartaoHTML = (c, todos) => {
                         ${esc(nomeDiaCurto(c.data))} ${esc(diaCurto(c.data))}
                     </span>
                     ${chipFase(c.fase, { curto: true })}
-                    ${chipStatus(c.status)}
                     ${l && l.chave === 'conflito' ? `<span class="vz-status vz-status--ajuste"><i data-lucide="octagon-alert"></i>par em conflito</span>` : ''}
                 </div>
                 <h3 class="vz-conteudo__titulo">${esc(c.titulo)}</h3>
@@ -566,10 +558,7 @@ const cartaoHTML = (c, todos) => {
                     ${c.responsavel ? `<span>${esc(c.responsavel)}</span>` : ''}
                     ${c.revisado ? '<span>revisado</span>' : ''}
                 </div>
-                ${(c.etiquetas || []).length ? `
-                    <div class="cr-etiquetas">
-                        ${c.etiquetas.map(chipEtiqueta).join('')}
-                    </div>` : ''}
+                <div class="cr-etiquetas">${chipsEstado(c)}</div>
                 ${seloDeslocado(desl)}
             </div>
             <i class="cr-seta" data-lucide="chevron-right"></i>
@@ -659,10 +648,13 @@ const cartaoHTML = (c, todos) => {
    mais teimosa que este sistema teve.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-const destinoAoLiberar = (c) =>
-    statusParaEtapa('rascunho', etapaAtual(c.etiquetas)?.nome) || 'em_revisao';
+/* A etapa que a peça ganha ao sair do rascunho. Quem já tinha etapa (dado
+   antigo, de antes da etapa única) fica nela; quem não tinha entra pelo
+   começo — aprovação se já há roteiro, desenvolvimento se ainda não há. */
+const destinoAoLiberar = (c, comRoteiro) =>
+    etapaAtual(c.etiquetas)?.nome || etapaAoLiberar(comRoteiro.has(c.id));
 
-function abrirLiberar(cliente, rascunhos, aoTerminar) {
+function abrirLiberar(cliente, rascunhos, comRoteiro, aoTerminar) {
     /* NADA marcado ao abrir. Liberar o mês inteiro custa um clique a mais
        ("Marcar todos"), e é um preço justo: o erro que este painel existe para
        impedir é o de liberar sem querer o que estava recolhido de propósito.
@@ -671,8 +663,7 @@ function abrirLiberar(cliente, rascunhos, aoTerminar) {
     const marcados = new Set();
 
     const linha = (c) => {
-        const destino = destinoAoLiberar(c);
-        const meta = STATUS[destino];
+        const destino = destinoAoLiberar(c, comRoteiro);
         return `
             <label class="cr-lib__item">
                 <input type="checkbox" class="cr-lib__caixa" data-lib="${esc(c.id)}">
@@ -681,7 +672,7 @@ function abrirLiberar(cliente, rascunhos, aoTerminar) {
                     <span class="cr-lib__meta">
                         ${esc(dataBR(c.data))}
                         <span class="cr-lib__seta"><i data-lucide="arrow-right"></i></span>
-                        <span class="cr-lib__destino">${esc(meta?.rotulo || destino)}</span>
+                        <span class="cr-lib__destino">${esc(destino)}</span>
                     </span>
                 </span>
             </label>`;
@@ -750,19 +741,18 @@ function abrirLiberar(cliente, rascunhos, aoTerminar) {
                    inteira a cada salvar, e disparar dez em paralelo faz a última
                    escrita sobrescrever as nove anteriores. */
                 const desfazeres = [];
-                let adiantados = 0;
+                let semRoteiro = 0;
                 for (const c of escolhidos) {
-                    const destino = destinoAoLiberar(c);
-                    if (destino !== 'em_revisao') adiantados++;
-                    // A MESMA função das outras telas: liberar também é uma
-                    // troca de status, e a etapa acompanha do mesmo jeito.
-                    const { desfazer } = await mudarStatus(c, destino);
+                    const destino = destinoAoLiberar(c, comRoteiro);
+                    if (!comRoteiro.has(c.id)) semRoteiro++;
+                    // A MESMA função das outras telas: liberar é mover de etapa.
+                    const { desfazer } = await moverParaEtapa(c, destino);
                     desfazeres.push(desfazer);
                 }
 
                 closeDrawer();
                 toast(`${escolhidos.length} conteúdo${escolhidos.length === 1 ? '' : 's'} no link do cliente.`
-                    + (adiantados ? ` ${adiantados} já ${adiantados === 1 ? 'estava' : 'estavam'} adiante na produção e não ${adiantados === 1 ? 'voltou' : 'voltaram'} a pedir aprovação de roteiro.` : ''), {
+                    + (semRoteiro ? ` ${semRoteiro} sem roteiro ${semRoteiro === 1 ? 'entrou' : 'entraram'} como "roteiro em desenvolvimento" — nada é pedido ao cliente ainda.` : ''), {
                     label: 'Desfazer',
                     // Conferir doze conteúdos leva mais que os onze segundos
                     // padrão — e este é o aviso que faltou da última vez.
@@ -1167,7 +1157,7 @@ export function abrirBancoDeTemas(cliente, noBanco, aoTerminar) {
                         <div class="cr-banco__corpo">
                             <div class="cr-banco__topo">
                                 ${chipFase(c.fase, { curto: true })}
-                                ${chipStatus(c.status)}
+                                ${chipsEstado(c)}
                                 <span class="cr-banco__desde">guardado em ${esc(dataBR(String(c.banco_em).slice(0, 10)))}</span>
                             </div>
                             <h4 class="cr-banco__titulo">${esc(c.titulo)}</h4>
@@ -1289,26 +1279,32 @@ export function formularioConteudo(c, cliente, mesSugerido, aoTerminar, etiqueta
                 dica: 'Traga o time do Gestor no painel de clientes para virar uma lista.',
             }]),
 
-            { nome: 'status', rotulo: 'Status', tipo: 'select', largura: 'metade', opcoes:
-                Object.entries(STATUS).map(([id, s]) => ({ valor: id, rotulo: s.rotulo })) },
+            /* UM campo de estado: a etapa. O status com o cliente sai dela
+               (lib/etiquetas.js — statusDaEtapa), e não se escolhe mais à mão.
+               Ver db/migracao-etapa-unica.sql. */
+            { nome: '_etapa', rotulo: 'Etapa', tipo: 'select', largura: 'metade', opcoes: [
+                { valor: '', rotulo: 'rascunho — fora do link do cliente' },
+                ...etapasDa(esteiraDe(c?.formato)).map(e => ({ valor: e.nome, rotulo: e.nome })),
+              ],
+              dica: 'O que o cliente vê acompanha a etapa sozinho.' },
             { nome: 'revisado', tipo: 'checkbox', rotulo: 'Conformidade revisada',
               dica: 'Marque depois da conferência jurídica. O cliente vê essa confirmação.' },
 
-            /* Etiqueta é o estado INTERNO que o sistema não interpreta — "a
-               gravar", "aguardando data". Fica separada de `status`, que é a
-               conversa com o cliente: cada valor de status vira regra em
-               código, e este campo existe justamente para o fluxo poder mudar
-               sem passar por migração. Ver db/migracao-etiquetas.sql. */
-            { nome: 'etiquetas', rotulo: 'Etiquetas', tipo: 'etiquetas',
-              sugestoes: etiquetasEmUso,
-              placeholder: 'a gravar, aguardando data',
-              dica: 'Separe por vírgula. Só a equipe vê. Escreva a que precisar — '
-                  + 'a lista se monta sozinha com as que já estão em uso.' },
+            /* Pendências: convivem com qualquer etapa e não mudam nada além do
+               aviso. O cliente vê as duas. */
+            ...PENDENCIAS.map(p => ({
+                nome: `_pend:${p.nome}`, tipo: 'checkbox', rotulo: p.nome, largura: 'metade', dica: p.dica,
+            })),
 
             { nome: 'nota', rotulo: 'Anotação interna', tipo: 'textarea',
               dica: 'Só a equipe vê.' },
         ],
-        valores: c || {
+        valores: c ? {
+            ...c,
+            _etapa: etapaAtual(c.etiquetas)?.nome || '',
+            ...Object.fromEntries(PENDENCIAS.map(p =>
+                [`_pend:${p.nome}`, (c.etiquetas || []).some(e => etiquetaMeta(e).nome === p.nome)])),
+        } : {
             status: 'rascunho',
             // Data padrão: hoje, se estamos no mês visitado; senão, o dia 1º
             // dele. Abrir o formulário em outubro e receber a data de hoje faz
@@ -1440,12 +1436,36 @@ export function formularioConteudo(c, cliente, mesSugerido, aoTerminar, etiqueta
             atualizar();
         },
         aoSalvar: async (dados) => {
+            /* Os campos de estado não são colunas: saem de `dados` e viram a
+               lista de etiquetas. A etapa ATUAL fica onde está nesta primeira
+               gravação; trocar de etapa é moverParaEtapa, que calcula o status
+               e registra a reabertura quando há — a mesma regra de todas as
+               telas. Etiqueta que não é etapa nem pendência (dado antigo) é
+               preservada. */
+            const etapaNova = dados._etapa || null;
+            const registro = Object.fromEntries(Object.entries(dados).filter(([k]) => !k.startsWith('_')));
+            const antigas = (c?.etiquetas || []).filter(e =>
+                etiquetaMeta(e).etapa || !PENDENCIAS.some(p => p.nome === etiquetaMeta(e).nome));
+            registro.etiquetas = [...antigas, ...PENDENCIAS.filter(p => dados[`_pend:${p.nome}`]).map(p => p.nome)];
+
             /* Editar a data na ficha é remanejamento DELIBERADO, então a origem
                acompanha. Arrastar é outra coisa: lá a origem fica parada, e é
                a diferença entre as duas que revela o deslocamento. */
-            await store.conteudos.salvar({ ...dados, cliente_id: cliente.id, data_original: dados.data });
-            toast(c ? 'Conteúdo atualizado.' : 'Conteúdo criado.');
-            aoTerminar();
+            let linha = await store.conteudos.salvar({ ...registro, cliente_id: cliente.id, data_original: dados.data });
+            if ((etapaAtual(linha.etiquetas)?.nome || null) !== etapaNova) {
+                await moverParaEtapa(linha, etapaNova);
+            }
+
+            if (c) {
+                toast('Conteúdo atualizado.');
+                aoTerminar();
+            } else {
+                /* Criou: vai direto para a página do conteúdo. Quase sempre o
+                   próximo passo é escrever o roteiro, e ele estava no fim de
+                   uma lista que precisava ser rolada até achar. */
+                toast('Conteúdo criado.');
+                navegar(caminhoDoConteudo(linha));
+            }
         },
         aoExcluir: c ? async () => {
             /* Os blocos do roteiro somem junto. No banco isso é `on delete

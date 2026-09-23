@@ -1,5 +1,6 @@
-import { etapaAtual, etapaEsperaCliente, ETAPAS, ETAPA_ESCRITA } from './etiquetas.js';
+import { etapaAtual, etapaEsperaCliente, ETAPAS, ETAPA_ESCRITA, ETAPA_APROVACAO, ETAPA_GRAVAR, ETAPA_DIAGRAMAR, esteiraDe, normalizarPeca, statusDaEtapa } from './etiquetas.js';
 import { daEquipe } from './conversa.js';
+import { STATUS } from './pecas.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    CONSISTÊNCIA — onde o sistema se contradiz.
@@ -136,22 +137,28 @@ export const auditar = (conteudos, blocos, retornos) => {
 
         /* ── Contradições ──────────────────────────────────────────────── */
 
+        const produzir = esteiraDe(c.formato) === 'carrossel' ? ETAPA_DIAGRAMAR : ETAPA_GRAVAR;
+        const naAprovacao = !etapa || etapa.nome === ETAPA_APROVACAO;
+        let acusada = false;
+
         /* O bug que originou este arquivo. `devolveu` fora: se a equipe
            reabriu o roteiro para aprovação, "em revisão" é o estado certo — e
            acusar contradição aqui faria o sistema apontar a própria ação. */
-        if (c.status === 'em_revisao' && aprovou && !pediuDepois && !devolveu) {
+        if (c.status === 'em_revisao' && naAprovacao && aprovou && !pediuDepois && !devolveu) {
+            acusada = true;
             achados.push(problema('grave', 'aprovacao-perdida', c,
-                'Aprovado pelo cliente, mas marcado como em revisão',
-                'O histórico tem a aprovação dele e o status ficou para trás. A tela dele mostra '
+                'Aprovado pelo cliente, mas ainda na etapa de aprovação',
+                'O histórico tem a aprovação dele e a peça ficou para trás. A tela dele mostra '
               + 'aprovado; a nossa, esperando resposta.',
-                { rotulo: 'Marcar como aprovado', campo: 'status', valor: 'aprovado' }));
+                { rotulo: `Mover para ${produzir}`, etapa: produzir, status: 'aprovado' }));
         }
 
         if (c.status === 'aprovado' && pediuDepois) {
+            acusada = true;
             achados.push(problema('grave', 'ajuste-ignorado', c,
                 'Marcado como aprovado depois de um pedido de ajuste',
                 'O último retorno dele foi um pedido de mudança, e o conteúdo está como aprovado.',
-                { rotulo: 'Marcar como ajuste', campo: 'status', valor: 'ajuste' }));
+                { rotulo: 'Voltar para aprovação, com o ajuste pedido', etapa: ETAPA_APROVACAO, status: 'ajuste' }));
         }
 
         if (c.status === 'aprovado' && !aprovou) {
@@ -161,71 +168,13 @@ export const auditar = (conteudos, blocos, retornos) => {
               + 'mas o cliente não vai encontrar registro disso.'));
         }
 
-        if (etapasNaPeca.length > 1) {
-            achados.push(problema('grave', 'duas-etapas', c,
-                'Duas etapas de produção ao mesmo tempo',
-                `A peça está marcada como ${etapasNaPeca.join(' e ')}. Só uma pode valer.`,
-                { rotulo: `Manter só ${etapa?.nome}`, campo: 'etiquetas', valor: null }));
-        }
-
-        // Rascunho com o roteiro sendo escrito é o começo normal de tudo.
-        if (c.status === 'rascunho' && etapa && etapa.nome !== ETAPA_ESCRITA) {
-            /* O conserto depende de onde a peça está. Na etapa de aprovação,
-               liberar quer dizer "o cliente precisa ler" — em revisão. Depois
-               dela, a peça está sendo PRODUZIDA, e mandá-la para revisão
-               pediria uma resposta que ninguém espera: aí é "em
-               desenvolvimento", que aparece no link dele sem cobrar nada. */
-            const destino = etapa.etapa <= 1 ? 'em_revisao' : 'desenvolvimento';
-            achados.push(problema('grave', 'rascunho-em-producao', c,
-                'Em produção, mas invisível para o cliente',
-                `Está marcado como ${etapa.nome} e o status é rascunho — ele não vê esta peça.`,
-                { rotulo: destino === 'em_revisao' ? 'Liberar para o cliente' : 'Marcar como em desenvolvimento',
-                  campo: 'status', valor: destino }));
-        }
-
         if (c.banco_em && etapa) {
             achados.push(problema('grave', 'banco-em-producao', c,
                 'No banco de temas com etapa de produção',
                 `Guardado fora do cronograma e marcado como ${etapa.nome}. A produção não vai achá-lo.`));
         }
 
-        /* O caso relatado: produção andou e a conversa com o cliente ficou
-           para trás. Na tela dele, uma peça já gravada pedindo aprovação de
-           roteiro. */
-        if (etapa && etapa.etapa >= 3 && ['rascunho', 'em_revisao'].includes(c.status)) {
-            /* Quem aprovou decide o conserto: com aprovação no histórico, o
-               status honesto é "aprovado"; sem ela, dizer aprovado inventaria
-               uma resposta que o cliente nunca deu — e o estado verdadeiro é
-               "em desenvolvimento", que é o que a peça está fazendo. */
-            const destino = aprovou ? 'aprovado' : 'desenvolvimento';
-            achados.push(problema('grave', 'etapa-sem-status', c,
-                `Já está em "${etapa.nome}" e ainda consta como ${c.status === 'rascunho' ? 'rascunho' : 'em revisão'}`,
-                'A produção avançou e o status ficou para trás. O cliente vê uma peça já em produção '
-              + 'pedindo aprovação de roteiro.',
-                { rotulo: aprovou ? 'Marcar como aprovado' : 'Marcar como em desenvolvimento',
-                  campo: 'status', valor: destino }));
-        }
-
-        /* O espelho do caso acima: a etapa diz que o roteiro está com o
-           cliente e o status diz que ele já respondeu.
-
-           O conserto mexe na ETAPA, não no status, e a razão importa: quando a
-           volta para aprovação é feita pelo sistema, ela reabre a conversa e
-           deixa registro (lib/etapas.js). Aqui não há registro nenhum — o que
-           existe é uma aprovação no histórico e uma etiqueta que ficou para
-           trás. Demote o status e a varredura acusaria, com toda razão, o
-           problema contrário na volta seguinte; um conserto que cria a próxima
-           contradição não é conserto. */
-        if (etapa && etapa.etapa === 1 && ['aprovado', 'publicado'].includes(c.status)) {
-            const destino = c.status === 'publicado' ? 'publicado' : 'a gravar';
-            achados.push(problema('grave', 'aprovacao-sem-volta', c,
-                'Na etapa de aprovação e já marcado como aprovado',
-                'A etapa diz que o roteiro está com o cliente e o status diz que ele já respondeu. '
-              + 'A tela dele mostra o selo de aprovado onde deveria estar o botão de aprovar.',
-                { rotulo: `Marcar como ${destino}`, campo: 'etiquetas', valor: destino }));
-        }
-
-        if (etapa && etapa.etapa >= 4 && c.status === 'ajuste') {
+        if (etapa && etapa.etapa >= 4 && etapa.etapa < 6 && c.status === 'ajuste') {
             achados.push(problema('grave', 'gravado-com-ajuste', c,
                 `Gravado com um pedido de ajuste em aberto`,
                 'A peça foi gravada e o cliente tinha pedido mudança no roteiro. Vale conferir se '
@@ -233,13 +182,34 @@ export const auditar = (conteudos, blocos, retornos) => {
         }
 
         /* Sem roteiro e esperando aprovação é contradição — MENOS quando a
-           etiqueta diz, na cara do cliente, que o texto está sendo escrito.
+           etapa diz, na cara do cliente, que o texto está sendo escrito.
            Essa é a peça liberada de propósito antes do roteiro existir. */
-        if (c.status === 'em_revisao' && !temRoteiro.has(c.id) && etapa?.nome !== ETAPA_ESCRITA) {
+        if (c.status === 'em_revisao' && naAprovacao && !temRoteiro.has(c.id)) {
+            acusada = true;
             achados.push(problema('grave', 'revisao-sem-roteiro', c,
                 'Esperando aprovação sem roteiro escrito',
                 'O cliente abre e encontra "roteiro ainda não escrito".',
-                { rotulo: 'Voltar para rascunho', campo: 'status', valor: 'rascunho' }));
+                { rotulo: `Mover para ${ETAPA_ESCRITA}`, etapa: ETAPA_ESCRITA, status: 'desenvolvimento' }));
+        }
+
+        /* ── A ETAPA É A ÚNICA FONTE ──────────────────────────────────────
+           Tudo o que antes eram quatro regras (duas etapas ao mesmo tempo,
+           rascunho em produção, etapa à frente do status, status à frente da
+           etapa) é uma pergunta só no modelo de etapa única: o status gravado
+           é o que a etapa manda? Etiqueta livre de antes também cai aqui — o
+           conserto a leva para a anotação interna. */
+        const acerto = !acusada && normalizarPeca(c, { aprovouRoteiro: aprovou && !devolveu });
+        if (acerto) {
+            const nomeStatus = (id) => STATUS[id]?.rotulo.toLowerCase() || id;
+            const etapaNova = etapaAtual(acerto.etiquetas)?.nome || 'rascunho';
+            achados.push(problema('grave', 'fora-da-etapa', c,
+                etapa ? `Na etapa "${etapa.nome}", mas o status é "${nomeStatus(c.status)}"`
+                      : `Sem etapa, mas o status é "${nomeStatus(c.status)}"`,
+                'A etapa é quem decide o que o cliente vê. '
+              + (etapasNaPeca.length > 1 ? `A peça tem ${etapasNaPeca.length} etapas marcadas (${etapasNaPeca.join(', ')}). ` : '')
+              + (acerto.nota !== c.nota ? 'As etiquetas livres vão para a anotação interna. ' : '')
+              + `Acertando, a peça fica em "${etapaNova}" e o cliente vê "${nomeStatus(acerto.status)}".`,
+                { rotulo: 'Acertar pela etapa', normalizar: acerto }));
         }
 
         /* ── Faltas ────────────────────────────────────────────────────── */

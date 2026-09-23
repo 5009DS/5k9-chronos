@@ -2,7 +2,7 @@ import { store } from '../store.js';
 import { buscar } from '../lib/busca.js';
 import { caminhoDoConteudo, navegar } from '../lib/rotas.js';
 import { esc, diaCurto } from '../lib/formato.js';
-import { chipStatus } from '../lib/pecas.js';
+import { chipsEstado, injectEstilosEtiqueta } from '../lib/etiquetas.js';
 import { tipo } from '../lib/roteiro.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -36,6 +36,7 @@ export const fecharBusca = () => {
 export const abrirBusca = async (consultaInicial = '') => {
     if (aberta) { aberta.fundo.querySelector('.bs-input').focus(); return; }
     injectStyles();
+    injectEstilosEtiqueta();
 
     const fundo = document.createElement('div');
     fundo.className = 'bs-fundo';
@@ -179,7 +180,7 @@ const itemHTML = (r, i, nomes) => {
             ${noTitulo ? '' : `
             <span class="bs-item__trecho"><b>${esc(onde)}</b> ${marcado(r.trecho)}</span>`}
             <span class="bs-item__chips">
-                ${chipStatus(c.status)}
+                ${chipsEstado(c)}
                 ${c.banco_em ? `<span class="vz-status"><i data-lucide="archive"></i>No banco de temas</span>` : ''}
             </span>
         </a>`;

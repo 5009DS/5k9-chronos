@@ -176,6 +176,7 @@ export const ETAPA_ESCRITA   = 'roteiro em desenvolvimento';
 export const ETAPA_APROVACAO = 'roteiro em aprovação';
 export const ETAPA_GRAVAR    = 'a gravar';
 export const ETAPA_DIAGRAMAR = 'a diagramar';
+export const ETAPA_APROVADO  = 'roteiro aprovado';
 export const ETAPA_PRONTO    = 'pronto para publicar';
 export const ETAPA_PUBLICADO = 'publicado';
 
@@ -255,8 +256,23 @@ export const ajusteTravado = (lista) =>
    adaptador local responder igual. */
 export const etiquetasAoAprovar = (lista, esteira = 'video') => {
     const atuais = lista || [];
+    const atual = etapaAtual(atuais);
+    /* Aprovar a GRAVAÇÃO ou a ARTE é o fim da conversa: a peça fica pronta.
+       Antes isto caía na regra do roteiro e mandava gravar de novo o vídeo
+       que o cliente tinha acabado de aprovar. */
+    if (atual?.esperaCliente && atual.etapa >= 6) return comEtapa(atuais, ETAPA_PRONTO);
+    // Já está em produção ou adiante: aprovar confirma, não empurra para trás.
+    if (atual && atual.etapa >= 3) return atuais;
     if (ajusteTravado(atuais)) return atuais;
     return comEtapa(atuais, esteira === 'carrossel' ? ETAPA_DIAGRAMAR : ETAPA_GRAVAR);
+};
+
+/** O status que a aprovação do cliente deixa, dada a etapa que resultou. */
+export const statusAoAprovar = (lista) => {
+    const nome = etapaAtual(lista)?.nome;
+    if (nome === ETAPA_PRONTO) return 'pronto';
+    if (nome === ETAPA_PUBLICADO) return 'publicado';
+    return 'aprovado';
 };
 
 /** Em que etapa a peça está, ou null quando ainda não entrou na esteira. */
@@ -284,111 +300,109 @@ export const proximaEtapa = (lista, esteira = 'video') => {
     return proximaDe(atual, esteira);
 };
 
-/* ── A ETAPA PUXA O STATUS ────────────────────────────────────────────────
-   Uma peça marcada como "gravado" continuava com status "em revisão": a
-   equipe avançava a produção e a conversa com o cliente ficava para trás. Na
-   tela dele, uma peça já gravada pedia aprovação de roteiro.
+/* ═══════════════════════════════════════════════════════════════════════════
+   UM CAMPO SÓ: A ETAPA DECIDE, O STATUS É CONSEQUÊNCIA
 
-   Da etapa "a gravar" em diante, o roteiro FOI aprovado — é o que autoriza
-   gravar. Então o status acompanha: rascunho ou em revisão viram aprovado, e
-   "publicado" leva o status junto.
+   Até aqui a peça tinha dois vocabulários — o status (a conversa com o
+   cliente) e a etapa (onde está a produção) — e regras de ida e volta tentando
+   mantê-los de acordo. As regras deixavam brechas de propósito, e cada brecha
+   virava uma peça dizendo duas coisas ao mesmo tempo.
 
-   E o caminho de volta, pela mesma razão: pôr a peça em "roteiro em aprovação"
-   é dizer que ela está na mão do cliente, então o status vira "em revisão". Sem
-   isto, escrever o roteiro e marcar a etapa deixava a peça invisível para ele —
-   o rascunho não aparece na tela do cliente — e ninguém descobria até a cobrança
-   de uma aprovação que nunca foi pedida. Esta volta vale de QUALQUER status,
-   inclusive de aprovado: reabrir para aprovação é um ato explícito de quem
-   mexeu, não um resto de estado antigo.
+   Agora a equipe só escolhe a ETAPA. O status continua gravado na coluna,
+   porque a tela do cliente e as funções do banco leem dele, mas ninguém o
+   escolhe mais: ele sai desta tabela.
 
-   ── O QUE ELA NÃO FAZ ────────────────────────────────────────────────────
-   AVANÇANDO, não mexe em "ajuste". Gravar com um pedido de mudança em aberto é
-   uma contradição de verdade — alguém gravou o que o cliente pediu para mudar —
-   e apagá-la aqui esconderia o problema em vez de mostrá-lo. A conferência
-   aponta esse caso.
+     sem etapa                      rascunho         o cliente não vê
+     roteiro em desenvolvimento     desenvolvimento  vê, não faz nada
+     roteiro em aprovação           em revisão       aprova ou pede ajuste
+     roteiro aprovado               aprovado
+     a gravar … em edição, revisão  aprovado — se o cliente aprovou o roteiro;
+                                    senão "em desenvolvimento", para a tela
+                                    dele não dizer "aprovado por você" num
+                                    texto que ele nunca leu
+     gravação/arte em aprovação     em revisão       aprova ou pede ajuste
+     pronto para publicar           pronto
+     publicado                      publicado
 
-   Voltar para aprovação é o contrário: sai de "ajuste" de propósito, porque
-   devolver o roteiro ao cliente é justamente o desfecho do pedido dele.
+   O único status que NÃO sai daqui é "ajuste": ele é o cliente falando, não a
+   equipe escolhendo. Fica como marca em cima da etapa em que o pedido chegou
+   e some no próximo movimento da equipe — mover a peça é a resposta.
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-   Devolve null quando não há nada a mudar, para quem chama não gravar à toa. */
-export const statusParaEtapa = (statusAtual, nomeEtapa) => {
-    const meta = etiquetaMeta(nomeEtapa);
-    if (!meta.etapa) return null;
-
-    /* Pelo NOME e não pelo número: uma etapa nova no começo da esteira não
-       pode mudar o sentido de uma regra escrita meses antes. "Roteiro em
-       desenvolvimento" cai fora daqui de propósito — pôr a peça nela não é
-       pedir nada ao cliente, e o status não muda. */
-    if (meta.nome === ETAPA_APROVACAO) return statusAtual === 'em_revisao' ? null : 'em_revisao';
-
-    const podeSubir = ['rascunho', 'em_revisao'].includes(statusAtual);
-
-    if (meta.nome === ETAPA_PUBLICADO && statusAtual !== 'publicado') return 'publicado';
-    /* Pronto é aprovado com data pela frente: quem já publicou não volta. */
-    if (meta.nome === ETAPA_PRONTO && !['pronto', 'publicado'].includes(statusAtual)) return 'pronto';
-
-    /* 3 = "a gravar" / "a diagramar": a peça saiu da mão do cliente e entrou na
-       da equipe. Antes isto virava "aprovado", e era mentira sempre que ninguém
-       tinha aprovado nada — a tela do cliente passava a dizer "aprovado por
-       você" numa peça que ele nunca leu. "Em desenvolvimento" diz o que está
-       acontecendo de verdade: está sendo produzida, e não há o que ele responda.
-
-       Peça que ele REALMENTE aprovou não passa por aqui: o status dela já é
-       "aprovado", que não está em podeSubir. */
-    if (meta.etapa >= 3 && podeSubir) return 'desenvolvimento';
-    return null;
+/** O status que uma etapa impõe. `nome` null é "sem etapa" (rascunho). */
+export const statusDaEtapa = (nome, { aprovouRoteiro = false } = {}) => {
+    if (!nome) return 'rascunho';
+    const meta = etiquetaMeta(nome);
+    if (!meta.etapa) return 'rascunho';
+    if (meta.nome === ETAPA_ESCRITA)   return 'desenvolvimento';
+    if (meta.nome === ETAPA_PRONTO)    return 'pronto';
+    if (meta.nome === ETAPA_PUBLICADO) return 'publicado';
+    if (meta.esperaCliente)            return 'em_revisao';
+    if (meta.nome === ETAPA_APROVADO)  return 'aprovado';
+    return aprovouRoteiro ? 'aprovado' : 'desenvolvimento';
 };
 
-/* ── E O STATUS PUXA A ETAPA ──────────────────────────────────────────────
-   O outro lado da mesma moeda, e o que faltava: mudar o status para rascunho
-   deixava a etiqueta "roteiro em aprovação" no lugar. A peça sumia do link do
-   cliente e continuava marcada como se estivesse na mão dele — as duas telas
-   dizendo coisas diferentes sobre a mesma peça, que é a queixa que mais se
-   repetiu neste sistema.
+/** As pendências: marcas que convivem com qualquer etapa e não mudam status. */
+export const PENDENCIAS = ETIQUETAS.filter(e => !e.etapa && e.publica);
 
-   ── O QUE ELA MUDA, E O QUE DEIXA QUIETO ──────────────────────────────────
-   Só age quando a leitura é ÚNICA:
+/**
+ * Traz uma peça do modelo antigo (status e etiquetas escolhidos à parte) para
+ * o novo: UMA etapa, as pendências, e o status calculado.
+ *
+ * A etapa ganha do status quando as duas existem — é a informação mais
+ * específica. A exceção é o fim da linha: status "pronto" ou "publicado" com
+ * etapa mais atrás é a etapa que ficou esquecida, e quem avança é ela.
+ *
+ * Etiqueta livre não tem mais onde morar; vai para a nota, com a data, para
+ * não se perder nada. O mesmo raciocínio está em db/migracao-etapa-unica.sql.
+ *
+ * @returns {?{status, etiquetas, nota}} null quando a peça já está certa.
+ */
+export const normalizarPeca = (c, { aprovouRoteiro = false } = {}) => {
+    const lista = c.etiquetas || [];
+    const esteira = esteiraDe(c.formato);
+    const pendencias = lista.filter(e => PENDENCIAS.some(p => chave(p.nome) === chave(e)))
+        .map(e => etiquetaMeta(e).nome);
+    const livres = lista.filter(e => !etiquetaMeta(e).etapa && !PENDENCIAS.some(p => chave(p.nome) === chave(e)));
 
-     rascunho    tira a etapa de aprovação — um rascunho não está com ninguém.
-                 Etapas mais adiante ficam: "gravado" é um fato da produção,
-                 e apagá-lo por causa de um clique em status seria destruir
-                 informação que ninguém pediu para destruir.
-     publicado   põe a etapa "publicado". Publicado é publicado.
-     aprovado    avança de "roteiro em aprovação" para "a gravar", que é
-                 exatamente o que a aprovação do cliente já fazia sozinha.
-     em revisão  e ajuste só entram quando a peça ainda não tem etapa nenhuma.
+    let etapa = etapaAtual(lista)?.nome || null;
+    /* Rascunho continua rascunho: a conversão nunca pode fazer uma peça
+       aparecer para o cliente sem alguém decidir. A etapa que havia fica
+       anotada, para não se perder. */
+    if (c.status === 'rascunho' && etapa) {
+        livres.push(`etapa antes da etapa única: ${etapa}`);
+        etapa = null;
+    }
+    const porStatus = {
+        desenvolvimento: ETAPA_ESCRITA,
+        em_revisao: ETAPA_APROVACAO,
+        ajuste: ETAPA_APROVACAO,
+        aprovado: ETAPA_APROVADO,
+        pronto: ETAPA_PRONTO,
+        publicado: ETAPA_PUBLICADO,
+    }[c.status];
+    if (!etapa && porStatus) etapa = porStatus;
+    if (c.status === 'publicado') etapa = ETAPA_PUBLICADO;
+    if (c.status === 'pronto' && etapa !== ETAPA_PUBLICADO) etapa = ETAPA_PRONTO;
+    // Etapa da outra esteira (um "a gravar" num carrossel) vira a equivalente.
+    const meta = etapa && etiquetaMeta(etapa);
+    if (meta && meta.esteira !== 'ambas' && meta.esteira !== esteira) {
+        etapa = etapasDa(esteira).find(e => e.etapa === meta.etapa)?.nome || etapa;
+    }
 
-   Quando a peça JÁ está numa etapa adiantada, "em revisão" tem mais de uma
-   leitura possível — o cliente pode estar vendo o roteiro ou a gravação — e
-   chutar uma delas trocaria uma contradição por outra. Esses casos ficam com
-   a conferência, que mostra o par e deixa a escolha com quem sabe.
+    const aprovou = aprovouRoteiro || ['aprovado', 'pronto', 'publicado'].includes(c.status);
+    let status = statusDaEtapa(etapa, { aprovouRoteiro: aprovou });
+    // O pedido de ajuste sobrevive quando a peça ainda está com o cliente.
+    if (c.status === 'ajuste' && etiquetaMeta(etapa).esperaCliente) status = 'ajuste';
 
-   Devolve a lista NOVA de etiquetas, ou null quando não há nada a mudar. */
-export const etiquetasParaStatus = (status, etiquetas, esteira = 'video') => {
-    const atual = etapaAtual(etiquetas);
-    const produzir = esteira === 'carrossel' ? ETAPA_DIAGRAMAR : ETAPA_GRAVAR;
+    const etiquetas = [...(etapa ? [etapa] : []), ...new Set(pendencias)];
+    const nota = livres.length
+        ? [c.nota, `Etiquetas antigas: ${livres.join('; ')}`].filter(Boolean).join('\n')
+        : c.nota;
 
-    const destino = (() => {
-        if (status === 'publicado') return atual?.nome === ETAPA_PUBLICADO ? undefined : ETAPA_PUBLICADO;
-        // Rascunho tira a etapa de aprovação e SÓ ela: escrever o roteiro de
-        // uma peça ainda não liberada é o estado mais normal que existe.
-        if (status === 'rascunho')  return atual?.nome === ETAPA_APROVACAO ? null : undefined;
-        if (status === 'aprovado')  return !atual || atual.nome === ETAPA_APROVACAO ? produzir : undefined;
-        /* "Em desenvolvimento" não escolhe etapa: ele vale tanto para quem está
-           escrevendo quanto para quem está diagramando, e adivinhar qual das
-           duas seria trocar a informação de quem marcou por um palpite. */
-        if (status === 'desenvolvimento') return undefined;
-        /* Espelho do de cima: marcar "pronto para publicar" no status põe a
-           peça na etapa de mesmo nome, a não ser que ela já esteja no ar. */
-        if (status === 'pronto') return atual?.nome === ETAPA_PRONTO || atual?.nome === ETAPA_PUBLICADO
-            ? undefined : ETAPA_PRONTO;
-        if (['em_revisao', 'ajuste'].includes(status)) return atual ? undefined : ETAPA_APROVACAO;
-        return undefined;
-    })();
-
-    // undefined é "não mexer"; null é "tirar da esteira" — e os dois precisam
-    // ser distinguíveis aqui dentro, porque só um deles grava.
-    return destino === undefined ? null : comEtapa(etiquetas, destino);
+    const igual = status === c.status && nota === c.nota
+        && etiquetas.length === lista.length && etiquetas.every(e => lista.includes(e));
+    return igual ? null : { status, etiquetas, nota };
 };
 
 export const chipEtiqueta = (nome) => {
@@ -397,6 +411,24 @@ export const chipEtiqueta = (nome) => {
         <i data-lucide="${esc(m.icone)}"></i>${esc(nome)}
     </span>`;
 };
+
+/* O ESTADO da peça, num lugar só: a etapa (ou "rascunho" quando não há), a
+   marca de ajuste quando o cliente pediu, e as pendências. É o que substitui
+   o par "chip de status + chips de etiqueta" nas telas da equipe. */
+export const chipsEstado = (c) => {
+    const etapa = etapaAtual(c?.etiquetas);
+    const principal = etapa ? chipEtiqueta(etapa.nome)
+        : `<span class="vz-etiqueta vz-etiqueta--neutro" title="Só a equipe vê. Não aparece no link do cliente.">
+               <i data-lucide="pencil"></i>rascunho</span>`;
+    const ajuste = c?.status === 'ajuste'
+        ? `<span class="vz-etiqueta vz-etiqueta--risco" title="O cliente pediu uma alteração. Mover a peça de etapa é a resposta.">
+               <i data-lucide="message-circle-warning"></i>ajuste pedido</span>` : '';
+    const resto = (c?.etiquetas || []).filter(e => !etiquetaMeta(e).etapa).map(chipEtiqueta).join('');
+    return principal + ajuste + resto;
+};
+
+/** Rótulo curto do estado, para texto corrido e títulos de menu. */
+export const nomeEstado = (c) => etapaAtual(c?.etiquetas)?.nome || 'rascunho';
 
 /* Estilos das etiquetas. Vivem aqui, e não no CSS de uma página, porque o chip
    aparece no cronograma, no quadro e no painel de edição — três arquivos que

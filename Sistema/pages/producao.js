@@ -5,7 +5,7 @@ import { navegar, caminhoDoConteudo } from '../lib/rotas.js';
 import { esc, dataBR, diaCurto, nomeDiaCurto } from '../lib/formato.js';
 import { chipFase, vazioHTML, STATUS } from '../lib/pecas.js';
 import { etapasDa, etapaAtual, esteiraDe, injectEstilosEtiqueta } from '../lib/etiquetas.js';
-import { moverParaEtapa } from '../lib/etapas.js';
+import { moverParaEtapa, mensagemDeMovimento } from '../lib/etapas.js';
 import { ativarArraste } from '../lib/arrastar.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -96,8 +96,8 @@ export const renderProducao = async (container, clienteId) => {
     };
 
     const colunas = () => [
-        { chave: SEM_ETAPA, nome: 'Sem etapa', icone: 'circle-dashed', tom: 'neutro',
-          dica: 'Existe no cronograma e ainda não entrou na produção.' },
+        { chave: SEM_ETAPA, nome: 'rascunho', icone: 'pencil', tom: 'neutro',
+          dica: 'Só a equipe vê. Não aparece no link do cliente.' },
         ...etapasDa(esteiraAtiva).map(e => ({ chave: e.nome, nome: e.nome, icone: e.icone, tom: e.tom, dica: e.dica })),
     ];
 
@@ -119,9 +119,7 @@ export const renderProducao = async (container, clienteId) => {
         // podem deixar o conteúdo em estados diferentes.
         const { novoStatus, reabriu, desfazer } = await moverParaEtapa(c, nome);
 
-        toast((nome ? `"${c.titulo}" → ${nome}.` : `"${c.titulo}" saiu da esteira.`)
-            + (novoStatus ? ` Status: ${STATUS[novoStatus]?.rotulo || novoStatus}.` : '')
-            + (reabriu ? ' A volta ficou registrada no histórico.' : ''), {
+        toast(`"${c.titulo}": ${mensagemDeMovimento(nome, novoStatus, reabriu).replace(/^Agora: /, '')}`, {
             label: 'Desfazer',
             onClick: async () => { await desfazer(); recarregar(); },
         });

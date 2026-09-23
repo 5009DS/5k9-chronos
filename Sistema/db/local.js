@@ -13,7 +13,7 @@
    Configurações oferece exportar em JSON.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { etiquetasPublicas, ajusteTravado, etiquetasAoAprovar, esteiraDe } from '../lib/etiquetas.js';
+import { etiquetasPublicas, ajusteTravado, etiquetasAoAprovar, statusAoAprovar, esteiraDe } from '../lib/etiquetas.js';
 
 const CHAVE = (colecao) => `5k9_visualizador_${colecao}`;
 
@@ -185,12 +185,13 @@ export const local = {
             /* `alvo` e não o conteúdo da visão: a visão já saiu recortada para
                o cliente, sem nota e só com as etiquetas públicas — gravar a
                partir dela apagaria as internas. */
+            const etiquetas = retorno.tipo === 'aprovado'
+                ? etiquetasAoAprovar(alvo?.etiquetas, esteiraDe(alvo?.formato))
+                : alvo?.etiquetas;
             await local.salvar('conteudos', {
                 ...alvo,
-                status: retorno.tipo === 'aprovado' ? 'aprovado' : 'ajuste',
-                etiquetas: retorno.tipo === 'aprovado'
-                    ? etiquetasAoAprovar(alvo?.etiquetas, esteiraDe(alvo?.formato))
-                    : alvo?.etiquetas,
+                status: retorno.tipo === 'aprovado' ? statusAoAprovar(etiquetas) : 'ajuste',
+                etiquetas,
             });
         }
         return linha;

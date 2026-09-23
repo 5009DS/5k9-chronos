@@ -5,7 +5,7 @@ import { toast } from '../components/toast.js';
 import { navegar, caminhoDoConteudo } from '../lib/rotas.js';
 import { ativarArraste } from '../lib/arrastar.js';
 import { nomeFase, noDiaCerto } from '../lib/diretorio.js';
-import { chipEtiqueta, injectEstilosEtiqueta } from '../lib/etiquetas.js';
+import { chipEtiqueta, injectEstilosEtiqueta, chipsEstado } from '../lib/etiquetas.js';
 import { chipFase, chipStatus, seloDeslocado, vazioHTML } from '../lib/pecas.js';
 import {
     porData, leituraDeslocamento, deslocado, moverPara, fixarPosicao, DIAS_DA_FASE,
@@ -266,8 +266,7 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
                     </div>
                     <h3 class="qd-cartao__titulo">${esc(c.titulo)}</h3>
                     <div class="qd-cartao__pe">
-                        ${chipStatus(c.status)}
-                        ${(c.etiquetas || []).map(chipEtiqueta).join('')}
+                        ${chipsEstado(c)}
                         ${seloDeslocado(l)}
                     </div>
                 </div>

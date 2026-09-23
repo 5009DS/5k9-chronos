@@ -11,8 +11,8 @@ import { retornosDe } from '../lib/cronograma.js';
 import { timeSalvo } from '../lib/gestor.js';
 import { linkDoCliente } from '../lib/apelido.js';
 import { abrirTeleprompter } from '../lib/teleprompter.js';
-import { etapasDa, etapaAtual, proximaEtapa, esteiraDe, chipEtiqueta, etiquetaMeta, injectEstilosEtiqueta } from '../lib/etiquetas.js';
-import { moverParaEtapa, mudarStatus } from '../lib/etapas.js';
+import { etapasDa, etapaAtual, proximaEtapa, esteiraDe, chipEtiqueta, etiquetaMeta, injectEstilosEtiqueta, chipsEstado, comEtapa } from '../lib/etiquetas.js';
+import { moverParaEtapa, mensagemDeMovimento } from '../lib/etapas.js';
 import {
     conversas, estadoMeta, ato, daEquipe, textoOriginal, entradaDaEquipe,
 } from '../lib/conversa.js';
@@ -200,17 +200,10 @@ export const renderRoteiro = async (container, conteudoId) => {
                     <div class="rt-chips">
                         ${chipFase(c.fase)}
                         ${objetivo(c.objetivo) ? `<span class="vz-status"><i data-lucide="${esc(objetivo(c.objetivo).icone || 'compass')}"></i>${esc(objetivo(c.objetivo).nome)}</span>` : '<span class="vz-status">sem objetivo</span>'}
-                        ${chipStatus(c.status)}
-                        ${/* A etapa da esteira ao lado do status: um é a
-                              conversa com o cliente, o outro é onde a peça
-                              está na produção. Ler os dois juntos é o que
-                              responde "e agora?". */''}
-                        ${(c.etiquetas || []).map(chipEtiqueta).join('')}
-                    </div>
-                    <div class="rt-status-troca">
-                        <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-status">
-                            <i data-lucide="repeat"></i> Mudar status
-                        </button>
+                        ${/* Um estado só: a etapa. O status com o cliente é
+                              consequência dela (lib/etiquetas.js), e se muda
+                              pelo botão de etapa no topo. */''}
+                        ${chipsEstado(c)}
                     </div>
                 </div>
 
@@ -379,28 +372,6 @@ export const renderRoteiro = async (container, conteudoId) => {
     function ligarEventos() {
         content.querySelector('#rt-colar').addEventListener('click', abrirColar);
         content.querySelector('#rt-colar-vazio')?.addEventListener('click', abrirColar);
-
-        content.querySelector('#rt-status').addEventListener('click', (e) => {
-            /* stopPropagation é OBRIGATÓRIO aqui. O menu se fecha sozinho em
-               qualquer clique no documento (ver components/menu.js), e sem
-               barrar a propagação este mesmo clique sobe até o document e
-               fecha o menu no instante em que ele abre — o botão parece morto,
-               sem erro nenhum no console. */
-            e.stopPropagation();
-            const b = e.target.closest('button');
-            abrirMenu(b, Object.entries(STATUS).map(([id, s]) => ({
-                id, label: s.rotulo, icon: s.icone,
-                onClick: async () => {
-                    // A etapa acompanha quando a leitura é única (lib/etapas.js).
-                    const { mensagem, desfazer } = await mudarStatus(c, id);
-                    toast(mensagem, {
-                        label: 'Desfazer',
-                        onClick: async () => { await desfazer(); recarregar(); },
-                    });
-                    recarregar();
-                },
-            })));
-        });
 
         content.querySelector('#rt-copiar').addEventListener('click', async () => {
             const texto = paraTexto(c, blocos);
@@ -1063,10 +1034,14 @@ export const renderRoteiro = async (container, conteudoId) => {
         const esvaziou = blocos.length === 0;
         const conversaMorta = esvaziou ? historico.map(r => ({ ...r })) : [];
         const statusAnterior = c.status;
+        const etiquetasAnteriores = [...(c.etiquetas || [])];
 
         if (esvaziou) {
             for (const r of conversaMorta) await store.retornos.excluir(r.id);
-            if (c.status !== 'rascunho') await store.conteudos.salvar({ ...c, status: 'rascunho' });
+            // Rascunho é "sem etapa": as duas coisas saem juntas.
+            if (c.status !== 'rascunho' || etapaAtual(c.etiquetas)) {
+                await store.conteudos.salvar({ ...c, status: 'rascunho', etiquetas: comEtapa(c.etiquetas, null) });
+            }
         }
 
         const nota = esvaziou
@@ -1087,9 +1062,7 @@ export const renderRoteiro = async (container, conteudoId) => {
                 // E a conversa inteira volta, com o estado que o conteúdo
                 // tinha antes — desfazer pela metade não é desfazer.
                 for (const r of conversaMorta) await store.retornos.salvar(r);
-                if (esvaziou && statusAnterior !== 'rascunho') {
-                    await store.conteudos.salvar({ ...c, status: statusAnterior });
-                }
+                if (esvaziou) await store.conteudos.salvar({ ...c, status: statusAnterior, etiquetas: etiquetasAnteriores });
                 recarregar();
             },
         });
@@ -1434,9 +1407,7 @@ export const renderRoteiro = async (container, conteudoId) => {
        obrigaria a lembrar a ordem de cor. */
     const irParaEtapa = async (nome) => {
         const { novoStatus, reabriu, desfazer } = await moverParaEtapa(c, nome, { autor: autorPadrao() });
-        toast(`Agora: ${nome}.`
-            + (novoStatus ? ` Status: ${STATUS[novoStatus]?.rotulo || novoStatus}.` : '')
-            + (reabriu ? ' A volta ficou registrada no histórico.' : ''), {
+        toast(mensagemDeMovimento(nome, novoStatus, reabriu), {
             label: 'Desfazer',
             onClick: async () => { await desfazer(); recarregar(); },
         });
@@ -1449,17 +1420,26 @@ export const renderRoteiro = async (container, conteudoId) => {
     });
 
     document.getElementById('rt-etapas')?.addEventListener('click', (e) => {
-        e.stopPropagation();   // ver a explicação no menu de status
+        /* stopPropagation é OBRIGATÓRIO: o menu se fecha em qualquer clique no
+           documento (components/menu.js), e sem barrar a propagação este mesmo
+           clique o fecharia no instante em que abre. */
+        e.stopPropagation();
         const atual = etapaAtual(c.etiquetas);
         /* Só as etapas DESTA esteira. Oferecer "a gravar" num carrossel é
            oferecer um caminho que não existe — e foi o que motivou a segunda
            esteira. */
-        abrirMenu(e.target.closest('button'), etapasDa(esteiraDe(c.formato)).map(et => ({
-            id: et.nome,
-            label: et.nome === atual?.nome ? `${et.nome} (agora)` : et.nome,
-            icon: et.icone,
-            onClick: () => { if (et.nome !== atual?.nome) irParaEtapa(et.nome); },
-        })));
+        abrirMenu(e.target.closest('button'), [
+            /* Rascunho é "sem etapa": tira a peça do link do cliente. */
+            { id: 'rascunho', label: atual ? 'rascunho (fora do link)' : 'rascunho (agora)', icon: 'pencil',
+              onClick: () => { if (atual) irParaEtapa(null); } },
+            ...etapasDa(esteiraDe(c.formato)).map((et, i) => ({
+                id: et.nome,
+                label: et.nome === atual?.nome ? `${et.nome} (agora)` : et.nome,
+                icon: et.icone,
+                separadorAntes: i === 0,
+                onClick: () => { if (et.nome !== atual?.nome) irParaEtapa(et.nome); },
+            })),
+        ]);
     });
 
     document.getElementById('rt-editar').addEventListener('click', () =>

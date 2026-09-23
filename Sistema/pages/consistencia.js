@@ -5,7 +5,7 @@ import { navegar, caminhoDoConteudo } from '../lib/rotas.js';
 import { esc, dataBR } from '../lib/formato.js';
 import { vazioHTML } from '../lib/pecas.js';
 import { auditar, resumoAuditoria } from '../lib/consistencia.js';
-import { comEtapa, etapaAtual, etiquetasParaStatus, esteiraDe, injectEstilosEtiqueta } from '../lib/etiquetas.js';
+import { comEtapa, etapaAtual, esteiraDe, injectEstilosEtiqueta } from '../lib/etiquetas.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    CONFERÊNCIA — o sistema procurando os próprios erros.
@@ -56,29 +56,15 @@ export const renderConsistencia = async (container) => {
         if (!c) return;
 
         const antes = { ...c };
-        const campo = achado.conserto.campo;
-        /* Etiquetas é o único conserto que não é "escreva este valor": pôr uma
-           etapa é uma operação — a nova entra, as outras saem —, e ela já
-           existe em comEtapa(). Reimplementá-la aqui criaria a segunda versão
-           da regra que esta tela existe para impedir.
-
-           Sem destino (`valor: null`), o conserto é "mantenha só a etapa que
-           já vale", que é o caso de duas etapas marcadas ao mesmo tempo. */
-        const valor = campo === 'etiquetas'
-            ? comEtapa(c.etiquetas, achado.conserto.valor ?? etapaAtual(c.etiquetas)?.nome ?? null)
-            : achado.conserto.valor;
-
-        /* Um conserto de status arrasta a etapa pela MESMA regra das telas de
-           trabalho. Sem isto, "voltar para rascunho" deixava a etiqueta de
-           aprovação no lugar e a varredura seguinte acusava o par que este
-           clique acabou de criar. */
-        const etiquetasNovas = campo === 'status'
-            ? etiquetasParaStatus(valor, c.etiquetas, esteiraDe(c.formato)) : null;
-
-        await store.conteudos.salvar({
-            ...c, [campo]: valor,
-            ...(etiquetasNovas ? { etiquetas: etiquetasNovas } : {}),
-        });
+        const conserto = achado.conserto;
+        /* Três formas de conserto, todas terminando no mesmo modelo: a etapa
+           manda e o status acompanha. `normalizar` já traz a peça inteira
+           calculada (lib/etiquetas.js — normalizarPeca); `etapa` + `status`
+           põe a peça numa etapa com um status que o histórico justifica. */
+        const novo = conserto.normalizar
+            ? { ...c, ...conserto.normalizar }
+            : { ...c, etiquetas: comEtapa(c.etiquetas, conserto.etapa ?? null), status: conserto.status };
+        await store.conteudos.salvar(novo);
         toast('Corrigido.', {
             label: 'Desfazer',
             onClick: async () => { await store.conteudos.salvar(antes); recarregar(); },
