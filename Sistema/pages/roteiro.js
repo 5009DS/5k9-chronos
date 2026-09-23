@@ -4,7 +4,7 @@ import { abrirMenu } from '../components/menu.js';
 import { openDrawer, closeDrawer } from '../components/drawer.js';
 import { lerRoteiroUnico, lerCarrossel } from '../lib/importar.js';
 import { toast } from '../components/toast.js';
-import { acharPorEndereco, caminhoDoConteudo, parecidosComEndereco } from '../lib/rotas.js';
+import { acharPorEndereco, caminhoDoConteudo, parecidosComEndereco, caminhoAnterior } from '../lib/rotas.js';
 import { esc, dataBR, quandoRelativo, nomeDia, duracao, segundosDeFala } from '../lib/formato.js';
 import { objetivo, classificar, nomeFase } from '../lib/diretorio.js';
 import { retornosDe } from '../lib/cronograma.js';
@@ -148,6 +148,18 @@ export const renderRoteiro = async (container, conteudoId) => {
     let selecionando = false;
     let selecionadas = new Set();
 
+    /* O botão de voltar leva para a tela de onde a pessoa veio — quadro,
+       esteira ou cronograma deste cliente —, e a rolagem daquela tela é
+       restaurada pelo pageshell. Vindo de qualquer outro lugar, cronograma. */
+    const volta = (() => {
+        const de = caminhoAnterior() || '';
+        const m = de.match(/^\/(quadro|producao|cliente)\/([^/]+)$/);
+        const rotulos = { quadro: 'Quadro do mês', producao: 'Esteira', cliente: 'Cronograma' };
+        return m && decodeURIComponent(m[2]) === c.cliente_id
+            ? { href: de, rotulo: rotulos[m[1]] }
+            : { href: `/cliente/${c.cliente_id}`, rotulo: 'Cronograma' };
+    })();
+
     const { content } = renderShell(container, {
         path: '/',
         /* O rastro inteiro importa aqui: chega-se a esta tela direto do painel,
@@ -161,8 +173,8 @@ export const renderRoteiro = async (container, conteudoId) => {
         title: c.titulo,
         subtitle: `${cliente?.nome || 'Cliente removido'} · ${nomeDia(c.data)}, ${dataBR(c.data)} · ${quandoRelativo(c.data)}`,
         actions: `
-            <a class="ds-btn ds-btn--ghost ds-btn--sm" href="/cliente/${esc(c.cliente_id)}">
-                <i data-lucide="arrow-left"></i> Cronograma
+            <a class="ds-btn ds-btn--ghost ds-btn--sm" href="${esc(volta.href)}">
+                <i data-lucide="arrow-left"></i> ${esc(volta.rotulo)}
             </a>
             ${cliente ? `
                 <a class="ds-btn ds-btn--ghost ds-btn--sm" href="/c/${esc(cliente.token)}/${esc(c.id)}" target="_blank" rel="noopener">

@@ -2,7 +2,7 @@ import { store } from '../store.js';
 import { theme } from '../theme.js';
 import { navegar } from '../lib/rotas.js';
 import { usarDiretorio, objetivo, nomeFase, fase } from '../lib/diretorio.js';
-import { mesEmSemanas, cobertura, porData, proximo, retornosDe } from '../lib/cronograma.js';
+import { mesEmSemanas, cobertura, porData, proximo, retornosDe, aguardaData } from '../lib/cronograma.js';
 import { chipFase, cartaoLeitura, explicacaoObjetivo, roteiroHTML, vazioHTML } from '../lib/pecas.js';
 import { ordenar, duracaoTotal, temFala } from '../lib/roteiro.js';
 import { esteiraDe } from '../lib/etiquetas.js';
@@ -358,7 +358,7 @@ const painelDoCliente = (conteudos, token, retornos) => {
             ${chipFormato(c)}
             ${comEtapa && etapaAtual(c.etiquetas)
                 ? `<span class="cl-linha__etapa">${esc(etapaAtual(c.etiquetas).nome)}</span>`
-                : `<span class="cl-linha__quando">${esc(diaCurto(c.data))}</span>`}
+                : `<span class="cl-linha__quando">${aguardaData(c) ? 'data a definir' : esc(diaCurto(c.data))}</span>`}
             <i data-lucide="chevron-right"></i>
         </a>`;
 
@@ -528,7 +528,7 @@ const cartaoConteudo = (c, token, comRoteiro) => {
             <span class="vz-fita vz-fita--${esc(c.fase || '')}"></span>
             <div class="vz-conteudo__corpo">
                 <div class="vz-conteudo__topo">
-                    <span class="vz-conteudo__dia">${esc(nomeDiaCurto(c.data))} ${esc(diaCurto(c.data))}</span>
+                    <span class="vz-conteudo__dia">${aguardaData(c) ? 'data a definir' : `${esc(nomeDiaCurto(c.data))} ${esc(diaCurto(c.data))}`}</span>
                     ${chipFase(c.fase, { curto: true })}
                 </div>
                 <h3 class="vz-conteudo__titulo">${esc(c.titulo)}</h3>
@@ -616,7 +616,9 @@ const desenharConteudo = (container, token, visao, conteudoId) => {
                     </div>
                     <h1 class="cl-titulo">${esc(c.titulo)}</h1>
                     <p class="cl-quando">
-                        ${esc(dataBR(c.data))} · ${esc(quandoRelativo(c.data))}
+                        ${/* Sem data, a data gravada é só um lugar provisório — mostrar
+                              ao cliente seria prometer um dia que ninguém marcou. */''}
+                        ${aguardaData(c) ? 'Data a definir' : `${esc(dataBR(c.data))} · ${esc(quandoRelativo(c.data))}`}
                         ${c.formato ? ` · ${esc(c.formato)}` : ''}
                         ${meus.length && temFala(c.formato) ? ` · ${esc(duracaoTotal(meus))} de fala (estimado)` : ''}
                     </p>

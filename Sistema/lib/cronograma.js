@@ -189,7 +189,14 @@ export const leituraDeslocamento = (c, todos) => {
 };
 
 /**
- * Troca dois conteúdos de data, ou move um para uma data livre.
+ * Move um conteúdo para uma data. NÃO troca com quem já está lá.
+ *
+ * Trocava: soltar sobre um dia ocupado mandava o ocupante para o dia de
+ * origem. Parecia esperto e era o contrário do que se queria na maior parte
+ * das vezes — um dia pode ter mais de um conteúdo, e trocar de lugar agora é
+ * um gesto explícito (o botão de troca do quadro).
+ *
+ * Mover para um dia é também DAR uma data: a pendência "aguardando data" sai.
  *
  * Devolve os registros JÁ alterados, sem gravar — quem chama decide quando
  * persistir e como desfazer. `data_original` nunca é tocada aqui: é ela que
@@ -197,19 +204,26 @@ export const leituraDeslocamento = (c, todos) => {
  *
  * @returns {{alterados: object[], desfazer: object[]}}
  */
-export const moverPara = (conteudo, novaData, todos) => {
-    if (conteudo.data === novaData) return { alterados: [], desfazer: [] };
+export const moverPara = (conteudo, novaData) => {
+    const semData = aguardaData(conteudo);
+    if (conteudo.data === novaData && !semData) return { alterados: [], desfazer: [] };
+    return {
+        alterados: [{ ...conteudo, data: novaData, etiquetas: comPendencia(conteudo.etiquetas, AGUARDANDO_DATA, false) }],
+        desfazer: [{ ...conteudo }],
+    };
+};
 
-    const alvo = (todos || []).find(x => x.id !== conteudo.id && x.data === novaData) || null;
-
-    const desfazer = [{ ...conteudo }];
-    const alterados = [{ ...conteudo, data: novaData }];
-
-    if (alvo) {
-        desfazer.push({ ...alvo });
-        alterados.push({ ...alvo, data: conteudo.data });
-    }
-    return { alterados, desfazer };
+/* ── SEM DATA ─────────────────────────────────────────────────────────────
+   Conteúdo gravado antes de ter dia: a coluna `data` não aceita vazio, então
+   "sem data" é a pendência "aguardando data". A peça guarda a data que tinha
+   (é para onde ela volta se ninguém mexer) e sai da grade das semanas para a
+   bandeja "Sem data" do quadro e do cronograma. Dar um dia a ela — soltar numa
+   vaga, ou tirar a marca na ficha — é o que a devolve ao calendário. */
+export const AGUARDANDO_DATA = 'aguardando data';
+export const aguardaData = (c) => (c?.etiquetas || []).some(e => String(e).trim().toLowerCase() === AGUARDANDO_DATA);
+export const comPendencia = (lista, nome, ligado) => {
+    const sem = (lista || []).filter(e => String(e).trim().toLowerCase() !== nome);
+    return ligado ? [...sem, nome] : sem;
 };
 
 /** Marca a posição atual como a certa, apagando o rastro do deslocamento. */

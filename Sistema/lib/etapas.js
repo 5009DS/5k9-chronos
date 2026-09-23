@@ -1,5 +1,5 @@
 import { store } from '../store.js';
-import { comEtapa, statusDaEtapa, etiquetaMeta, ETAPA_ESCRITA, ETAPA_APROVACAO } from './etiquetas.js';
+import { comEtapa, statusDaEtapa, etiquetaMeta, etapaAtual, etapasDa, esteiraDe, proximaEtapa, ETAPA_ESCRITA, ETAPA_APROVACAO } from './etiquetas.js';
 import { entradaDaEquipe } from './conversa.js';
 import { aprovouNoHistorico, equipeDevolveu } from './consistencia.js';
 
@@ -104,3 +104,24 @@ export const mensagemDeMovimento = (nome, novoStatus, reabriu) =>
     `Agora: ${nome || 'rascunho'}.`
     + (novoStatus && PARA_O_CLIENTE[novoStatus] ? ` Agora ${PARA_O_CLIENTE[novoStatus]}.` : '')
     + (reabriu ? ' A volta ficou registrada no histórico.' : '');
+
+/* Os itens do menu de etapa de uma peça: a próxima primeiro (a ação da
+   rotina), depois rascunho e as outras etapas da esteira dela. Quem desenha o
+   menu passa `ir`, que recebe o nome da etapa (null = rascunho). O cartão do
+   cronograma e o do quadro usam os mesmos itens — o mesmo menu nas duas. */
+export const itensDeEtapa = (c, ir) => {
+    const atual = etapaAtual(c.etiquetas);
+    const proxima = proximaEtapa(c.etiquetas, esteiraDe(c.formato));
+    return [
+        ...(proxima ? [{ id: 'etapa', label: `Mover para ${proxima}`, icon: 'arrow-right', onClick: () => ir(proxima) }] : []),
+        ...(atual ? [{ id: 'et-rascunho', label: 'rascunho (fora do link)', icon: 'pencil',
+                       separadorAntes: true, onClick: () => ir(null) }] : []),
+        ...etapasDa(esteiraDe(c.formato))
+            .filter(et => et.nome !== atual?.nome && et.nome !== proxima)
+            .map((et, i) => ({
+                id: `et-${et.nome}`, label: et.nome, icon: et.icone,
+                separadorAntes: !atual && i === 0,
+                onClick: () => ir(et.nome),
+            })),
+    ];
+};

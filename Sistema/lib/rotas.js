@@ -80,6 +80,21 @@ export const parecidosComEndereco = (conteudos, referencia) => {
 /** O endereço canônico de um conteúdo, o que a barra deve mostrar. */
 export const caminhoDoConteudo = (c) => `/conteudo/${apelidoDeConteudo(c)}`;
 
+/* ── DE ONDE A PESSOA VEIO ────────────────────────────────────────────────
+   A demanda é aberta do cronograma, do quadro e da esteira, e o botão de
+   voltar dela levava sempre ao cronograma: quem vinha do quadro perdia a tela
+   e o lugar em que estava. O roteador avisa aqui cada troca de tela, e a
+   demanda pergunta para onde voltar.
+
+   Trocas ENTRE demandas não contam: a correção de endereço da própria demanda
+   (id velho → endereço legível) também passa pelo roteador, e contá-la faria
+   a demanda "voltar" para ela mesma. */
+let anterior = null;
+export const registrarNavegacao = (de) => {
+    if (de && !de.startsWith('/conteudo/')) anterior = de;
+};
+export const caminhoAnterior = () => anterior;
+
 /** Navega sem recarregar a página. */
 export const navegar = (caminho, { substituir = false } = {}) => {
     if (caminho === window.location.pathname) return;

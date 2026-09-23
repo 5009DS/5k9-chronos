@@ -15,7 +15,7 @@ import {
 } from '../lib/formato.js';
 import {
     mesEmSemanas, cobertura, alertasDaSemana, porData, proximo,
-    leituraDeslocamento, moverPara,
+    leituraDeslocamento, moverPara, aguardaData,
 } from '../lib/cronograma.js';
 import {
     listarFases, listarObjetivos, objetivosDaFase, objetivo, nomeFase,
@@ -23,7 +23,7 @@ import {
 } from '../lib/diretorio.js';
 import { chipFase, chipStatus, seloDeslocado, vazioHTML, STATUS } from '../lib/pecas.js';
 import { chipEtiqueta, injectEstilosEtiqueta, etapaAtual, proximaEtapa, etapasDa, esteiraDe, chipsEstado, etiquetaMeta, PENDENCIAS } from '../lib/etiquetas.js';
-import { moverParaEtapa, mensagemDeMovimento, etapaAoLiberar } from '../lib/etapas.js';
+import { moverParaEtapa, mensagemDeMovimento, etapaAoLiberar, itensDeEtapa } from '../lib/etapas.js';
 import { ativarArraste } from '../lib/arrastar.js';
 import { timeSalvo } from '../lib/gestor.js';
 import { sugerirObjetivo } from '../lib/importar.js';
@@ -194,8 +194,12 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
     })();
 
     const desenhar = () => {
-        const semanas = mesEmSemanas(conteudos, mes);
-        const doMes = conteudos.filter(c => chaveMes(c.data) === mes);
+        /* Quem aguarda data sai das semanas e fica na seção "Sem data", de
+           qualquer mês: é justamente a peça que ainda não tem mês de verdade. */
+        const comData = conteudos.filter(c => !aguardaData(c));
+        const semDataLista = porData(conteudos.filter(aguardaData));
+        const semanas = mesEmSemanas(comData, mes);
+        const doMes = comData.filter(c => chaveMes(c.data) === mes);
         const rascunhos = doMes.filter(c => c.status === 'rascunho');
 
         // A contagem fica no botão: decidir se vale clicar não pode custar
@@ -280,6 +284,17 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
                     </button>
                 </p>` : ''}
 
+            ${semDataLista.length ? `
+                <section class="cr-semdata">
+                    <header class="cr-semdata__cabeca">
+                        <h2><i data-lucide="calendar-clock"></i> Sem data <span class="cr-conta">${semDataLista.length}</span></h2>
+                        <p>Esperando um dia. Para dar a data, use o Quadro do mês ou a ficha.</p>
+                    </header>
+                    <div class="cr-semdata__lista">
+                        ${semDataLista.map(c => cartaoHTML(c, conteudos)).join('')}
+                    </div>
+                </section>` : ''}
+
             <div class="cr-semanas">
                 ${doMes.length
                     ? semanas.map(s => semanaHTML(s, passa, conteudos)).join('')
@@ -350,9 +365,6 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
                 const alvo = conteudos.find(x => x.id === botao.dataset.acoes);
                 if (!alvo) return;
 
-                const proxima = proximaEtapa(alvo.etiquetas, esteiraDe(alvo.formato));
-
-                const atual = etapaAtual(alvo.etiquetas);
                 const ir = async (nome) => {
                     // A mesma função da demanda e da esteira.
                     const { novoStatus, reabriu, desfazer } = await moverParaEtapa(alvo, nome);
@@ -364,23 +376,7 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
                 };
 
                 abrirMenu(botao, [
-                    /* A próxima etapa vem primeiro: é a ação da rotina, e o
-                       rótulo diz o destino em vez de exigir que se lembre da
-                       ordem. Depois, todas as outras — é o único controle de
-                       estado que a peça tem. */
-                    ...(proxima ? [{
-                        id: 'etapa', label: `Mover para ${proxima}`, icon: 'arrow-right',
-                        onClick: () => ir(proxima),
-                    }] : []),
-                    ...(atual ? [{ id: 'et-rascunho', label: 'rascunho (fora do link)', icon: 'pencil',
-                                   separadorAntes: true, onClick: () => ir(null) }] : []),
-                    ...etapasDa(esteiraDe(alvo.formato))
-                        .filter(et => et.nome !== atual?.nome && et.nome !== proxima)
-                        .map((et, i) => ({
-                            id: `et-${et.nome}`, label: et.nome, icon: et.icone,
-                            separadorAntes: !atual && i === 0,
-                            onClick: () => ir(et.nome),
-                        })),
+                    ...itensDeEtapa(alvo, ir),
                     { id: 'abrir', label: 'Abrir o roteiro', icon: 'file-text', separadorAntes: true,
                       onClick: () => navegar(caminhoDoConteudo(alvo)) },
                 ]);
@@ -415,10 +411,9 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
         content.querySelector('#cr-liberar')?.addEventListener('click',
             () => abrirLiberar(cliente, rascunhos, comRoteiro, recarregar));
 
-        /* Arrastar um cartão sobre outro TROCA os dois de lugar. Na lista, o
-           alvo é sempre outro conteúdo — não existe "vaga vazia" para receber,
-           porque a lista só desenha o que existe. Mover para um dia livre é o
-           que o Quadro do mês faz, e é por isso que ele existe. */
+        /* Arrastar um cartão sobre outro põe os dois NO MESMO DIA — não troca.
+           Um dia pode ter mais de um conteúdo; trocar de lugar é o botão de
+           troca do Quadro do mês, onde origem e destino estão à vista. */
         soltarArraste?.();
         soltarArraste = ativarArraste(content, {
             item: '[data-arrastavel]',
@@ -429,10 +424,11 @@ export const renderCronograma = async (container, clienteId, mesInicial = null) 
                 const b = conteudos.find(x => x.id === idB);
                 if (!a || !b) return;
 
-                const { alterados, desfazer } = moverPara(a, b.data, conteudos);
+                const { alterados, desfazer } = moverPara(a, b.data);
+                if (!alterados.length) return;
                 for (const c of alterados) await store.conteudos.salvar(c);
 
-                toast(`"${a.titulo.slice(0, 30)}…" trocou de lugar com "${b.titulo.slice(0, 30)}…".`, {
+                toast(`"${a.titulo.slice(0, 30)}…" foi para ${diaCurto(b.data)}.`, {
                     label: 'Desfazer',
                     onClick: async () => {
                         for (const c of desfazer) await store.conteudos.salvar(c);
@@ -1615,6 +1611,21 @@ const ESTILOS = `
 .cr-escondidos i, .cr-escondidos svg { width: 15px; height: 15px; flex-shrink: 0; color: var(--text-tertiary); }
 .cr-escondidos span { flex: 1; }
 .cr-escondidos strong { color: var(--text-primary); }
+
+/* Sem data: a bandeja do que espera um dia. Borda tracejada porque é um
+   lugar provisório — não é uma semana, e não deve parecer uma. */
+.cr-semdata {
+    display: flex; flex-direction: column; gap: var(--space-3);
+    padding: var(--space-4) var(--space-5);
+    border: 1px dashed var(--border-default); border-radius: var(--radius-md);
+}
+.cr-semdata__cabeca h2 {
+    display: flex; align-items: center; gap: var(--space-2); margin: 0;
+    font-size: var(--text-sm); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+}
+.cr-semdata__cabeca h2 svg { width: 15px; height: 15px; color: var(--accent); }
+.cr-semdata__cabeca p { margin: 4px 0 0; font-size: var(--text-xs); color: var(--text-tertiary); }
+.cr-semdata__lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--space-3); }
 
 .cr-liberar {
     display: flex; align-items: center; justify-content: space-between;

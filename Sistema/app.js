@@ -1,6 +1,6 @@
 import { store } from './store.js';
 import { theme } from './theme.js';
-import { navegar, caminhoAtual, interceptarLinks } from './lib/rotas.js';
+import { navegar, caminhoAtual, interceptarLinks, registrarNavegacao } from './lib/rotas.js';
 import { guardarRolagem } from './components/pageshell.js';
 
 import { renderPainel } from './pages/painel.js';
@@ -106,6 +106,7 @@ const roteador = async () => {
        único instante em que dá para lê-la, e é o que permite voltar de um
        roteiro para o mesmo ponto do cronograma em vez de para o topo. */
     guardarRolagem(caminhoCorrente);
+    registrarNavegacao(caminhoCorrente);
 
     app.innerHTML = '';
     const render = resolver(caminho);

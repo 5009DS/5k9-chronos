@@ -31,7 +31,9 @@ export const fecharMenu = () => {
  * @param {HTMLElement} ancora  botão que abriu
  * @param {Array} itens  [{ label, icon, href?, onClick?, variante?, separadorAntes? }]
  */
-export const abrirMenu = (ancora, itens) => {
+/* `alinhar: 'esquerda'` para gatilhos que ficam à esquerda do conteúdo (o chip
+   de etapa do quadro): alinhado pela direita, o menu fugia para a borda. */
+export const abrirMenu = (ancora, itens, { alinhar } = {}) => {
     const jaEra = aberto && aberto.ancora === ancora;
     fecharMenu();
     if (jaEra) return;   // clicar de novo no mesmo botão fecha
@@ -63,7 +65,7 @@ export const abrirMenu = (ancora, itens) => {
     el.addEventListener('click', (e) => e.stopPropagation());
 
     if (window.lucide) lucide.createIcons();
-    aberto.soltar = seguirAncora(el, ancora, fecharMenu);
+    aberto.soltar = seguirAncora(el, ancora, fecharMenu, alinhar ? { alinhar } : undefined);
     requestAnimationFrame(() => el.classList.add('is-aberto'));
 };
 

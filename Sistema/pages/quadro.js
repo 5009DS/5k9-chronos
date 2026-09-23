@@ -5,10 +5,13 @@ import { toast } from '../components/toast.js';
 import { navegar, caminhoDoConteudo } from '../lib/rotas.js';
 import { ativarArraste } from '../lib/arrastar.js';
 import { nomeFase, noDiaCerto } from '../lib/diretorio.js';
-import { chipEtiqueta, injectEstilosEtiqueta, chipsEstado } from '../lib/etiquetas.js';
-import { chipFase, chipStatus, seloDeslocado, vazioHTML } from '../lib/pecas.js';
+import { injectEstilosEtiqueta, chipsEstado, etapaAtual, etiquetaMeta, chipEtiqueta } from '../lib/etiquetas.js';
+import { moverParaEtapa, mensagemDeMovimento, itensDeEtapa } from '../lib/etapas.js';
+import { abrirMenu } from '../components/menu.js';
+import { chipFase, vazioHTML } from '../lib/pecas.js';
 import {
     porData, leituraDeslocamento, deslocado, moverPara, fixarPosicao, DIAS_DA_FASE,
+    aguardaData, comPendencia, AGUARDANDO_DATA,
 } from '../lib/cronograma.js';
 import {
     esc, mesExtenso, somarMeses, chaveMes, semanaCurta, semanaAtual,
@@ -50,6 +53,11 @@ const VAGAS = ['fundo', 'meio', 'topo'].map(fase => ({
     dia: DIAS_DA_FASE[fase][0],
 }));
 
+/* O mês que cada cliente estava vendo. Em memória, como a rolagem: sair para
+   uma demanda e voltar precisa reabrir o mesmo mês, senão a rolagem guardada
+   aponta para uma grade que não é mais a da tela. */
+const MES_ABERTO = new Map();
+
 const vagaDoDia = (iso) => VAGAS.find(v => v.dias.includes(indiceDia(iso))) || VAGAS[0];
 
 /**
@@ -81,7 +89,8 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
        `mesesComConteudo` devolve do mais recente para o mais antigo, então
        pegar o primeiro abria o quadro em março de 2027 quando havia pauta
        importada até lá. Quem abre o quadro quer ver a semana em que está. */
-    let mes = mesInicial || mesAtual();
+    let mes = mesInicial || MES_ABERTO.get(clienteId) || mesAtual();
+    const trocarMes = (novo) => { mes = novo; MES_ABERTO.set(clienteId, mes); selecionado = null; desenhar(); };
     let selecionado = null;     // id do primeiro conteúdo de uma troca por seleção
     let soltarArraste = null;
 
@@ -92,7 +101,7 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
             { href: `/cliente/${clienteId}`, label: cliente.nome },
         ],
         title: 'Quadro do mês',
-        subtitle: 'Arraste para mover ou trocar. No toque, segure o conteúdo por um instante antes de arrastar.',
+        subtitle: 'Arraste para mover — um dia pode ter mais de um conteúdo. No toque, segure por um instante antes de arrastar.',
         actions: `
             <button class="ds-btn ds-btn--ghost" id="qd-banco">
                 <i data-lucide="archive"></i> Banco de temas
@@ -136,29 +145,45 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
         recarregar();
     }
 
-    /** Move um conteúdo para a vaga (semana + coluna) indicada. */
-    async function moverParaVaga(conteudoId, chaveVaga) {
+    /**
+     * Solta um conteúdo num destino. Três tipos de destino:
+     *   vaga:<segunda>|<fase>  a célula — vai para o primeiro dia da vaga;
+     *   dia:<iso>              outro cartão — vai para o MESMO dia dele;
+     *   semdata                a bandeja — ganha a pendência "aguardando data".
+     *
+     * Nunca troca com quem já está no dia: um dia pode ter vários conteúdos.
+     * Trocar de lugar é o botão de troca, um gesto explícito.
+     */
+    async function soltar(conteudoId, destino) {
         const c = conteudos.find(x => x.id === conteudoId);
         if (!c) return;
 
-        const [segunda, faseVaga] = chaveVaga.split('|');
-        const vaga = VAGAS.find(v => v.fase === faseVaga);
-        const destino = somarDias(segunda, vaga.dia);
+        if (destino === 'semdata') {
+            if (aguardaData(c)) return;
+            await aplicar({
+                alterados: [{ ...c, etiquetas: comPendencia(c.etiquetas, AGUARDANDO_DATA, true) }],
+                desfazer: [{ ...c }],
+            }, `"${curto(c.titulo)}" ficou sem data.`);
+            return;
+        }
 
-        /* Já ocupa a coluna certa nesta semana? Não mexe. Sem esta guarda, soltar
-           um conteúdo de terça na própria coluna o empurraria para segunda —
-           uma mudança que ninguém pediu e que reescreve a agenda em silêncio. */
-        if (c.data === destino) return;
-        if (vaga.dias.includes(indiceDia(c.data)) && chaveMes(c.data) === chaveMes(destino)
-            && somarDias(c.data, -indiceDia(c.data)) === segunda) return;
+        let dia;
+        if (destino.startsWith('dia:')) {
+            dia = destino.slice(4);
+        } else {
+            const [segunda, faseVaga] = destino.slice(5).split('|');
+            const vaga = VAGAS.find(v => v.fase === faseVaga);
+            dia = somarDias(segunda, vaga.dia);
+            /* Já está nesta vaga, nesta semana, e tem data? Não mexe. Sem a
+               guarda, soltar um conteúdo de terça na própria coluna o empurraria
+               para segunda — uma mudança que ninguém pediu. */
+            if (!aguardaData(c) && vaga.dias.includes(indiceDia(c.data))
+                && somarDias(c.data, -indiceDia(c.data)) === segunda) return;
+        }
 
-        const ocupante = conteudos.find(x => x.id !== c.id && x.data === destino);
-        await aplicar(
-            moverPara(c, destino, conteudos),
-            ocupante
-                ? `"${curto(c.titulo)}" trocou de lugar com "${curto(ocupante.titulo)}".`
-                : `"${curto(c.titulo)}" foi para ${diaCurto(destino)}.`,
-        );
+        const juntos = conteudos.filter(x => x.id !== c.id && x.data === dia && !aguardaData(x)).length;
+        await aplicar(moverPara(c, dia),
+            `"${curto(c.titulo)}" foi para ${diaCurto(dia)}${juntos ? `, junto com ${juntos === 1 ? 'mais 1' : `mais ${juntos}`}` : ''}.`);
     }
 
     /** Troca dois conteúdos de data. É o caminho da seleção, sem arraste. */
@@ -176,7 +201,9 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
     // ── Desenho ──────────────────────────────────────────────────────────
     const desenhar = () => {
         const semanas = semanasDoMes(mes);
-        const doMes = conteudos.filter(c => chaveMes(c.data) === mes);
+        const comData = conteudos.filter(c => !aguardaData(c));
+        const semData = porData(conteudos.filter(aguardaData));
+        const doMes = comData.filter(c => chaveMes(c.data) === mes);
         const deslocados = doMes.filter(deslocado);
 
         content.innerHTML = `
@@ -187,30 +214,31 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
                     <button class="ds-icon-btn" id="qd-proximo" aria-label="Próximo mês"><i data-lucide="chevron-right"></i></button>
                 </div>
                 <span class="vz-barra__espaco"></span>
-                <span class="qd-conta">
-                    ${doMes.length} conteúdo${doMes.length === 1 ? '' : 's'}
-                    ${deslocados.length ? ` · <span class="qd-conta__alerta">${deslocados.length} fora da posição de origem</span>` : ''}
-                </span>
+                <span class="qd-conta">${doMes.length} conteúdo${doMes.length === 1 ? '' : 's'}</span>
             </article>
 
             ${selecionado ? barraSelecao() : ''}
 
-            ${doMes.length ? `
-                <div class="qd-grade" id="qd-grade">
-                    <div class="qd-cabeca">
-                        <span class="qd-cabeca__canto"></span>
-                        ${VAGAS.map(v => `
-                            <span class="qd-cabeca__col qd-cabeca__col--${v.fase}">
-                                <span class="vz-ponto vz-ponto--${v.fase}"></span>
-                                ${esc(nomeFase(v.fase))}
-                                <em>${esc(rotuloDias(v))}</em>
-                            </span>`).join('')}
-                    </div>
-                    ${semanas.map(s => linhaSemana(s, conteudos)).join('')}
-                </div>`
-            : vazioHTML('layout-grid', 'Nada neste mês',
-                'Importe os temas ou crie um conteúdo para o quadro ter o que mostrar.',
-                `<a class="ds-btn ds-btn--primary" href="/cliente/${esc(clienteId)}">Ir para o cronograma</a>`)}
+            <div id="qd-area">
+                ${bandejaSemData(semData)}
+
+                ${doMes.length || semData.length ? `
+                    <div class="qd-grade" id="qd-grade">
+                        <div class="qd-cabeca">
+                            <span class="qd-cabeca__canto"></span>
+                            ${VAGAS.map(v => `
+                                <span class="qd-cabeca__col qd-cabeca__col--${v.fase}">
+                                    <span class="vz-ponto vz-ponto--${v.fase}"></span>
+                                    ${esc(nomeFase(v.fase))}
+                                    <em>${esc(rotuloDias(v))}</em>
+                                </span>`).join('')}
+                        </div>
+                        ${semanas.map(s => linhaSemana(s, comData)).join('')}
+                    </div>`
+                : vazioHTML('layout-grid', 'Nada neste mês',
+                    'Importe os temas ou crie um conteúdo para o quadro ter o que mostrar.',
+                    `<a class="ds-btn ds-btn--primary" href="/cliente/${esc(clienteId)}">Ir para o cronograma</a>`)}
+            </div>
 
             ${deslocados.length ? painelDeslocados(deslocados) : ''}
         `;
@@ -218,6 +246,25 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
         ligarEventos();
         if (window.lucide) lucide.createIcons();
     };
+
+    /* ── SEM DATA ─────────────────────────────────────────────────────────
+       A gaveta do que já foi gravado (ou escrito) e ainda não tem dia. Antes
+       essas peças eram empilhadas numa data qualquer até alguém sentar para
+       distribuir — e o dia escolhido virava um amontoado que parecia agenda.
+       Aqui elas ficam fora da grade, de qualquer mês, e voltam ao calendário
+       arrastadas para uma vaga. A bandeja existe mesmo vazia: é também o
+       lugar para onde se arrasta o que perdeu a data. */
+    const bandejaSemData = (lista) => `
+        <section class="qd-semdata ${lista.length ? '' : 'qd-semdata--vazia'}" data-solta="semdata">
+            <header class="qd-semdata__cabeca">
+                <span class="qd-semdata__titulo"><i data-lucide="calendar-clock"></i> Sem data
+                    ${lista.length ? `<span class="qd-semdata__conta">${lista.length}</span>` : ''}</span>
+                <span class="qd-semdata__dica">${lista.length
+                    ? 'Arraste para uma vaga do quadro para dar o dia.'
+                    : 'Arraste para cá o que ainda não tem dia — sai do calendário e fica esperando aqui.'}</span>
+            </header>
+            ${lista.length ? `<div class="qd-semdata__lista">${lista.map(c => cartao(c, conteudos, { semData: true })).join('')}</div>` : ''}
+        </section>`;
 
     const linhaSemana = (segunda, todos) => {
         const atual = segunda === semanaAtual();
@@ -236,53 +283,68 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
         const dentro = porData(todos.filter(c => dias.includes(c.data)));
 
         return `
-            <div class="qd-celula" data-solta="${esc(segunda)}|${esc(vaga.fase)}">
+            <div class="qd-celula" data-solta="vaga:${esc(segunda)}|${esc(vaga.fase)}">
                 ${dentro.map(c => cartao(c, todos)).join('')}
                 ${dentro.length ? '' : '<span class="qd-vazia">vago</span>'}
             </div>`;
     };
 
-    const cartao = (c, todos) => {
-        const l = leituraDeslocamento(c, todos);
+    const cartao = (c, todos, { semData = false } = {}) => {
         const escolhido = selecionado === c.id;
+        const href = esc(caminhoDoConteudo(c));
 
-        /* A borda vermelha NÃO depende de deslocamento, e essa distinção custou
-           um teste para aparecer. `leituraDeslocamento` devolve null para quem
-           nunca saiu do lugar — então um conteúdo CRIADO direto na coluna errada
-           (um fundo agendado para sábado, que é o caso do exemplo) passava sem
-           marca nenhuma no quadro. A pergunta que esta tela responde é "a fase
-           bate com a coluna?", e ela vale para todo cartão, tenha ele se movido
-           ou não. */
-        const foraDeFase = !!c.fase && !noDiaCerto(c.fase, indiceDia(c.data));
+        /* PUBLICADO é passado: verde, apagado, só o essencial, sem botões e
+           sem arraste. Continua abrindo ao clique — reler um roteiro que foi
+           ao ar é consulta comum —, mas nada nele convida a mexer. */
+        if (etapaAtual(c.etiquetas)?.nome === 'publicado') {
+            return `
+                <a class="qd-cartao qd-cartao--publicado" href="${href}" draggable="false" data-solta="dia:${esc(c.data)}">
+                    <div class="qd-cartao__corpo">
+                        <div class="qd-cartao__topo">
+                            <span class="qd-cartao__dia">${esc(nomeDiaCurto(c.data))} ${esc(diaCurto(c.data))}</span>
+                            ${chipFase(c.fase, { curto: true })}
+                        </div>
+                        <h3 class="qd-cartao__titulo">${esc(c.titulo)}</h3>
+                        <span class="qd-cartao__publicado"><i data-lucide="send"></i> publicado</span>
+                    </div>
+                </a>`;
+        }
+
+        /* A borda vermelha diz "a fase não bate com a coluna", e vale para todo
+           cartão, tenha ele se movido ou não. Na bandeja não há coluna. */
+        const foraDeFase = !semData && !!c.fase && !noDiaCerto(c.fase, indiceDia(c.data));
+        const etapa = etapaAtual(c.etiquetas);
+        const outras = (c.etiquetas || []).filter(e => !etiquetaMeta(e).etapa && String(e).trim().toLowerCase() !== AGUARDANDO_DATA);
 
         return `
             <article class="qd-cartao ${escolhido ? 'is-escolhido' : ''} ${foraDeFase ? 'qd-cartao--fora' : ''}"
-                     data-arrastavel="${esc(c.id)}" data-cartao="${esc(c.id)}">
-                <span class="vz-fita vz-fita--${esc(c.fase || '')}"></span>
+                     data-arrastavel="${esc(c.id)}" data-cartao="${esc(c.id)}" data-solta="${semData ? 'semdata' : `dia:${esc(c.data)}`}">
                 <div class="qd-cartao__corpo">
                     <div class="qd-cartao__topo">
-                        <span class="qd-cartao__dia">${esc(nomeDiaCurto(c.data))} ${esc(diaCurto(c.data))}</span>
+                        <span class="qd-cartao__dia">${semData ? 'sem data' : `${esc(nomeDiaCurto(c.data))} ${esc(diaCurto(c.data))}`}</span>
                         ${chipFase(c.fase, { curto: true })}
                     </div>
-                    <h3 class="qd-cartao__titulo">${esc(c.titulo)}</h3>
+                    ${/* O título é link de verdade (ctrl+clique, botão do meio);
+                          o resto do cartão abre por clique, em ligarEventos —
+                          um link cobrindo o cartão engoliria o arraste. */''}
+                    <h3 class="qd-cartao__titulo"><a href="${href}" draggable="false">${esc(c.titulo)}</a></h3>
                     <div class="qd-cartao__pe">
-                        ${chipsEstado(c)}
-                        ${seloDeslocado(l)}
+                        ${/* A etapa é o botão de mudar a etapa: o lugar onde a
+                              pessoa já está olhando é o lugar onde ela clica. */''}
+                        <button class="qd-etapa" data-etapa="${esc(c.id)}" aria-haspopup="menu"
+                                title="Mudar a etapa">
+                            ${etapa ? chipEtiqueta(etapa.nome)
+                                : '<span class="vz-etiqueta vz-etiqueta--neutro"><i data-lucide="pencil"></i>rascunho</span>'}
+                            <i class="qd-etapa__seta" data-lucide="chevron-down"></i>
+                        </button>
+                        ${c.status === 'ajuste' ? '<span class="vz-etiqueta vz-etiqueta--risco"><i data-lucide="message-circle-warning"></i>ajuste pedido</span>' : ''}
+                        ${outras.map(chipEtiqueta).join('')}
                     </div>
                 </div>
-                <div class="qd-cartao__acoes">
-                    <button class="ds-icon-btn ds-icon-btn--sm" data-trocar="${esc(c.id)}"
-                            title="${escolhido ? 'Cancelar seleção' : 'Selecionar para trocar de lugar'}">
-                        <i data-lucide="${escolhido ? 'x' : 'arrow-left-right'}"></i>
-                    </button>
-                    <button class="ds-icon-btn ds-icon-btn--sm" data-guardar="${esc(c.id)}"
-                            title="Mandar para o banco de temas">
-                        <i data-lucide="archive"></i>
-                    </button>
-                    <button class="ds-icon-btn ds-icon-btn--sm" data-abrir="${esc(c.id)}" title="Abrir o roteiro">
-                        <i data-lucide="chevron-right"></i>
-                    </button>
-                </div>
+                <button class="ds-icon-btn ds-icon-btn--sm qd-cartao__mais" data-mais="${esc(c.id)}"
+                        aria-label="Mais ações" aria-haspopup="menu" title="Mais ações">
+                    <i data-lucide="${escolhido ? 'x' : 'ellipsis-vertical'}"></i>
+                </button>
             </article>`;
     };
 
@@ -292,7 +354,7 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
             <article class="ds-card qd-selecao">
                 <div class="qd-selecao__texto">
                     <strong>"${esc(curto(c?.titulo || '', 46))}"</strong> selecionado.
-                    Agora clique no botão de troca de outro conteúdo para inverter os dois de lugar.
+                    Agora clique no <i data-lucide="ellipsis-vertical" class="qd-inline"></i> de outro conteúdo para inverter os dois de lugar.
                 </div>
                 <button class="ds-btn ds-btn--ghost ds-btn--sm" id="qd-cancelar">Cancelar</button>
             </article>`;
@@ -301,16 +363,20 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
     /* A lista de deslocados existe porque o selo no cartão é curto por
        necessidade — cabe "trocado com X" e não cabe a história inteira. Aqui
        cada caso aparece por extenso, com o botão de aceitar a posição nova. */
+    /* Fechado por padrão: é consulta de produção, não o assunto da tela. O
+       cartão não mostra mais de onde veio cada peça — poluía a leitura do mês —
+       e quem quiser a história inteira abre aqui. */
     const painelDeslocados = (lista) => `
-        <article class="ds-card vz-secao">
-            <div class="vz-secao__cabeca">
+        <details class="ds-card vz-secao qd-historico">
+            <summary class="vz-secao__cabeca">
                 <div>
-                    <h2 class="ds-card-title">Fora da posição de origem</h2>
+                    <h2 class="ds-card-title">Remanejados neste mês</h2>
                     <span class="ds-card-sub">
-                        ${lista.length} conteúdo${lista.length > 1 ? 's' : ''} remanejado${lista.length > 1 ? 's' : ''} neste mês
+                        ${lista.length} conteúdo${lista.length > 1 ? 's' : ''} fora do dia em que nasceu — clique para ver
                     </span>
                 </div>
-            </div>
+                <i data-lucide="chevron-down" class="qd-historico__seta"></i>
+            </summary>
             <div class="qd-remanejados">
                 ${porData(lista).map(c => {
                     const l = leituraDeslocamento(c, conteudos);
@@ -346,18 +412,12 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
                 O cliente não vê nada disso — ele enxerga só a data e a fase de cada conteúdo.
                 Remanejamento é conversa de produção.
             </p>
-        </article>`;
+        </details>`;
 
     // ── Eventos ──────────────────────────────────────────────────────────
     function ligarEventos() {
-        content.querySelector('#qd-anterior').addEventListener('click', () => { mes = somarMeses(mes, -1); selecionado = null; desenhar(); });
-        content.querySelector('#qd-proximo').addEventListener('click', () => { mes = somarMeses(mes, 1); selecionado = null; desenhar(); });
-
-        content.querySelectorAll('[data-abrir]').forEach(b =>
-            b.addEventListener('click', () => {
-                const alvo = conteudos.find(x => x.id === b.dataset.abrir);
-                if (alvo) navegar(caminhoDoConteudo(alvo));
-            }));
+        content.querySelector('#qd-anterior').addEventListener('click', () => trocarMes(somarMeses(mes, -1)));
+        content.querySelector('#qd-proximo').addEventListener('click', () => trocarMes(somarMeses(mes, 1)));
 
         content.querySelectorAll('[data-fixar]').forEach(b =>
             b.addEventListener('click', async () => {
@@ -369,37 +429,86 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
 
         content.querySelector('#qd-cancelar')?.addEventListener('click', () => { selecionado = null; desenhar(); });
 
-        content.querySelectorAll('[data-guardar]').forEach(b =>
-            b.addEventListener('click', async () => {
-                const alvo = conteudos.find(x => x.id === b.dataset.guardar);
-                if (!alvo) return;
-                b.disabled = true;
-                await store.conteudos.salvar({ ...alvo, banco_em: new Date().toISOString() });
-                toast(`"${alvo.titulo}" foi para o banco de temas.`, {
-                    label: 'Desfazer',
-                    onClick: async () => {
-                        await store.conteudos.salvar({ ...alvo, banco_em: null });
-                        recarregar();
-                    },
-                });
-                recarregar();
+        /* Clicar no cartão abre a demanda. Controles dentro dele cuidam do
+           próprio clique, e o clique que sobra de um arraste já chega aqui
+           cancelado (lib/arrastar.js). */
+        content.querySelectorAll('[data-cartao]').forEach(el =>
+            el.addEventListener('click', (e) => {
+                if (e.defaultPrevented || e.target.closest('button, a')) return;
+                const alvo = conteudos.find(x => x.id === el.dataset.cartao);
+                if (alvo) navegar(caminhoDoConteudo(alvo));
             }));
 
-        content.querySelectorAll('[data-trocar]').forEach(b =>
-            b.addEventListener('click', () => {
-                const id = b.dataset.trocar;
-                if (selecionado === id) { selecionado = null; desenhar(); return; }
-                if (!selecionado) { selecionado = id; desenhar(); return; }
-                const primeiro = selecionado;
-                selecionado = null;
-                trocarSelecionados(primeiro, id);
+        /* Etapa: o mesmo menu do cronograma e a mesma função da demanda. */
+        content.querySelectorAll('[data-etapa]').forEach(b =>
+            b.addEventListener('click', (e) => {
+                e.stopPropagation();   // o menu se fecha em qualquer clique no documento
+                const alvo = conteudos.find(x => x.id === b.dataset.etapa);
+                if (!alvo) return;
+                abrirMenu(b, itensDeEtapa(alvo, async (nome) => {
+                    const { novoStatus, reabriu, desfazer } = await moverParaEtapa(alvo, nome);
+                    toast(mensagemDeMovimento(nome, novoStatus, reabriu), {
+                        label: 'Desfazer',
+                        onClick: async () => { await desfazer(); recarregar(); },
+                    });
+                    recarregar();
+                }), { alinhar: 'esquerda' });
+            }));
+
+        /* O resto das ações num menu só: três botões empilhados no canto de
+           cada cartão eram metade do ruído da tela. */
+        content.querySelectorAll('[data-mais]').forEach(b =>
+            b.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const id = b.dataset.mais;
+                const alvo = conteudos.find(x => x.id === id);
+                if (!alvo) return;
+
+                // Durante uma troca, o botão do próprio cartão cancela, e o de
+                // outro cartão completa — sem abrir menu nenhum.
+                if (selecionado) {
+                    if (selecionado === id) { selecionado = null; desenhar(); return; }
+                    const primeiro = selecionado;
+                    selecionado = null;
+                    trocarSelecionados(primeiro, id);
+                    return;
+                }
+
+                abrirMenu(b, [
+                    { id: 'abrir', label: 'Abrir a demanda', icon: 'file-text',
+                      onClick: () => navegar(caminhoDoConteudo(alvo)) },
+                    { id: 'trocar', label: 'Trocar de lugar com…', icon: 'arrow-left-right',
+                      onClick: () => { selecionado = id; desenhar(); } },
+                    aguardaData(alvo)
+                        ? { id: 'semdata', label: 'Voltar para o dia que tinha', icon: 'calendar-check',
+                            onClick: () => soltar(id, `dia:${alvo.data}`) }
+                        : { id: 'semdata', label: 'Tirar a data (sem data)', icon: 'calendar-clock',
+                            onClick: () => soltar(id, 'semdata') },
+                    { id: 'banco', label: 'Mandar para o banco de temas', icon: 'archive', separadorAntes: true,
+                      onClick: async () => {
+                          await store.conteudos.salvar({ ...alvo, banco_em: new Date().toISOString() });
+                          toast(`"${curto(alvo.titulo)}" foi para o banco de temas.`, {
+                              label: 'Desfazer',
+                              onClick: async () => {
+                                  await store.conteudos.salvar({ ...alvo, banco_em: null });
+                                  recarregar();
+                              },
+                          });
+                          recarregar();
+                      } },
+                ]);
             }));
 
         soltarArraste?.();
-        soltarArraste = ativarArraste(content.querySelector('#qd-grade') || content, {
+        soltarArraste = ativarArraste(content.querySelector('#qd-area') || content, {
             item: '[data-arrastavel]',
             alvo: '[data-solta]',
-            aoSoltar: (idConteudo, chaveVaga) => moverParaVaga(idConteudo, chaveVaga),
+            // Soltar sobre si mesmo não é movimento.
+            podeSoltar: (id, destino) => {
+                const c = conteudos.find(x => x.id === id);
+                return !(c && destino === `dia:${c.data}` && !aguardaData(c));
+            },
+            aoSoltar: (idConteudo, destino) => soltar(idConteudo, destino),
         });
     }
 
@@ -419,7 +528,29 @@ const curto = (t, n = 34) => {
 const ESTILOS = `
 <style>
 .qd-conta { font-size: var(--text-sm); color: var(--text-tertiary); }
-.qd-conta__alerta { color: var(--warning); font-weight: 600; }
+
+/* ── Sem data ────────────────────────────────────────────────────────── */
+.qd-semdata {
+    display: flex; flex-direction: column; gap: var(--space-3);
+    margin-bottom: var(--space-4); padding: var(--space-4);
+    border: 1px dashed var(--border-default); border-radius: var(--radius-md);
+    transition: background-color var(--dur-fast), border-color var(--dur-fast);
+}
+.qd-semdata--vazia { padding: var(--space-3) var(--space-4); }
+.qd-semdata.ar-sobre { border-color: var(--accent); background: var(--accent-muted); }
+.qd-semdata__cabeca { display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; }
+.qd-semdata__titulo {
+    display: inline-flex; align-items: center; gap: var(--space-2);
+    font-size: var(--text-xs); font-weight: 700; color: var(--text-secondary);
+    text-transform: uppercase; letter-spacing: var(--tracking-wide);
+}
+.qd-semdata__titulo svg { width: 14px; height: 14px; color: var(--accent); }
+.qd-semdata__conta {
+    padding: 1px 8px; border-radius: var(--radius-pill);
+    background: var(--accent-muted); color: var(--accent); letter-spacing: 0;
+}
+.qd-semdata__dica { font-size: var(--text-xs); color: var(--text-tertiary); }
+.qd-semdata__lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: var(--space-2); }
 
 /* ── Grade ───────────────────────────────────────────────────────────────
    Rola na horizontal em vez de espremer: três colunas de cartão não cabem
@@ -457,29 +588,63 @@ const ESTILOS = `
 
 /* ── Cartão ──────────────────────────────────────────────────────────── */
 .qd-cartao {
-    display: flex; align-items: stretch; gap: var(--space-2);
+    position: relative;
+    display: flex; align-items: flex-start; gap: var(--space-2);
     padding: var(--space-3);
     border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);
     background: var(--surface-2);
-    cursor: grab;
-    transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
+    cursor: pointer;
+    transition: border-color var(--dur-fast), box-shadow var(--dur-fast), opacity var(--dur-fast);
 }
 .qd-cartao:hover { border-color: var(--border-default); }
 .qd-cartao.is-escolhido { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); background: var(--accent-muted); }
-/* Fase que não bate com a coluna: o cartão ganha borda vermelha. É a leitura
-   que a tela existe para dar, e ela precisa funcionar de longe, sem ler. */
-.qd-cartao--fora { border-color: color-mix(in oklch, var(--danger) 55%, transparent); }
+/* Fase que não bate com a coluna. Discreta: é um aviso de estratégia, não um
+   erro, e uma grade cheia de bordas vermelhas deixa de dizer qualquer coisa. */
+.qd-cartao--fora { border-color: color-mix(in oklch, var(--danger) 32%, transparent); }
 
-.qd-cartao__corpo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.qd-cartao__corpo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .qd-cartao__topo { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 .qd-cartao__dia { font-size: var(--text-xs); font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: var(--tracking-wide); }
 .qd-cartao__titulo {
-    margin: 0; font-size: var(--text-sm); font-weight: 600; color: var(--text-primary);
-    line-height: var(--leading-snug);
+    margin: 0; font-size: var(--text-sm); font-weight: 600; line-height: var(--leading-snug);
     display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
 }
-.qd-cartao__pe { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; min-width: 0; }
-.qd-cartao__acoes { display: flex; flex-direction: column; gap: 2px; flex-shrink: 0; }
+.qd-cartao__titulo a { color: var(--text-primary); text-decoration: none; }
+.qd-cartao__titulo a:hover { text-decoration: underline; text-underline-offset: 2px; }
+.qd-cartao__pe { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.qd-cartao__mais { flex-shrink: 0; margin: -4px -4px 0 0; opacity: 0.55; transition: opacity var(--dur-fast); }
+.qd-cartao:hover .qd-cartao__mais, .qd-cartao__mais:focus-visible, .qd-cartao.is-escolhido .qd-cartao__mais { opacity: 1; }
+
+/* A etapa como botão: o próprio chip, com uma seta que só aparece no hover. */
+.qd-etapa {
+    display: inline-flex; align-items: center; gap: 2px;
+    padding: 0; border: none; background: none; cursor: pointer; border-radius: var(--radius-pill);
+}
+.qd-etapa__seta { width: 13px; height: 13px; color: var(--text-tertiary); opacity: 0; transition: opacity var(--dur-fast); }
+.qd-etapa:hover .qd-etapa__seta, .qd-etapa:focus-visible .qd-etapa__seta { opacity: 1; }
+.qd-etapa:hover .vz-etiqueta { box-shadow: inset 0 0 0 1px currentColor; }
+
+/* Publicado: passado. Verde, apagado, só o essencial. */
+.qd-cartao--publicado {
+    text-decoration: none; opacity: 0.6;
+    background: color-mix(in oklch, var(--success) 12%, var(--surface-1));
+    border-color: color-mix(in oklch, var(--success) 38%, transparent);
+}
+.qd-cartao--publicado:hover { opacity: 0.85; border-color: color-mix(in oklch, var(--success) 40%, transparent); }
+.qd-cartao--publicado .qd-cartao__titulo { color: var(--text-secondary); }
+.qd-cartao__publicado {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: var(--text-xs); font-weight: 600; color: var(--success);
+}
+.qd-cartao__publicado svg { width: 13px; height: 13px; }
+
+.qd-inline { width: 14px; height: 14px; vertical-align: -2px; }
+
+/* Remanejados: fechado por padrão. */
+.qd-historico > summary { list-style: none; cursor: pointer; }
+.qd-historico > summary::-webkit-details-marker { display: none; }
+.qd-historico__seta { width: 18px; height: 18px; color: var(--text-tertiary); transition: transform var(--dur-fast); }
+.qd-historico[open] .qd-historico__seta { transform: rotate(180deg); }
 
 /* ── Barra de seleção ────────────────────────────────────────────────── */
 .qd-selecao {
