@@ -158,6 +158,16 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
         const c = conteudos.find(x => x.id === conteudoId);
         if (!c) return;
 
+        if (destino === 'banco') {
+            await store.conteudos.salvar({ ...c, banco_em: new Date().toISOString() });
+            toast(`"${curto(c.titulo)}" foi para o banco de temas.`, {
+                label: 'Desfazer',
+                onClick: async () => { await store.conteudos.salvar({ ...c, banco_em: null }); recarregar(); },
+            });
+            recarregar();
+            return;
+        }
+
         if (destino === 'semdata') {
             if (aguardaData(c)) return;
             await aplicar({
@@ -220,6 +230,21 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
             ${selecionado ? barraSelecao() : ''}
 
             <div id="qd-area">
+                ${/* Os destinos que não são um dia aparecem SÓ durante o arraste,
+                      presos ao rodapé da tela: a peça pode estar na última
+                      semana, e a bandeja lá no topo. Esperar que a pessoa leve
+                      o cartão até lá em cima era esperar demais. */''}
+                <div class="qd-doca" data-ar-fixo>
+                    <div class="qd-doca__alvo" data-solta="semdata">
+                        <i data-lucide="calendar-clock"></i>
+                        <span><b>Sem data</b><small>tira do calendário</small></span>
+                    </div>
+                    <div class="qd-doca__alvo" data-solta="banco">
+                        <i data-lucide="archive"></i>
+                        <span><b>Banco de temas</b><small>guarda para depois</small></span>
+                    </div>
+                </div>
+
                 ${bandejaSemData(semData)}
 
                 ${doMes.length || semData.length ? `
@@ -252,18 +277,16 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
        essas peças eram empilhadas numa data qualquer até alguém sentar para
        distribuir — e o dia escolhido virava um amontoado que parecia agenda.
        Aqui elas ficam fora da grade, de qualquer mês, e voltam ao calendário
-       arrastadas para uma vaga. A bandeja existe mesmo vazia: é também o
-       lugar para onde se arrasta o que perdeu a data. */
-    const bandejaSemData = (lista) => `
-        <section class="qd-semdata ${lista.length ? '' : 'qd-semdata--vazia'}" data-solta="semdata">
+       arrastadas para uma vaga. Vazia, ela nem aparece: para TIRAR a data,
+       o destino é a barra que surge no rodapé durante o arraste. */
+    const bandejaSemData = (lista) => !lista.length ? '' : `
+        <section class="qd-semdata" data-solta="semdata">
             <header class="qd-semdata__cabeca">
                 <span class="qd-semdata__titulo"><i data-lucide="calendar-clock"></i> Sem data
-                    ${lista.length ? `<span class="qd-semdata__conta">${lista.length}</span>` : ''}</span>
-                <span class="qd-semdata__dica">${lista.length
-                    ? 'Arraste para uma vaga do quadro para dar o dia.'
-                    : 'Arraste para cá o que ainda não tem dia — sai do calendário e fica esperando aqui.'}</span>
+                    <span class="qd-semdata__conta">${lista.length}</span></span>
+                <span class="qd-semdata__dica">Arraste para uma vaga do quadro para dar o dia.</span>
             </header>
-            ${lista.length ? `<div class="qd-semdata__lista">${lista.map(c => cartao(c, conteudos, { semData: true })).join('')}</div>` : ''}
+            <div class="qd-semdata__lista">${lista.map(c => cartao(c, conteudos, { semData: true })).join('')}</div>
         </section>`;
 
     const linhaSemana = (segunda, todos) => {
@@ -506,7 +529,9 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
             // Soltar sobre si mesmo não é movimento.
             podeSoltar: (id, destino) => {
                 const c = conteudos.find(x => x.id === id);
-                return !(c && destino === `dia:${c.data}` && !aguardaData(c));
+                if (!c) return false;
+                if (destino === 'semdata') return !aguardaData(c);
+                return !(destino === `dia:${c.data}` && !aguardaData(c));
             },
             aoSoltar: (idConteudo, destino) => soltar(idConteudo, destino),
         });
@@ -529,6 +554,35 @@ const ESTILOS = `
 <style>
 .qd-conta { font-size: var(--text-sm); color: var(--text-tertiary); }
 
+/* ── Barra de destinos (só durante o arraste) ──────────────────────────── */
+.qd-doca {
+    position: fixed; left: 50%; bottom: var(--space-6); z-index: 850;
+    display: flex; gap: var(--space-3);
+    padding: var(--space-2);
+    border: 1px solid var(--border-default); border-radius: var(--radius-lg, 16px);
+    background: var(--surface-2); box-shadow: var(--shadow-lg);
+    transform: translate(-50%, 16px); opacity: 0; pointer-events: none;
+    transition: opacity var(--dur-fast), transform var(--dur-fast) var(--ease-out);
+}
+body.ar-arrastando .qd-doca { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.qd-doca__alvo {
+    display: flex; align-items: center; gap: var(--space-3);
+    min-width: 200px; padding: var(--space-3) var(--space-4);
+    border: 1px dashed var(--border-default); border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    transition: background-color var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast);
+}
+.qd-doca__alvo svg { width: 20px; height: 20px; flex-shrink: 0; color: var(--accent); }
+.qd-doca__alvo span { display: flex; flex-direction: column; line-height: 1.25; }
+.qd-doca__alvo b { font-size: var(--text-sm); color: var(--text-primary); }
+.qd-doca__alvo small { font-size: var(--text-xs); color: var(--text-tertiary); }
+.qd-doca__alvo.ar-sobre { border-style: solid; border-color: var(--accent); }
+@media (max-width: 640px) {
+    .qd-doca { left: var(--space-3); right: var(--space-3); transform: translateY(16px); }
+    body.ar-arrastando .qd-doca { transform: none; }
+    .qd-doca__alvo { min-width: 0; flex: 1; }
+}
+
 /* ── Sem data ────────────────────────────────────────────────────────── */
 .qd-semdata {
     display: flex; flex-direction: column; gap: var(--space-3);
@@ -536,7 +590,6 @@ const ESTILOS = `
     border: 1px dashed var(--border-default); border-radius: var(--radius-md);
     transition: background-color var(--dur-fast), border-color var(--dur-fast);
 }
-.qd-semdata--vazia { padding: var(--space-3) var(--space-4); }
 .qd-semdata.ar-sobre { border-color: var(--accent); background: var(--accent-muted); }
 .qd-semdata__cabeca { display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; }
 .qd-semdata__titulo {
@@ -588,7 +641,6 @@ const ESTILOS = `
 
 /* ── Cartão ──────────────────────────────────────────────────────────── */
 .qd-cartao {
-    position: relative;
     display: flex; align-items: flex-start; gap: var(--space-2);
     padding: var(--space-3);
     border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);

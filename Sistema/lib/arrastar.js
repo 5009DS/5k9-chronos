@@ -34,6 +34,23 @@
 const LIMITE_MOUSE = 6;       // px de movimento que já contam como arraste
 const ESPERA_TOQUE = 320;     // ms de toque parado antes de o arraste começar
 
+/* ── ROLAGEM AUTOMÁTICA ───────────────────────────────────────────────────
+   Arrastar da primeira semana para a última exigia que as duas coubessem na
+   tela: não havia como rolar com o cartão na mão. Agora, perto da borda de
+   cima ou de baixo, a página rola sozinha — mais rápido quanto mais perto da
+   borda —, como em qualquer lista que se reordena arrastando. */
+const BORDA_ROLAGEM = 90;     // px da borda da janela em que a rolagem começa
+const VELOCIDADE_MAX = 22;    // px por quadro, colado na borda
+
+/** O contêiner que rola de verdade (aqui, o .sh-scroll), ou a página. */
+const acharRolador = (el) => {
+    for (let n = el.parentElement; n; n = n.parentElement) {
+        const oy = getComputedStyle(n).overflowY;
+        if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight) return n;
+    }
+    return document.scrollingElement;
+};
+
 /**
  * @param {HTMLElement} raiz        onde procurar itens e alvos
  * @param {object}   opts
@@ -51,6 +68,7 @@ export const ativarArraste = (raiz, { item, alvo, aoSoltar, podeSoltar }) => {
     const limpar = () => {
         if (!estado) return;
         clearTimeout(estado.timer);
+        cancelAnimationFrame(estado.quadro);
         estado.el.classList.remove('ar-origem');
         estado.fantasma?.remove();
         raiz.querySelectorAll('.ar-sobre').forEach(e => e.classList.remove('ar-sobre'));
@@ -81,7 +99,29 @@ export const ativarArraste = (raiz, { item, alvo, aoSoltar, podeSoltar }) => {
         estado.el.classList.add('ar-origem');
         document.body.classList.add('ar-arrastando');
 
+        estado.rolador = acharRolador(estado.el);
+        estado.quadro = requestAnimationFrame(rolarNaBorda);
+
         if (navigator.vibrate) navigator.vibrate(8);   // confirma o pega no toque
+    };
+
+    /* Um laço por quadro, e não só no pointermove: com o ponteiro PARADO na
+       borda o evento não chega, e a rolagem tem de continuar. Cada passo
+       reavalia o alvo, porque a grade andou por baixo do ponteiro. */
+    const rolarNaBorda = () => {
+        if (!estado?.ativo) return;
+        const y = estado.y ?? estado.y0;
+        const h = window.innerHeight;
+        let v = 0;
+        if (estado.sobreFixo) v = 0;
+        else if (y < BORDA_ROLAGEM) v = -Math.ceil(((BORDA_ROLAGEM - y) / BORDA_ROLAGEM) * VELOCIDADE_MAX);
+        else if (y > h - BORDA_ROLAGEM) v = Math.ceil(((y - (h - BORDA_ROLAGEM)) / BORDA_ROLAGEM) * VELOCIDADE_MAX);
+        if (v) {
+            const antes = estado.rolador.scrollTop;
+            estado.rolador.scrollTop += v;
+            if (estado.rolador.scrollTop !== antes) procurarAlvo(estado.x, estado.y);
+        }
+        estado.quadro = requestAnimationFrame(rolarNaBorda);
     };
 
     const aoDescer = (e) => {
@@ -131,15 +171,24 @@ export const ativarArraste = (raiz, { item, alvo, aoSoltar, podeSoltar }) => {
         }
 
         e.preventDefault();
+        estado.x = e.clientX;
+        estado.y = e.clientY;
         estado.fantasma.style.left = `${e.clientX - estado.dx}px`;
         estado.fantasma.style.top = `${e.clientY - estado.dy}px`;
+        procurarAlvo(e.clientX, e.clientY);
+    };
 
+    const procurarAlvo = (x, y) => {
+        if (!estado?.fantasma || x == null) return;
         /* elementFromPoint com o fantasma escondido: ele está sob o ponteiro e
            devolveria a si mesmo. `pointer-events: none` no fantasma resolveria,
            mas quebra o clone quando ele tem filhos interativos. */
         estado.fantasma.style.display = 'none';
-        const sob = document.elementFromPoint(e.clientX, e.clientY);
+        const sob = document.elementFromPoint(x, y);
         estado.fantasma.style.display = '';
+        // Sobre um painel fixo (a barra de destinos do quadro), a rolagem
+        // automática espera: a barra mora justamente na borda da tela.
+        estado.sobreFixo = !!sob?.closest('[data-ar-fixo]');
 
         const destino = sob?.closest(alvo);
         const idAlvo = destino?.dataset.solta;
@@ -209,8 +258,15 @@ function injectStyles() {
 
         .ar-origem { opacity: 0.28; }
 
+        /* position com !important: o fantasma é um CLONE do cartão e herda as
+           classes dele. Um cartão com position própria (o do quadro já teve)
+           vencia esta regra pela ordem do CSS, o fantasma entrava no fluxo do
+           <body> — que é flex — e empurrava a página inteira para o lado no
+           instante em que o arraste começava. */
         .ar-fantasma {
-            position: fixed; z-index: 900; margin: 0;
+            position: fixed !important; z-index: 900; margin: 0;
+            /* O clone mora no <body>, fora da página que define a fonte. */
+            font-family: var(--font-sans); color: var(--text-primary);
             pointer-events: none;
             box-shadow: var(--shadow-lg);
             transform: rotate(1.2deg) scale(1.02);
@@ -230,6 +286,9 @@ function injectStyles() {
            pisca entre "mover" e "texto" a cada elemento que passa por baixo. */
         body.ar-arrastando, body.ar-arrastando * { cursor: grabbing !important; }
         body.ar-arrastando { -webkit-user-select: none; user-select: none; }
+        /* Avisos somem durante o arraste: moram no rodapé, onde ficam os
+           destinos da barra do quadro, e ninguém lê aviso com o cartão na mão. */
+        body.ar-arrastando .ts { opacity: 0; pointer-events: none; }
 
         @media (prefers-reduced-motion: reduce) {
             .ar-fantasma { transform: none; }
