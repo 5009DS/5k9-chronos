@@ -206,6 +206,14 @@ export const ETAPAS = ETIQUETAS.filter(e => e.etapa).sort((a, b) => a.etapa - b.
    ═══════════════════════════════════════════════════════════════════════════ */
 const FORMATO_ARTE = /carro?ss?el|carousel|est[áa]tico|imagem|foto|arte|infogr[áa]fico/i;
 
+/** A etapa equivalente na esteira da peça: "a gravar" num carrossel vira
+    "a diagramar". null quando a outra esteira não tem equivalente. */
+export const etapaNaEsteira = (nome, esteira) => {
+    const meta = etiquetaMeta(nome);
+    if (!meta.etapa || meta.esteira === 'ambas' || meta.esteira === esteira) return meta.nome || nome;
+    return etapasDa(esteira).find(e => e.etapa === meta.etapa)?.nome || null;
+};
+
 /** Qual esteira este formato segue. Sem formato, a de vídeo. */
 export const esteiraDe = (formato) => FORMATO_ARTE.test(String(formato || '')) ? 'carrossel' : 'video';
 

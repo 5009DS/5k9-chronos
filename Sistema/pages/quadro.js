@@ -5,7 +5,7 @@ import { toast } from '../components/toast.js';
 import { navegar, caminhoDoConteudo } from '../lib/rotas.js';
 import { ativarArraste } from '../lib/arrastar.js';
 import { nomeFase, noDiaCerto } from '../lib/diretorio.js';
-import { injectEstilosEtiqueta, chipsEstado, etapaAtual, etiquetaMeta, chipEtiqueta } from '../lib/etiquetas.js';
+import { injectEstilosEtiqueta, chipsEstado, etapaAtual, etiquetaMeta, chipEtiqueta, ETAPAS, etapaNaEsteira, esteiraDe } from '../lib/etiquetas.js';
 import { moverParaEtapa, mensagemDeMovimento, itensDeEtapa } from '../lib/etapas.js';
 import { abrirMenu } from '../components/menu.js';
 import { chipFase, vazioHTML } from '../lib/pecas.js';
@@ -58,6 +58,11 @@ const VAGAS = ['fundo', 'meio', 'topo'].map(fase => ({
    aponta para uma grade que não é mais a da tela. */
 const MES_ABERTO = new Map();
 
+/* Esc limpa a seleção. Um ouvinte só, para a vida toda: o quadro se redesenha
+   a cada movimento, e um ouvinte por desenho se empilharia. */
+let aoEsc = null;
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') aoEsc?.(); });
+
 const vagaDoDia = (iso) => VAGAS.find(v => v.dias.includes(indiceDia(iso))) || VAGAS[0];
 
 /**
@@ -92,6 +97,11 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
     let mes = mesInicial || MES_ABERTO.get(clienteId) || mesAtual();
     const trocarMes = (novo) => { mes = novo; MES_ABERTO.set(clienteId, mes); selecionado = null; desenhar(); };
     let selecionado = null;     // id do primeiro conteúdo de uma troca por seleção
+    /* A seleção MÚLTIPLA: vários cartões marcados vão juntos para o mesmo
+       destino, pela barra do rodapé ou arrastando qualquer um deles. Vive só
+       até o próximo movimento — depois de mover, a seleção já cumpriu o papel. */
+    const marcados = new Set();
+    aoEsc = () => { if (marcados.size) { marcados.clear(); desenhar(); } };
     let soltarArraste = null;
 
     const { content } = renderShell(container, {
@@ -155,25 +165,32 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
      * Trocar de lugar é o botão de troca, um gesto explícito.
      */
     async function soltar(conteudoId, destino) {
-        const c = conteudos.find(x => x.id === conteudoId);
-        if (!c) return;
+        // Arrastar um cartão MARCADO leva a seleção inteira junto.
+        const ids = marcados.has(conteudoId) && marcados.size > 1 ? [...marcados] : [conteudoId];
+        await moverGrupo(ids, destino);
+    }
+
+    /** Aplica um destino a um ou vários conteúdos, com um desfazer só. */
+    async function moverGrupo(ids, destino) {
+        const grupo = ids.map(id => conteudos.find(x => x.id === id)).filter(Boolean);
+        if (!grupo.length) return;
+        const um = grupo.length === 1;
+        const nome = um ? `"${curto(grupo[0].titulo)}"` : `${grupo.length} conteúdos`;
 
         if (destino === 'banco') {
-            await store.conteudos.salvar({ ...c, banco_em: new Date().toISOString() });
-            toast(`"${curto(c.titulo)}" foi para o banco de temas.`, {
-                label: 'Desfazer',
-                onClick: async () => { await store.conteudos.salvar({ ...c, banco_em: null }); recarregar(); },
-            });
-            recarregar();
+            await aplicar({
+                alterados: grupo.map(c => ({ ...c, banco_em: new Date().toISOString() })),
+                desfazer: grupo.map(c => ({ ...c })),
+            }, `${nome} ${um ? 'foi' : 'foram'} para o banco de temas.`);
             return;
         }
 
         if (destino === 'semdata') {
-            if (aguardaData(c)) return;
+            const mexer = grupo.filter(c => !aguardaData(c));
             await aplicar({
-                alterados: [{ ...c, etiquetas: comPendencia(c.etiquetas, AGUARDANDO_DATA, true) }],
-                desfazer: [{ ...c }],
-            }, `"${curto(c.titulo)}" ficou sem data.`);
+                alterados: mexer.map(c => ({ ...c, etiquetas: comPendencia(c.etiquetas, AGUARDANDO_DATA, true) })),
+                desfazer: mexer.map(c => ({ ...c })),
+            }, `${nome} ${um ? 'ficou' : 'ficaram'} sem data.`);
             return;
         }
 
@@ -184,16 +201,42 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
             const [segunda, faseVaga] = destino.slice(5).split('|');
             const vaga = VAGAS.find(v => v.fase === faseVaga);
             dia = somarDias(segunda, vaga.dia);
-            /* Já está nesta vaga, nesta semana, e tem data? Não mexe. Sem a
+            /* Um só, já nesta vaga, nesta semana, e com data? Não mexe. Sem a
                guarda, soltar um conteúdo de terça na própria coluna o empurraria
                para segunda — uma mudança que ninguém pediu. */
-            if (!aguardaData(c) && vaga.dias.includes(indiceDia(c.data))
+            const c = grupo[0];
+            if (um && !aguardaData(c) && vaga.dias.includes(indiceDia(c.data))
                 && somarDias(c.data, -indiceDia(c.data)) === segunda) return;
         }
 
-        const juntos = conteudos.filter(x => x.id !== c.id && x.data === dia && !aguardaData(x)).length;
-        await aplicar(moverPara(c, dia),
-            `"${curto(c.titulo)}" foi para ${diaCurto(dia)}${juntos ? `, junto com ${juntos === 1 ? 'mais 1' : `mais ${juntos}`}` : ''}.`);
+        const movimentos = grupo.map(c => moverPara(c, dia));
+        const juntos = conteudos.filter(x => !ids.includes(x.id) && x.data === dia && !aguardaData(x)).length;
+        await aplicar({
+            alterados: movimentos.flatMap(m => m.alterados),
+            desfazer: movimentos.flatMap(m => m.desfazer),
+        }, `${nome} ${um ? 'foi' : 'foram'} para ${diaCurto(dia)}${juntos ? `, junto com ${juntos === 1 ? 'mais 1' : `mais ${juntos}`}` : ''}.`);
+    }
+
+    /** A mesma etapa para vários — cada um na equivalente da sua esteira. */
+    async function etapaEmGrupo(ids, etapa) {
+        const desfazeres = [];
+        let pulados = 0;
+        // Um por vez: o adaptador local grava a coleção inteira a cada salvar.
+        for (const id of ids) {
+            const c = conteudos.find(x => x.id === id);
+            if (!c) continue;
+            const destino = etapa ? etapaNaEsteira(etapa, esteiraDe(c.formato)) : null;
+            if (etapa && !destino) { pulados++; continue; }
+            if ((etapaAtual(c.etiquetas)?.nome || null) === destino) continue;
+            const { desfazer } = await moverParaEtapa(c, destino);
+            desfazeres.push(desfazer);
+        }
+        toast(`${desfazeres.length} conteúdo${desfazeres.length === 1 ? '' : 's'} em "${etapa || 'rascunho'}".`
+            + (pulados ? ` ${pulados} de outra esteira ficaram como estavam.` : ''), {
+            label: 'Desfazer',
+            onClick: async () => { for (const d of desfazeres) await d(); recarregar(); },
+        });
+        recarregar();
     }
 
     /** Troca dois conteúdos de data. É o caminho da seleção, sem arraste. */
@@ -229,7 +272,7 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
 
             ${selecionado ? barraSelecao() : ''}
 
-            <div id="qd-area">
+            <div id="qd-area" class="${marcados.size ? 'qd-area--selecionando' : ''}">
                 ${/* Os destinos que não são um dia aparecem SÓ durante o arraste,
                       presos ao rodapé da tela: a peça pode estar na última
                       semana, e a bandeja lá no topo. Esperar que a pessoa leve
@@ -266,6 +309,8 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
             </div>
 
             ${deslocados.length ? painelDeslocados(deslocados) : ''}
+
+            ${marcados.size ? barraLote() : ''}
         `;
 
         ligarEventos();
@@ -339,11 +384,20 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
         const etapa = etapaAtual(c.etiquetas);
         const outras = (c.etiquetas || []).filter(e => !etiquetaMeta(e).etapa && String(e).trim().toLowerCase() !== AGUARDANDO_DATA);
 
+        const marcado = marcados.has(c.id);
         return `
-            <article class="qd-cartao ${escolhido ? 'is-escolhido' : ''} ${foraDeFase ? 'qd-cartao--fora' : ''}"
-                     data-arrastavel="${esc(c.id)}" data-cartao="${esc(c.id)}" data-solta="${semData ? 'semdata' : `dia:${esc(c.data)}`}">
+            <article class="qd-cartao ${escolhido ? 'is-escolhido' : ''} ${marcado ? 'is-marcado' : ''} ${foraDeFase ? 'qd-cartao--fora' : ''}"
+                     data-arrastavel="${esc(c.id)}" data-cartao="${esc(c.id)}" data-solta="${semData ? 'semdata' : `dia:${esc(c.data)}`}"
+                     ${marcado && marcados.size > 1 ? `data-lote="${marcados.size}"` : ''}>
                 <div class="qd-cartao__corpo">
                     <div class="qd-cartao__topo">
+                        ${/* A caixa de seleção aparece no hover — e fica visível
+                              em todos os cartões enquanto houver seleção, para o
+                              segundo e o terceiro não exigirem caçar o hover. */''}
+                        <button class="qd-marca" data-marcar="${esc(c.id)}" role="checkbox" aria-checked="${marcado}"
+                                aria-label="Selecionar ${esc(c.titulo)}" title="Selecionar">
+                            <i data-lucide="check"></i>
+                        </button>
                         <span class="qd-cartao__dia">${semData ? 'sem data' : `${esc(nomeDiaCurto(c.data))} ${esc(diaCurto(c.data))}`}</span>
                         ${chipFase(c.fase, { curto: true })}
                     </div>
@@ -370,6 +424,36 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
                 </button>
             </article>`;
     };
+
+    /* ── A BARRA DA SELEÇÃO ───────────────────────────────────────────────
+       Presa ao rodapé, como a de destinos do arraste — que toma o lugar dela
+       enquanto se arrasta. O dia exato vem de um calendário: é o "local exato"
+       que o arraste não alcança quando o destino está a meses de distância. */
+    const barraLote = () => `
+        <div class="qd-lote" role="toolbar" aria-label="Ações para os selecionados">
+            <span class="qd-lote__conta"><b>${marcados.size}</b> selecionado${marcados.size === 1 ? '' : 's'}</span>
+            <span class="qd-lote__sep"></span>
+            <label class="qd-lote__dia">
+                <i data-lucide="calendar"></i>
+                <input type="date" id="qd-lote-data" aria-label="Dia de destino">
+            </label>
+            <button class="ds-btn ds-btn--primary ds-btn--sm" id="qd-lote-mover" disabled>
+                <i data-lucide="arrow-right"></i> Mover
+            </button>
+            <span class="qd-lote__sep"></span>
+            <button class="ds-btn ds-btn--ghost ds-btn--sm" id="qd-lote-etapa" aria-haspopup="menu">
+                <i data-lucide="git-commit-horizontal"></i> Etapa
+            </button>
+            <button class="ds-btn ds-btn--ghost ds-btn--sm" id="qd-lote-semdata">
+                <i data-lucide="calendar-clock"></i> Sem data
+            </button>
+            <button class="ds-btn ds-btn--ghost ds-btn--sm" id="qd-lote-banco">
+                <i data-lucide="archive"></i> Banco
+            </button>
+            <button class="ds-icon-btn ds-icon-btn--sm" id="qd-lote-limpar" aria-label="Limpar seleção (Esc)" title="Limpar seleção (Esc)">
+                <i data-lucide="x"></i>
+            </button>
+        </div>`;
 
     const barraSelecao = () => {
         const c = conteudos.find(x => x.id === selecionado);
@@ -455,12 +539,55 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
         /* Clicar no cartão abre a demanda. Controles dentro dele cuidam do
            próprio clique, e o clique que sobra de um arraste já chega aqui
            cancelado (lib/arrastar.js). */
+        const alternar = (id) => {
+            if (marcados.has(id)) marcados.delete(id); else marcados.add(id);
+            desenhar();
+        };
+        content.querySelectorAll('[data-marcar]').forEach(b =>
+            b.addEventListener('click', (e) => { e.stopPropagation(); alternar(b.dataset.marcar); }));
+
+        /* Com seleção ativa, clicar no cartão marca/desmarca em vez de abrir —
+           é o que se espera de uma tela em modo de seleção. Sem seleção,
+           abre a demanda. */
         content.querySelectorAll('[data-cartao]').forEach(el =>
             el.addEventListener('click', (e) => {
                 if (e.defaultPrevented || e.target.closest('button, a')) return;
+                if (marcados.size) { alternar(el.dataset.cartao); return; }
                 const alvo = conteudos.find(x => x.id === el.dataset.cartao);
                 if (alvo) navegar(caminhoDoConteudo(alvo));
             }));
+
+        // ── Barra da seleção ──
+        const dataLote = content.querySelector('#qd-lote-data');
+        const moverLote = content.querySelector('#qd-lote-mover');
+        dataLote?.addEventListener('input', () => { moverLote.disabled = !dataLote.value; });
+        dataLote?.addEventListener('keydown', (e) => { if (e.key === 'Enter' && dataLote.value) moverLote.click(); });
+        moverLote?.addEventListener('click', () => {
+            if (!dataLote.value) return;
+            // O mês acompanha o destino: mover para novembro e continuar vendo
+            // setembro esconderia o resultado do próprio clique.
+            mes = chaveMes(dataLote.value);
+            MES_ABERTO.set(clienteId, mes);
+            moverGrupo([...marcados], `dia:${dataLote.value}`);
+        });
+        content.querySelector('#qd-lote-semdata')?.addEventListener('click', () => moverGrupo([...marcados], 'semdata'));
+        content.querySelector('#qd-lote-banco')?.addEventListener('click', () => moverGrupo([...marcados], 'banco'));
+        content.querySelector('#qd-lote-limpar')?.addEventListener('click', () => { marcados.clear(); desenhar(); });
+        content.querySelector('#qd-lote-etapa')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            // Todas as etapas, das duas esteiras, sem repetir nome: cada peça
+            // vai para a equivalente da sua (etapaNaEsteira).
+            const nomes = [...new Set(ETAPAS.map(et => et.nome))];
+            abrirMenu(e.currentTarget, [
+                { id: 'rascunho', label: 'rascunho (fora do link)', icon: 'pencil',
+                  onClick: () => etapaEmGrupo([...marcados], null) },
+                ...nomes.map((nome, i) => ({
+                    id: `et-${nome}`, label: nome, icon: etiquetaMeta(nome).icone,
+                    separadorAntes: i === 0,
+                    onClick: () => etapaEmGrupo([...marcados], nome),
+                })),
+            ]);
+        });
 
         /* Etapa: o mesmo menu do cronograma e a mesma função da demanda. */
         content.querySelectorAll('[data-etapa]').forEach(b =>
@@ -581,6 +708,66 @@ body.ar-arrastando .qd-doca { opacity: 1; transform: translate(-50%, 0); pointer
     .qd-doca { left: var(--space-3); right: var(--space-3); transform: translateY(16px); }
     body.ar-arrastando .qd-doca { transform: none; }
     .qd-doca__alvo { min-width: 0; flex: 1; }
+}
+
+/* ── Seleção múltipla ─────────────────────────────────────────────────── */
+.qd-marca {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px; padding: 0; flex-shrink: 0;
+    border: 1.5px solid var(--border-strong, var(--text-tertiary)); border-radius: 5px;
+    background: transparent; color: transparent; cursor: pointer;
+    opacity: 0; transition: opacity var(--dur-fast), background-color var(--dur-fast), border-color var(--dur-fast);
+}
+.qd-marca svg { width: 12px; height: 12px; stroke-width: 3; }
+.qd-cartao:hover .qd-marca, .qd-marca:focus-visible, .qd-area--selecionando .qd-marca { opacity: 1; }
+.qd-cartao.is-marcado { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.qd-cartao.is-marcado .qd-marca { opacity: 1; background: var(--accent-solid, var(--accent)); border-color: transparent; color: #fff; }
+/* No toque não há hover: a caixa fica sempre à vista. */
+@media (hover: none) { .qd-marca { opacity: 1; } }
+
+/* Arrastando um cartão marcado, o fantasma diz quantos vão junto. */
+.ar-fantasma[data-lote]::after {
+    content: attr(data-lote);
+    position: absolute; top: -10px; right: -10px;
+    min-width: 26px; height: 26px; padding: 0 7px; border-radius: 13px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--accent-solid, var(--accent)); color: #fff;
+    font-size: 13px; font-weight: 700; box-shadow: var(--shadow-lg);
+}
+
+.qd-lote {
+    position: fixed; left: 50%; bottom: var(--space-6); z-index: 840;
+    transform: translateX(-50%);
+    display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; justify-content: center;
+    /* max-content: com left 50%, a largura disponível seria só a metade
+       direita da tela, e a barra quebrava em duas linhas sem precisar. */
+    width: max-content; max-width: calc(100vw - 2 * var(--space-4));
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--accent-border); border-radius: var(--radius-lg, 16px);
+    background: var(--surface-2); box-shadow: var(--shadow-lg);
+    animation: qd-sobe var(--dur-fast) var(--ease-out);
+}
+@keyframes qd-sobe { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translateX(-50%); } }
+/* Durante o arraste quem ocupa o rodapé é a barra de destinos. */
+body.ar-arrastando .qd-lote { display: none; }
+.qd-lote__conta { font-size: var(--text-sm); color: var(--text-secondary); padding: 0 var(--space-2); white-space: nowrap; }
+.qd-lote__conta b { color: var(--text-primary); }
+.qd-lote__sep { width: 1px; align-self: stretch; background: var(--border-subtle); margin: 0 var(--space-1); }
+.qd-lote__dia {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 32px; padding: 0 var(--space-2);
+    border: 1px solid var(--border-default); border-radius: var(--radius-sm);
+    background: var(--surface-1); color: var(--text-tertiary);
+}
+.qd-lote__dia svg { width: 15px; height: 15px; }
+.qd-lote__dia input {
+    border: none; background: none; outline: none; color: var(--text-primary);
+    font-family: var(--font-sans); font-size: var(--text-sm); color-scheme: dark;
+}
+html[data-theme="light"] .qd-lote__dia input { color-scheme: light; }
+@media (max-width: 640px) {
+    .qd-lote { left: var(--space-3); right: var(--space-3); width: auto; transform: none; max-width: none; animation: none; }
+    .qd-lote__sep { display: none; }
 }
 
 /* ── Sem data ────────────────────────────────────────────────────────── */
