@@ -1,5 +1,4 @@
 import { store } from '../store.js';
-import { abrirBancoDeTemas } from './cronograma.js';
 import { renderShell } from '../components/pageshell.js';
 import { toast } from '../components/toast.js';
 import { navegar, caminhoDoConteudo } from '../lib/rotas.js';
@@ -61,6 +60,10 @@ const MES_ABERTO = new Map();
 /* Esc limpa a seleção. Um ouvinte só, para a vida toda: o quadro se redesenha
    a cada movimento, e um ouvinte por desenho se empilharia. */
 let aoEsc = null;
+
+/* O painel do banco fica aberto entre um movimento e outro: devolver cinco
+   temas seguidos não pode exigir reabri-lo cinco vezes. */
+const BANCO_ABERTO = new Set();
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') aoEsc?.(); });
 
 const vagaDoDia = (iso) => VAGAS.find(v => v.dias.includes(indiceDia(iso))) || VAGAS[0];
@@ -113,7 +116,7 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
         title: 'Quadro do mês',
         subtitle: 'Arraste para mover — um dia pode ter mais de um conteúdo. No toque, segure por um instante antes de arrastar.',
         actions: `
-            <button class="ds-btn ds-btn--ghost" id="qd-banco">
+            <button class="ds-btn ds-btn--ghost" id="qd-banco" aria-pressed="${BANCO_ABERTO.has(clienteId)}">
                 <i data-lucide="archive"></i> Banco de temas
                 ${noBanco.length ? `<span class="cr-conta">${noBanco.length}</span>` : ''}
             </button>
@@ -129,8 +132,18 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
     // onde a pessoa estava, não para o mês corrente.
     const recarregar = () => renderQuadro(container, clienteId, mes);
 
-    document.getElementById('qd-banco')?.addEventListener('click',
-        () => abrirBancoDeTemas(cliente, noBanco, recarregar));
+    /* ── O BANCO AO LADO DO QUADRO ──────────────────────────────────────
+       No cronograma o banco é uma gaveta; aqui é um painel fixo à direita,
+       sem cobrir o quadro. A gaveta tapava a tela com um fundo escuro, e
+       devolver um tema exigia digitar a data — sem poder arrastar para a vaga
+       que se está vendo. Com o painel ao lado, o tema vai do banco para o dia
+       vago (ou de volta para o banco) no mesmo gesto do resto da tela. */
+    const botaoBanco = document.getElementById('qd-banco');
+    botaoBanco?.addEventListener('click', () => {
+        if (BANCO_ABERTO.has(clienteId)) BANCO_ABERTO.delete(clienteId); else BANCO_ABERTO.add(clienteId);
+        botaoBanco.setAttribute('aria-pressed', String(BANCO_ABERTO.has(clienteId)));
+        desenhar();
+    });
 
     // ── Movimento ────────────────────────────────────────────────────────
     /**
@@ -172,23 +185,26 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
 
     /** Aplica um destino a um ou vários conteúdos, com um desfazer só. */
     async function moverGrupo(ids, destino) {
-        const grupo = ids.map(id => conteudos.find(x => x.id === id)).filter(Boolean);
+        // `todos`, e não `conteudos`: o grupo pode vir do banco de temas.
+        const grupo = ids.map(id => todos.find(x => x.id === id)).filter(Boolean);
         if (!grupo.length) return;
         const um = grupo.length === 1;
+        const doBanco = grupo.every(c => c.banco_em);
         const nome = um ? `"${curto(grupo[0].titulo)}"` : `${grupo.length} conteúdos`;
 
         if (destino === 'banco') {
+            const mexer = grupo.filter(c => !c.banco_em);
             await aplicar({
-                alterados: grupo.map(c => ({ ...c, banco_em: new Date().toISOString() })),
-                desfazer: grupo.map(c => ({ ...c })),
+                alterados: mexer.map(c => ({ ...c, banco_em: new Date().toISOString() })),
+                desfazer: mexer.map(c => ({ ...c })),
             }, `${nome} ${um ? 'foi' : 'foram'} para o banco de temas.`);
             return;
         }
 
         if (destino === 'semdata') {
-            const mexer = grupo.filter(c => !aguardaData(c));
+            const mexer = grupo.filter(c => c.banco_em || !aguardaData(c));
             await aplicar({
-                alterados: mexer.map(c => ({ ...c, etiquetas: comPendencia(c.etiquetas, AGUARDANDO_DATA, true) })),
+                alterados: mexer.map(c => ({ ...c, banco_em: null, etiquetas: comPendencia(c.etiquetas, AGUARDANDO_DATA, true) })),
                 desfazer: mexer.map(c => ({ ...c })),
             }, `${nome} ${um ? 'ficou' : 'ficaram'} sem data.`);
             return;
@@ -209,12 +225,19 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
                 && somarDias(c.data, -indiceDia(c.data)) === segunda) return;
         }
 
-        const movimentos = grupo.map(c => moverPara(c, dia));
+        /* Quem sai do BANCO volta com a origem no dia novo: devolver é decisão
+           deliberada de onde ele fica, e não remanejamento — o histórico de
+           "saiu do lugar" falaria de uma mudança que ninguém fez. */
+        const movimentos = grupo.map(c => c.banco_em
+            ? { alterados: [{ ...c, banco_em: null, data: dia, data_original: dia,
+                              etiquetas: comPendencia(c.etiquetas, AGUARDANDO_DATA, false) }],
+                desfazer: [{ ...c }] }
+            : moverPara(c, dia));
         const juntos = conteudos.filter(x => !ids.includes(x.id) && x.data === dia && !aguardaData(x)).length;
         await aplicar({
             alterados: movimentos.flatMap(m => m.alterados),
             desfazer: movimentos.flatMap(m => m.desfazer),
-        }, `${nome} ${um ? 'foi' : 'foram'} para ${diaCurto(dia)}${juntos ? `, junto com ${juntos === 1 ? 'mais 1' : `mais ${juntos}`}` : ''}.`);
+        }, `${nome} ${doBanco ? (um ? 'saiu' : 'saíram') + ' do banco e ' + (um ? 'foi' : 'foram') : (um ? 'foi' : 'foram')} para ${diaCurto(dia)}${juntos ? `, junto com ${juntos === 1 ? 'mais 1' : `mais ${juntos}`}` : ''}.`);
     }
 
     /** A mesma etapa para vários — cada um na equivalente da sua esteira. */
@@ -288,6 +311,8 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
                     </div>
                 </div>
 
+                ${BANCO_ABERTO.has(clienteId) ? painelBanco() : ''}
+
                 ${bandejaSemData(semData)}
 
                 ${doMes.length || semData.length ? `
@@ -316,6 +341,42 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
         ligarEventos();
         if (window.lucide) lucide.createIcons();
     };
+
+    /* O painel do banco. É também destino: soltar um cartão do quadro nele
+       guarda o conteúdo. `data-ar-fixo` pausa a rolagem automática sobre ele. */
+    const painelBanco = () => `
+        <aside class="qd-banco" data-solta="banco" data-ar-fixo aria-label="Banco de temas">
+            <header class="qd-banco__cabeca">
+                <div>
+                    <h2>Banco de temas <span class="qd-semdata__conta">${noBanco.length}</span></h2>
+                    <p>${noBanco.length
+                        ? 'Arraste um tema para um dia do quadro para devolvê-lo ao calendário.'
+                        : 'Vazio. Arraste um cartão do quadro para cá para guardá-lo sem apagar.'}</p>
+                </div>
+                <button class="ds-icon-btn ds-icon-btn--sm" id="qd-banco-fechar" aria-label="Fechar o banco de temas">
+                    <i data-lucide="x"></i>
+                </button>
+            </header>
+            <div class="qd-banco__lista">
+                ${noBanco.map(c => `
+                    <article class="qd-cartao qd-banco__item" data-arrastavel="${esc(c.id)}">
+                        <div class="qd-cartao__corpo">
+                            <div class="qd-cartao__topo">
+                                ${chipFase(c.fase, { curto: true })}
+                                <span class="qd-cartao__dia">guardado em ${esc(diaCurto(String(c.banco_em).slice(0, 10)))}</span>
+                            </div>
+                            <h3 class="qd-cartao__titulo"><a href="${esc(caminhoDoConteudo(c))}" draggable="false">${esc(c.titulo)}</a></h3>
+                            <div class="qd-cartao__pe">
+                                ${chipsEstado(c)}
+                                <button class="qd-banco__voltar" data-devolver="${esc(c.id)}"
+                                        title="Devolver para o dia em que estava">
+                                    <i data-lucide="corner-up-left"></i> ${esc(diaCurto(c.data))}
+                                </button>
+                            </div>
+                        </div>
+                    </article>`).join('')}
+            </div>
+        </aside>`;
 
     /* ── SEM DATA ─────────────────────────────────────────────────────────
        A gaveta do que já foi gravado (ou escrito) e ainda não tem dia. Antes
@@ -557,6 +618,18 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
                 if (alvo) navegar(caminhoDoConteudo(alvo));
             }));
 
+        // ── Banco ──
+        content.querySelector('#qd-banco-fechar')?.addEventListener('click', () => {
+            BANCO_ABERTO.delete(clienteId);
+            botaoBanco?.setAttribute('aria-pressed', 'false');
+            desenhar();
+        });
+        content.querySelectorAll('[data-devolver]').forEach(b =>
+            b.addEventListener('click', () => {
+                const c = noBanco.find(x => x.id === b.dataset.devolver);
+                if (c) moverGrupo([c.id], `dia:${c.data}`);
+            }));
+
         // ── Barra da seleção ──
         const dataLote = content.querySelector('#qd-lote-data');
         const moverLote = content.querySelector('#qd-lote-mover');
@@ -655,12 +728,16 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
             alvo: '[data-solta]',
             // Soltar sobre si mesmo não é movimento.
             podeSoltar: (id, destino) => {
-                const c = conteudos.find(x => x.id === id);
+                const c = todos.find(x => x.id === id);
                 if (!c) return false;
+                if (destino === 'banco') return !c.banco_em;
+                if (c.banco_em) return true;   // do banco, qualquer dia ou "sem data" serve
                 if (destino === 'semdata') return !aguardaData(c);
                 return !(destino === `dia:${c.data}` && !aguardaData(c));
             },
             aoSoltar: (idConteudo, destino) => soltar(idConteudo, destino),
+            // A página rola, não a lista do banco de onde o cartão pode sair.
+            rolador: content.closest('.sh-scroll'),
         });
     }
 
@@ -708,6 +785,41 @@ body.ar-arrastando .qd-doca { opacity: 1; transform: translate(-50%, 0); pointer
     .qd-doca { left: var(--space-3); right: var(--space-3); transform: translateY(16px); }
     body.ar-arrastando .qd-doca { transform: none; }
     .qd-doca__alvo { min-width: 0; flex: 1; }
+}
+
+/* ── Painel do banco ──────────────────────────────────────────────────── */
+.qd-banco {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 820;
+    width: 340px; display: flex; flex-direction: column;
+    background: var(--surface-1); border-left: 1px solid var(--border-default);
+    box-shadow: var(--shadow-lg);
+    animation: qd-entra-lado var(--dur-fast) var(--ease-out);
+}
+@keyframes qd-entra-lado { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+/* O quadro abre espaço para o painel em vez de ficar escondido atrás dele. */
+.sh-scroll:has(.qd-banco) { padding-right: calc(340px + var(--space-6)); }
+.qd-banco.ar-sobre { background: var(--accent-muted) !important; outline-offset: -4px; }
+.qd-banco__cabeca {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3);
+    padding: var(--space-5) var(--space-4) var(--space-3);
+    border-bottom: 1px solid var(--border-subtle);
+}
+.qd-banco__cabeca h2 { display: flex; align-items: center; gap: var(--space-2); margin: 0; font-size: var(--text-body); font-weight: 700; }
+.qd-banco__cabeca p { margin: 6px 0 0; font-size: var(--text-xs); color: var(--text-tertiary); line-height: var(--leading-body); }
+.qd-banco__lista { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3) var(--space-4) var(--space-6); }
+.qd-banco__item { cursor: grab; }
+.qd-banco__voltar {
+    display: inline-flex; align-items: center; gap: 4px; margin-left: auto;
+    padding: 2px 8px; border: 1px solid var(--border-subtle); border-radius: var(--radius-pill);
+    background: none; color: var(--text-tertiary); cursor: pointer;
+    font-family: var(--font-sans); font-size: var(--text-xs); font-weight: 600;
+}
+.qd-banco__voltar:hover { color: var(--text-primary); border-color: var(--border-default); }
+.qd-banco__voltar svg { width: 12px; height: 12px; }
+#qd-banco[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+@media (max-width: 900px) {
+    .qd-banco { width: min(86vw, 340px); }
+    .sh-scroll:has(.qd-banco) { padding-right: var(--space-4); }
 }
 
 /* ── Seleção múltipla ─────────────────────────────────────────────────── */

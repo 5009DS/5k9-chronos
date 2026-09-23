@@ -58,9 +58,10 @@ const acharRolador = (el) => {
  * @param {string}   opts.alvo      seletor das áreas que recebem
  * @param {function} opts.aoSoltar  (idItem, idAlvo, elementos) => void
  * @param {function} [opts.podeSoltar] (idItem, idAlvo) => boolean
+ * @param {HTMLElement} [opts.rolador] quem rola perto das bordas (padrão: o ancestral que rola)
  * @returns {function} solta os ouvintes
  */
-export const ativarArraste = (raiz, { item, alvo, aoSoltar, podeSoltar }) => {
+export const ativarArraste = (raiz, { item, alvo, aoSoltar, podeSoltar, rolador = null }) => {
     injectStyles();
 
     let estado = null;   // { el, fantasma, idItem, alvoAtual, timer, x0, y0, ativo }
@@ -99,7 +100,7 @@ export const ativarArraste = (raiz, { item, alvo, aoSoltar, podeSoltar }) => {
         estado.el.classList.add('ar-origem');
         document.body.classList.add('ar-arrastando');
 
-        estado.rolador = acharRolador(estado.el);
+        estado.rolador = rolador || acharRolador(estado.el);
         estado.quadro = requestAnimationFrame(rolarNaBorda);
 
         if (navigator.vibrate) navigator.vibrate(8);   // confirma o pega no toque
