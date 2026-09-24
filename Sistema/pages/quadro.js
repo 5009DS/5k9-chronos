@@ -806,12 +806,13 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
                 abrirMenu(b, [
                     { id: 'abrir', label: 'Abrir a demanda', icon: 'file-text',
                       onClick: () => navegar(caminhoDoConteudo(alvo)) },
+                    { id: 'copiar', label: 'Copiar link', icon: 'link',
+                      onClick: async () => toast(!(await copiarMensagem(alvo, cliente))
+                          ? 'Não foi possível copiar. Tente de novo.'
+                          : alvo.drive_url ? 'Copiado: link da demanda e do Drive. É só colar no WhatsApp.'
+                          : 'Link copiado. Esta demanda ainda não tem link do Drive.') },
                     { id: 'whats', label: 'Enviar no WhatsApp', icon: 'message-circle',
                       onClick: () => enviarNoWhatsApp(alvo, cliente) },
-                    { id: 'copiar', label: 'Copiar mensagem', icon: 'copy',
-                      onClick: async () => toast(await copiarMensagem(alvo, cliente)
-                          ? (alvo.drive_url ? 'Mensagem copiada, com o link do Drive.' : 'Mensagem copiada.')
-                          : 'Não foi possível copiar. Tente de novo.') },
                     { id: 'trocar', label: 'Trocar de lugar com…', icon: 'arrow-left-right',
                       onClick: () => { selecionado = id; desenhar(); } },
                     aguardaData(alvo)

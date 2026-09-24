@@ -13,7 +13,7 @@ import { linkDoCliente } from '../lib/apelido.js';
 import { abrirTeleprompter } from '../lib/teleprompter.js';
 import { etapasDa, etapaAtual, proximaEtapa, esteiraDe, chipEtiqueta, etiquetaMeta, injectEstilosEtiqueta, chipsEstado, comEtapa } from '../lib/etiquetas.js';
 import { moverParaEtapa, mensagemDeMovimento } from '../lib/etapas.js';
-import { enviarNoWhatsApp, copiarMensagem } from '../lib/compartilhar.js';
+import { copiarMensagem } from '../lib/compartilhar.js';
 import {
     conversas, estadoMeta, ato, daEquipe, textoOriginal, entradaDaEquipe,
 } from '../lib/conversa.js';
@@ -207,8 +207,9 @@ export const renderRoteiro = async (container, conteudoId) => {
             <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-editar">
                 <i data-lucide="pencil"></i> Editar ficha
             </button>
-            <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-compartilhar" aria-haspopup="menu">
-                <i data-lucide="share-2"></i> Compartilhar
+            <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-copiar-link"
+                    title="Copia o link da demanda — e o do Drive, quando houver — pronto para colar no WhatsApp">
+                <i data-lucide="link"></i> Copiar link
             </button>
             ${/* A esteira fica na OUTRA PONTA da linha de ações, separada das
                   que abrem telas. É a única daqui que muda o estado da peça, e
@@ -1512,18 +1513,16 @@ export const renderRoteiro = async (container, conteudoId) => {
         ]);
     });
 
-    /* A mensagem para quem vai produzir: demanda e Drive num texto só
-       (lib/compartilhar.js explica por que não é o card do link). */
-    document.getElementById('rt-compartilhar')?.addEventListener('click', (e) => {
-        e.stopPropagation();   // o menu se fecha em qualquer clique no documento
-        abrirMenu(e.currentTarget, [
-            { id: 'whats', label: 'Enviar no WhatsApp', icon: 'message-circle',
-              onClick: () => enviarNoWhatsApp(c, cliente) },
-            { id: 'copiar', label: 'Copiar mensagem', icon: 'copy',
-              onClick: async () => toast(await copiarMensagem(c, cliente)
-                  ? (c.drive_url ? 'Mensagem copiada, com o link do Drive.' : 'Mensagem copiada.')
-                  : 'Não foi possível copiar. Tente de novo.') },
-        ]);
+    /* COPIAR LINK, e não "compartilhar": o uso real é no computador, copiando
+       o endereço da barra e colando no WhatsApp. O card que o WhatsApp monta
+       com esse endereço nunca terá o Drive (ver lib/compartilhar.js) — então
+       o botão copia a MENSAGEM, com o link da demanda e o do Drive juntos. Um
+       clique, no lugar do gesto que a pessoa já fazia. */
+    document.getElementById('rt-copiar-link')?.addEventListener('click', async () => {
+        const ok = await copiarMensagem(c, cliente);
+        toast(!ok ? 'Não foi possível copiar. Tente de novo.'
+            : c.drive_url ? 'Copiado: link da demanda e do Drive. É só colar no WhatsApp.'
+            : 'Link copiado. Esta demanda ainda não tem link do Drive.');
     });
 
     document.getElementById('rt-editar').addEventListener('click', () =>
