@@ -558,20 +558,24 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
                         </button>
                         ${c.status === 'ajuste' ? '<span class="vz-etiqueta vz-etiqueta--risco"><i data-lucide="message-circle-warning"></i>ajuste pedido</span>' : ''}
                         ${outras.map(chipEtiqueta).join('')}
-                        ${/* Link de verdade, em outra aba: quem edita abre o
-                              material sem entrar na demanda. É <a>, então o
-                              arraste e o clique do cartão o deixam em paz. */''}
-                        ${c.drive_url ? `
-                            <a class="qd-drive" href="${esc(c.drive_url)}" target="_blank" rel="noopener"
-                               title="Abrir no Drive" aria-label="Abrir no Drive">
-                                <i data-lucide="folder-open"></i> Drive
-                            </a>` : ''}
                     </div>
                 </div>
-                <button class="ds-icon-btn ds-icon-btn--sm qd-cartao__mais" data-mais="${esc(c.id)}"
-                        aria-label="Mais ações" aria-haspopup="menu" title="Mais ações">
-                    <i data-lucide="${escolhido ? 'x' : 'ellipsis-vertical'}"></i>
-                </button>
+                ${/* A coluna da direita: o menu em cima e, quando há link, a
+                      pílula do Drive logo abaixo — fora da linha de chips,
+                      que é leitura de estado, e não atalho. É <a> de verdade,
+                      em outra aba, e o arraste e o clique do cartão o deixam
+                      em paz. */''}
+                <div class="qd-cartao__lado">
+                    <button class="ds-icon-btn ds-icon-btn--sm qd-cartao__mais" data-mais="${esc(c.id)}"
+                            aria-label="Mais ações" aria-haspopup="menu" title="Mais ações">
+                        <i data-lucide="${escolhido ? 'x' : 'ellipsis-vertical'}"></i>
+                    </button>
+                    ${c.drive_url ? `
+                        <a class="qd-drive" href="${esc(c.drive_url)}" target="_blank" rel="noopener"
+                           title="Abrir no Drive" aria-label="Abrir no Drive">
+                            <i data-lucide="folder-open"></i>
+                        </a>` : ''}
+                </div>
             </article>`;
     };
 
@@ -908,14 +912,17 @@ body.ar-arrastando .qd-doca { opacity: 1; transform: translate(-50%, 0); pointer
 .qd-liberar > svg { width: 16px; height: 16px; flex-shrink: 0; }
 .qd-liberar b { color: var(--text-secondary); font-weight: 600; }
 
+.qd-cartao__lado { display: flex; flex-direction: column; align-items: center; gap: 6px; flex-shrink: 0; margin: -4px -4px 0 0; }
+/* Pílula vertical: mais alta que larga, para não ser confundida com o botão
+   redondo de cima. */
 .qd-drive {
-    display: inline-flex; align-items: center; gap: 4px; margin-left: auto;
-    padding: 2px 8px; border-radius: var(--radius-pill);
-    border: 1px solid var(--accent-border); color: var(--accent);
-    font-size: var(--text-xs); font-weight: 600; text-decoration: none;
+    display: flex; align-items: center; justify-content: center;
+    width: 24px; height: 36px; border-radius: var(--radius-pill);
+    border: 1px solid var(--accent-border); background: var(--accent-muted); color: var(--accent);
+    text-decoration: none; transition: border-color var(--dur-fast), background-color var(--dur-fast);
 }
-.qd-drive:hover { background: var(--accent-muted); }
-.qd-drive svg { width: 12px; height: 12px; }
+.qd-drive:hover { border-color: var(--accent); background: color-mix(in oklch, var(--accent) 22%, transparent); }
+.qd-drive svg { width: 13px; height: 13px; }
 
 /* ── Painel do banco ──────────────────────────────────────────────────── */
 .qd-banco {
@@ -1093,7 +1100,7 @@ html[data-theme="light"] .qd-lote__dia input { color-scheme: light; }
 .qd-cartao__titulo a { color: var(--text-primary); text-decoration: none; }
 .qd-cartao__titulo a:hover { text-decoration: underline; text-underline-offset: 2px; }
 .qd-cartao__pe { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
-.qd-cartao__mais { flex-shrink: 0; margin: -4px -4px 0 0; opacity: 0.55; transition: opacity var(--dur-fast); }
+.qd-cartao__mais { flex-shrink: 0; opacity: 0.55; transition: opacity var(--dur-fast); }
 .qd-cartao:hover .qd-cartao__mais, .qd-cartao__mais:focus-visible, .qd-cartao.is-escolhido .qd-cartao__mais { opacity: 1; }
 
 /* A etapa como botão: o próprio chip, com uma seta que só aparece no hover. */
