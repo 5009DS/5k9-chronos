@@ -129,7 +129,7 @@ export const local = {
             .filter(c => c.cliente_id === cliente.id
                       && c.status !== 'rascunho'
                       && !c.banco_em)
-            .map(({ nota, banco_em, ...c }) => ({
+            .map(({ nota, banco_em, drive_url, ...c }) => ({
                 ...c, etiquetas: etiquetasPublicas(c.etiquetas),
             }));
         const ids = new Set(conteudos.map(c => c.id));

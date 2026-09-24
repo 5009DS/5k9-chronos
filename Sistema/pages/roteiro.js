@@ -5,7 +5,7 @@ import { openDrawer, closeDrawer } from '../components/drawer.js';
 import { lerRoteiroUnico, lerCarrossel } from '../lib/importar.js';
 import { toast } from '../components/toast.js';
 import { acharPorEndereco, caminhoDoConteudo, parecidosComEndereco, caminhoAnterior } from '../lib/rotas.js';
-import { esc, dataBR, quandoRelativo, nomeDia, duracao, segundosDeFala } from '../lib/formato.js';
+import { esc, dataBR, quandoRelativo, nomeDia, duracao, segundosDeFala, normalizarLink, linkCurto } from '../lib/formato.js';
 import { objetivo, classificar, nomeFase } from '../lib/diretorio.js';
 import { retornosDe } from '../lib/cronograma.js';
 import { timeSalvo } from '../lib/gestor.js';
@@ -147,6 +147,29 @@ export const renderRoteiro = async (container, conteudoId) => {
        recomeça. */
     let selecionando = false;
     let selecionadas = new Set();
+    let editandoDrive = false;
+
+    /* O LINK DO DRIVE mora no topo da ficha, à vista: quem abre a demanda para
+       editar procura o material antes de qualquer outra coisa. Com link, é um
+       botão; sem link (ou trocando), é um campo de colar. Só a equipe vê — o
+       banco recorta da tela do cliente (db/migracao-drive.sql). */
+    const blocoDrive = (c) => (c.drive_url && !editandoDrive) ? `
+        <div class="rt-drive">
+            <a class="rt-drive__abrir" href="${esc(c.drive_url)}" target="_blank" rel="noopener">
+                <i data-lucide="folder-open"></i>
+                <span><b>Abrir no Drive</b><small>${esc(linkCurto(c.drive_url))}</small></span>
+                <i data-lucide="external-link" class="rt-drive__seta"></i>
+            </a>
+            <button class="ds-icon-btn ds-icon-btn--sm" id="rt-drive-trocar" title="Trocar o link" aria-label="Trocar o link do Drive">
+                <i data-lucide="pencil"></i>
+            </button>
+        </div>` : `
+        <div class="rt-drive rt-drive--campo">
+            <i data-lucide="folder-open"></i>
+            <input class="ds-input" id="rt-drive-campo" type="url" inputmode="url" autocomplete="off"
+                   placeholder="Cole o link do Drive com o material bruto…" value="${esc(c.drive_url || '')}">
+            <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-drive-salvar">Salvar</button>
+        </div>`;
 
     /* O botão de voltar leva para a tela de onde a pessoa veio — quadro,
        esteira ou cronograma deste cliente —, e a rolagem daquela tela é
@@ -217,6 +240,7 @@ export const renderRoteiro = async (container, conteudoId) => {
                               pelo botão de etapa no topo. */''}
                         ${chipsEstado(c)}
                     </div>
+                    ${blocoDrive(c)}
                 </div>
 
                 ${c.tema ? `<p class="vz-nota">${esc(c.tema)}</p>` : ''}
@@ -384,6 +408,36 @@ export const renderRoteiro = async (container, conteudoId) => {
     function ligarEventos() {
         content.querySelector('#rt-colar').addEventListener('click', abrirColar);
         content.querySelector('#rt-colar-vazio')?.addEventListener('click', abrirColar);
+
+        /* ── Drive ── colar e salvar sem abrir a ficha; trocar reabre o campo. */
+        const salvarDrive = async () => {
+            const campo = content.querySelector('#rt-drive-campo');
+            const link = normalizarLink(campo.value);
+            if (campo.value.trim() && !link) {
+                toast('Esse texto não parece um link. Cole o endereço inteiro do Drive.');
+                campo.focus();
+                return;
+            }
+            const anterior = c.drive_url ?? null;
+            // c é constante nesta tela: atualiza o objeto em vez de trocar a referência.
+            Object.assign(c, await store.conteudos.salvar({ ...c, drive_url: link }));
+            editandoDrive = false;
+            toast(link ? 'Link do Drive salvo.' : 'Link do Drive removido.', {
+                label: 'Desfazer',
+                onClick: async () => { await store.conteudos.salvar({ ...c, drive_url: anterior }); recarregar(); },
+            });
+            desenhar();
+        };
+        content.querySelector('#rt-drive-salvar')?.addEventListener('click', salvarDrive);
+        content.querySelector('#rt-drive-campo')?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); salvarDrive(); }
+            if (e.key === 'Escape' && c.drive_url) { editandoDrive = false; desenhar(); }
+        });
+        content.querySelector('#rt-drive-trocar')?.addEventListener('click', () => {
+            editandoDrive = true;
+            desenhar();
+            content.querySelector('#rt-drive-campo')?.focus();
+        });
 
         content.querySelector('#rt-copiar').addEventListener('click', async () => {
             const texto = paraTexto(c, blocos);
@@ -2054,6 +2108,24 @@ const ESTILOS = `
 .rt-orfao i, .rt-orfao svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 2px; }
 .rt-orfao a { color: inherit; font-weight: 600; }
 
+.rt-drive { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-3); }
+.rt-drive__abrir {
+    flex: 1; min-width: 0;
+    display: flex; align-items: center; gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--accent-border); border-radius: var(--radius-md);
+    background: var(--accent-muted); color: var(--text-primary); text-decoration: none;
+    transition: border-color var(--dur-fast), background-color var(--dur-fast);
+}
+.rt-drive__abrir:hover { border-color: var(--accent); }
+.rt-drive__abrir > svg { width: 20px; height: 20px; color: var(--accent); flex-shrink: 0; }
+.rt-drive__abrir span { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+.rt-drive__abrir b { font-size: var(--text-sm); }
+.rt-drive__abrir small { font-size: var(--text-xs); color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rt-drive__abrir .rt-drive__seta { width: 15px; height: 15px; margin-left: auto; color: var(--text-tertiary); }
+.vz-secao__cabeca .rt-drive { margin-top: 0; min-width: min(100%, 340px); }
+.rt-drive--campo > svg { width: 18px; height: 18px; color: var(--text-tertiary); flex-shrink: 0; }
+.rt-drive--campo .ds-input { flex: 1; min-width: 0; }
 .rt-acoes-topo, .rt-status-troca { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 
 /* Excluir o roteiro fica ao lado de "Copiar texto" e precisa não se parecer

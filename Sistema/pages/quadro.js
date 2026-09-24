@@ -558,6 +558,14 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
                         </button>
                         ${c.status === 'ajuste' ? '<span class="vz-etiqueta vz-etiqueta--risco"><i data-lucide="message-circle-warning"></i>ajuste pedido</span>' : ''}
                         ${outras.map(chipEtiqueta).join('')}
+                        ${/* Link de verdade, em outra aba: quem edita abre o
+                              material sem entrar na demanda. É <a>, então o
+                              arraste e o clique do cartão o deixam em paz. */''}
+                        ${c.drive_url ? `
+                            <a class="qd-drive" href="${esc(c.drive_url)}" target="_blank" rel="noopener"
+                               title="Abrir no Drive" aria-label="Abrir no Drive">
+                                <i data-lucide="folder-open"></i> Drive
+                            </a>` : ''}
                     </div>
                 </div>
                 <button class="ds-icon-btn ds-icon-btn--sm qd-cartao__mais" data-mais="${esc(c.id)}"
@@ -899,6 +907,15 @@ body.ar-arrastando .qd-doca { opacity: 1; transform: translate(-50%, 0); pointer
 }
 .qd-liberar > svg { width: 16px; height: 16px; flex-shrink: 0; }
 .qd-liberar b { color: var(--text-secondary); font-weight: 600; }
+
+.qd-drive {
+    display: inline-flex; align-items: center; gap: 4px; margin-left: auto;
+    padding: 2px 8px; border-radius: var(--radius-pill);
+    border: 1px solid var(--accent-border); color: var(--accent);
+    font-size: var(--text-xs); font-weight: 600; text-decoration: none;
+}
+.qd-drive:hover { background: var(--accent-muted); }
+.qd-drive svg { width: 12px; height: 12px; }
 
 /* ── Painel do banco ──────────────────────────────────────────────────── */
 .qd-banco {

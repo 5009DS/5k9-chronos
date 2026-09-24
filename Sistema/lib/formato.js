@@ -256,3 +256,28 @@ export const numero = (n) => new Intl.NumberFormat('pt-BR').format(Number(n) || 
 
 /** Percentual inteiro, protegido contra divisão por zero. */
 export const pct = (parte, todo) => (todo ? Math.round((parte / todo) * 100) : 0);
+
+/**
+ * Link colado por gente, pronto para ser aberto. Aceita sem o "https://"
+ * ("drive.google.com/drive/folders/…" é como o link costuma ser copiado da
+ * barra), tira espaço das pontas e devolve null para vazio ou para texto que
+ * não é endereço — um link quebrado no botão é pior que botão nenhum.
+ */
+export const normalizarLink = (texto) => {
+    let t = String(texto ?? '').trim();
+    if (!t) return null;
+    if (!/^https?:\/\//i.test(t)) {
+        if (!/^[\w-]+(\.[\w-]+)+(\/|$)/.test(t)) return null;
+        t = `https://${t}`;
+    }
+    try { return new URL(t).href; } catch { return null; }
+};
+
+/** O link resumido para caber num botão: domínio + começo do caminho. */
+export const linkCurto = (url) => {
+    try {
+        const u = new URL(url);
+        const caminho = u.pathname.length > 24 ? `${u.pathname.slice(0, 24)}…` : u.pathname;
+        return `${u.hostname.replace(/^www\./, '')}${caminho === '/' ? '' : caminho}`;
+    } catch { return String(url || ''); }
+};

@@ -11,7 +11,7 @@ import { navegar, caminhoDoConteudo } from '../lib/rotas.js';
 import { marcarAtivo } from '../lib/ui.js';
 import {
     esc, mesExtenso, somarMeses, chaveMes, semanaCurta, semanaAtual,
-    nomeDiaCurto, diaCurto, hoje, indiceDia, dataBR,
+    nomeDiaCurto, diaCurto, hoje, indiceDia, dataBR, normalizarLink,
 } from '../lib/formato.js';
 import {
     mesEmSemanas, cobertura, alertasDaSemana, porData, proximo,
@@ -1292,6 +1292,11 @@ export function formularioConteudo(c, cliente, mesSugerido, aoTerminar, etiqueta
                 nome: `_pend:${p.nome}`, tipo: 'checkbox', rotulo: p.nome, largura: 'metade', dica: p.dica,
             })),
 
+            /* Onde está o material bruto. Só a equipe vê — o banco recorta
+               da tela do cliente (db/migracao-drive.sql). */
+            { nome: 'drive_url', rotulo: 'Link do Drive', placeholder: 'https://drive.google.com/…',
+              dica: 'Pasta com o material bruto. Só a equipe vê — quem for editar abre direto daqui.' },
+
             { nome: 'nota', rotulo: 'Anotação interna', tipo: 'textarea',
               dica: 'Só a equipe vê.' },
         ],
@@ -1440,6 +1445,12 @@ export function formularioConteudo(c, cliente, mesSugerido, aoTerminar, etiqueta
                preservada. */
             const etapaNova = dados._etapa || null;
             const registro = Object.fromEntries(Object.entries(dados).filter(([k]) => !k.startsWith('_')));
+            /* Link colado de qualquer jeito vira endereço que abre. Vazio numa
+               peça que nunca teve link não vai no registro: não há o que
+               apagar, e a peça continua gravável mesmo antes da migração. */
+            const link = normalizarLink(dados.drive_url);
+            if (dados.drive_url && !link) throw new Error('O link do Drive não parece um endereço. Cole o link inteiro, começando por https://');
+            if (link || c?.drive_url) registro.drive_url = link; else delete registro.drive_url;
             const antigas = (c?.etiquetas || []).filter(e =>
                 etiquetaMeta(e).etapa || !PENDENCIAS.some(p => p.nome === etiquetaMeta(e).nome));
             registro.etiquetas = [...antigas, ...PENDENCIAS.filter(p => dados[`_pend:${p.nome}`]).map(p => p.nome)];
