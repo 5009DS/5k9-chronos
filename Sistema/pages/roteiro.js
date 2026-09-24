@@ -13,6 +13,7 @@ import { linkDoCliente } from '../lib/apelido.js';
 import { abrirTeleprompter } from '../lib/teleprompter.js';
 import { etapasDa, etapaAtual, proximaEtapa, esteiraDe, chipEtiqueta, etiquetaMeta, injectEstilosEtiqueta, chipsEstado, comEtapa } from '../lib/etiquetas.js';
 import { moverParaEtapa, mensagemDeMovimento } from '../lib/etapas.js';
+import { enviarNoWhatsApp, copiarMensagem } from '../lib/compartilhar.js';
 import {
     conversas, estadoMeta, ato, daEquipe, textoOriginal, entradaDaEquipe,
 } from '../lib/conversa.js';
@@ -205,6 +206,9 @@ export const renderRoteiro = async (container, conteudoId) => {
                 </a>` : ''}
             <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-editar">
                 <i data-lucide="pencil"></i> Editar ficha
+            </button>
+            <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-compartilhar" aria-haspopup="menu">
+                <i data-lucide="share-2"></i> Compartilhar
             </button>
             ${/* A esteira fica na OUTRA PONTA da linha de ações, separada das
                   que abrem telas. É a única daqui que muda o estado da peça, e
@@ -1505,6 +1509,20 @@ export const renderRoteiro = async (container, conteudoId) => {
                 separadorAntes: i === 0,
                 onClick: () => { if (et.nome !== atual?.nome) irParaEtapa(et.nome); },
             })),
+        ]);
+    });
+
+    /* A mensagem para quem vai produzir: demanda e Drive num texto só
+       (lib/compartilhar.js explica por que não é o card do link). */
+    document.getElementById('rt-compartilhar')?.addEventListener('click', (e) => {
+        e.stopPropagation();   // o menu se fecha em qualquer clique no documento
+        abrirMenu(e.currentTarget, [
+            { id: 'whats', label: 'Enviar no WhatsApp', icon: 'message-circle',
+              onClick: () => enviarNoWhatsApp(c, cliente) },
+            { id: 'copiar', label: 'Copiar mensagem', icon: 'copy',
+              onClick: async () => toast(await copiarMensagem(c, cliente)
+                  ? (c.drive_url ? 'Mensagem copiada, com o link do Drive.' : 'Mensagem copiada.')
+                  : 'Não foi possível copiar. Tente de novo.') },
         ]);
     });
 

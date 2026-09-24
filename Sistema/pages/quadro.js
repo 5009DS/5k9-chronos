@@ -6,6 +6,7 @@ import { ativarArraste } from '../lib/arrastar.js';
 import { nomeFase, noDiaCerto } from '../lib/diretorio.js';
 import { injectEstilosEtiqueta, chipsEstado, etapaAtual, etiquetaMeta, chipEtiqueta, ETAPAS, etapaNaEsteira, esteiraDe } from '../lib/etiquetas.js';
 import { moverParaEtapa, mensagemDeMovimento, itensDeEtapa } from '../lib/etapas.js';
+import { enviarNoWhatsApp, copiarMensagem } from '../lib/compartilhar.js';
 import {
     FILTROS, FORMATOS, formularioConteudo, abrirLinkDoCliente, abrirLiberar, abrirApagarCronograma,
 } from './cronograma.js';
@@ -805,6 +806,12 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
                 abrirMenu(b, [
                     { id: 'abrir', label: 'Abrir a demanda', icon: 'file-text',
                       onClick: () => navegar(caminhoDoConteudo(alvo)) },
+                    { id: 'whats', label: 'Enviar no WhatsApp', icon: 'message-circle',
+                      onClick: () => enviarNoWhatsApp(alvo, cliente) },
+                    { id: 'copiar', label: 'Copiar mensagem', icon: 'copy',
+                      onClick: async () => toast(await copiarMensagem(alvo, cliente)
+                          ? (alvo.drive_url ? 'Mensagem copiada, com o link do Drive.' : 'Mensagem copiada.')
+                          : 'Não foi possível copiar. Tente de novo.') },
                     { id: 'trocar', label: 'Trocar de lugar com…', icon: 'arrow-left-right',
                       onClick: () => { selecionado = id; desenhar(); } },
                     aguardaData(alvo)
