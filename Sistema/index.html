@@ -20,7 +20,76 @@
 
     <!-- Lucide: cópia local, não CDN. O unpkg já falhou em teste no Forms, e
          aqui o prejuízo é maior — a tela sem ícone que gente de fora vê. -->
-    <script src="/lucide.min.js"></script>
+    <!-- async, e não defer nem nada: são 400 KB. Sem atributo, o navegador
+         parava de ler a página até terminar de baixá-los; com defer, o
+         sistema inteiro esperava por eles, porque scripts defer rodam ANTES
+         dos módulos. Com async a tela monta sem esperar, e quando a
+         biblioteca chega ela desenha os ícones que já estão na tela — toda
+         tela desenhada depois chama createIcons por conta própria. -->
+    <script src="/lucide.min.js" async onload="lucide.createIcons()"></script>
+
+    <!-- A biblioteca do Supabase começa a descer JUNTO com o resto, em vez de
+         esperar todo o sistema carregar para ser pedida. Só nas telas da
+         equipe: o link do cliente não usa a biblioteca (db/remoto.js).
+         O endereço é o mesmo de SUPABASE_JS, em db/remoto.js. -->
+    <script>
+        if (!location.pathname.startsWith('/c/')) {
+            var l = document.createElement('link');
+            l.rel = 'modulepreload'; l.crossOrigin = 'anonymous';
+            l.href = 'https://esm.sh/@supabase/supabase-js@2.117.1/es2022/supabase-js.bundle.mjs';
+            document.head.appendChild(l);
+        }
+    </script>
+
+    <!-- O núcleo que TODA tela usa, pedido de uma vez. Sem esta lista o
+         navegador só descobre um arquivo depois de ler o que o importa, e o
+         núcleo descia em cinco ondas. É só um aviso: um arquivo que saia da
+         lista continua carregando, só que na onda dele. -->
+    <link rel="modulepreload" href="/app.js">
+    <link rel="modulepreload" href="/store.js">
+    <link rel="modulepreload" href="/theme.js">
+    <link rel="modulepreload" href="/lib/supabase-config.js">
+    <link rel="modulepreload" href="/db/local.js">
+    <link rel="modulepreload" href="/db/remoto.js">
+    <link rel="modulepreload" href="/lib/diretorio.js">
+    <link rel="modulepreload" href="/lib/diretorio-dados.js">
+    <link rel="modulepreload" href="/lib/formato.js">
+    <link rel="modulepreload" href="/lib/etiquetas.js">
+    <link rel="modulepreload" href="/lib/rotas.js">
+    <link rel="modulepreload" href="/lib/roteiro.js">
+    <link rel="modulepreload" href="/components/pageshell.js">
+    <link rel="modulepreload" href="/components/topnav.js">
+    <link rel="modulepreload" href="/components/trocador.js">
+    <link rel="modulepreload" href="/components/busca.js">
+    <link rel="modulepreload" href="/lib/busca.js">
+    <link rel="modulepreload" href="/lib/ferramentas.js">
+    <link rel="modulepreload" href="/components/menu.js">
+    <link rel="modulepreload" href="/components/toast.js">
+    <link rel="modulepreload" href="/components/drawer.js">
+    <link rel="modulepreload" href="/components/campos.js">
+    <link rel="modulepreload" href="/lib/ancorar.js">
+    <link rel="modulepreload" href="/lib/pecas.js">
+    <link rel="modulepreload" href="/lib/cronograma.js">
+
+    <!-- E a tela do endereço aberto: as telas são baixadas quando abertas
+         (app.js), e sem este aviso a da primeira visita só seria pedida depois
+         de todo o núcleo rodar. -->
+    <script>
+        (function () {
+            var p = location.pathname, m =
+                p === '/' ? 'painel' :
+                /^\/quadro\//.test(p) ? 'quadro' :
+                /^\/conteudo\//.test(p) ? 'roteiro' :
+                /^\/cliente\//.test(p) ? 'cronograma' :
+                /^\/producao\//.test(p) ? 'producao' :
+                /^\/c\//.test(p) ? 'cliente' :
+                /^\/login/.test(p) ? 'login' : null;
+            if (!m) return;
+            var l = document.createElement('link');
+            l.rel = 'modulepreload'; l.href = '/pages/' + m + '.js';
+            document.head.appendChild(l);
+        })();
+    </script>
 
     <!-- Design tokens (base do design system) -->
     <link rel="stylesheet" href="/tokens.css">

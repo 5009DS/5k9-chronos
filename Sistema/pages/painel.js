@@ -23,7 +23,11 @@ import { vazioHTML } from '../lib/pecas.js';
    ═══════════════════════════════════════════════════════════════════════════ */
 
 export const renderPainel = async (container) => {
-    const { clientes, conteudos, retornos } = await store.tudo();
+    /* Sem os blocos: o painel não mostra roteiro, e a tabela de blocos é a
+       maior do banco — era a consulta mais cara da primeira tela, para nada. */
+    const [clientes, conteudos, retornos] = await Promise.all([
+        store.clientes.listar(), store.conteudos.listar(), store.retornos.listar(),
+    ]);
 
     const { content } = renderShell(container, {
         path: '/',

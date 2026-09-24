@@ -47,6 +47,8 @@ const TABELAS = {
 
 const tabela = (colecao) => TABELAS[colecao] || colecao;
 
+export const SUPABASE_JS = 'https://esm.sh/@supabase/supabase-js@2.117.1/es2022/supabase-js.bundle.mjs';
+
 let sb = null;
 
 /* Uma instância só, para sempre. Dois createClient() no mesmo navegador geram
@@ -54,7 +56,12 @@ let sb = null;
    primeiro em silêncio e a pessoa é deslogada do nada. */
 const cliente = async () => {
     if (sb) return sb;
-    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+    /* UM arquivo, versão FIXA. `@2` sem versão fazia o esm.sh resolver a
+       versão a cada carga e devolver a biblioteca em 16 módulos, baixados em
+       quatro ondas. O bundle é um arquivo só. O mesmo endereço está no
+       index.html, que começa o download antes de este código rodar — se mudar
+       aqui, muda lá, senão o navegador baixa duas vezes. */
+    const { createClient } = await import(SUPABASE_JS);
     sb = createClient(SUPABASE_URL, SUPABASE_ANON);
     return sb;
 };

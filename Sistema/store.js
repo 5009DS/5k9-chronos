@@ -36,14 +36,62 @@ const db = CONFIGURADO ? remoto : local;
 const TTL = 30_000;
 const cache = new Map();
 
+/* ── VENCIDO NÃO É INÚTIL ─────────────────────────────────────────────────
+   Passados os 30s, toda troca de tela esperava o banco reler as quatro
+   coleções inteiras — meio segundo por consulta, medido, e a tabela de blocos
+   é grande. Era o atraso que se sentia ao voltar de uma demanda para o quadro.
+
+   Agora o vencido é ENTREGUE na hora e a releitura corre por trás: a próxima
+   tela já nasce com o dado novo. O que a pessoa acabou de gravar continua
+   aparecendo imediatamente (a escrita remenda o cache, ver mexerNoCache); a
+   única coisa que pode chegar uma tela atrasada é a mudança feita por OUTRA
+   pessoa — o mesmo atraso que o TTL já admitia.
+
+   Com um teto: depois de VELHO_DEMAIS sem releitura (aba esquecida aberta), a
+   espera volta a valer. Dado de uma hora atrás não é mais "quase atual". */
+const VELHO_DEMAIS = 10 * 60_000;
+
 const comCache = async (chave, buscar) => {
     const guardado = cache.get(chave);
-    if (guardado && Date.now() - guardado.em < TTL) return guardado.dados;
+    const idade = guardado ? Date.now() - guardado.em : Infinity;
+    if (guardado && idade < TTL) return guardado.dados;
 
-    /* Guarda a PROMESSA, não o resultado: duas telas pedindo o mesmo
-       compartilham a ida ao banco em vez de disparar duas. Quando ela resolve,
-       a lista toma o lugar da promessa na MESMA entrada — é o que permite
-       remendar o cache depois (ver mexerNoCache). */
+    if (guardado && idade < VELHO_DEMAIS && Array.isArray(guardado.dados)) {
+        if (!guardado.relendo) {
+            guardado.relendo = true;
+            ler(chave, buscar).catch(() => { guardado.relendo = false; });
+        }
+        return guardado.dados;
+    }
+    return ler(chave, buscar);
+};
+
+const ler = async (chave, buscar) => {
+    const atual = cache.get(chave);
+
+    /* Releitura com a lista antiga na mão: a entrada NÃO é trocada por uma
+       promessa, para quem pedir no meio continuar recebendo a lista na hora.
+       Se uma escrita remendou o cache enquanto a releitura voava, a resposta
+       pode não ter visto essa escrita — ela é descartada, e a próxima leitura
+       tenta de novo. Sobrescrever apagaria da tela o que acabou de ser gravado. */
+    if (atual && Array.isArray(atual.dados)) {
+        const versao = atual.versao || 0;
+        try {
+            const lista = await buscar();
+            if (cache.get(chave) === atual) {
+                if ((atual.versao || 0) === versao) cache.set(chave, { dados: lista, em: Date.now() });
+                else atual.relendo = false;
+            }
+            return lista;
+        } catch (e) {
+            atual.relendo = false;
+            throw e;
+        }
+    }
+
+    /* Primeira leitura: guarda a PROMESSA, não o resultado — duas telas pedindo
+       o mesmo compartilham a ida ao banco em vez de disparar duas. Quando ela
+       resolve, a lista toma o lugar da promessa na MESMA entrada. */
     const promessa = buscar();
     const entrada = { dados: promessa, em: Date.now() };
     cache.set(chave, entrada);
@@ -92,6 +140,7 @@ const mexerNoCache = (nome, transformar) => {
        Jogar fora é o que o código fazia sempre, e continua correto. */
     if (!Array.isArray(guardado.dados)) { cache.delete(nome); return; }
     guardado.dados = transformar(guardado.dados);
+    guardado.versao = (guardado.versao || 0) + 1;   // ver `ler`: releitura em voo é descartada
 };
 
 const cascatearNoCache = (nome, id) => {

@@ -3,17 +3,26 @@ import { theme } from './theme.js';
 import { navegar, caminhoAtual, interceptarLinks, registrarNavegacao } from './lib/rotas.js';
 import { guardarRolagem } from './components/pageshell.js';
 
-import { renderPainel } from './pages/painel.js';
-import { renderCronograma } from './pages/cronograma.js';
-import { renderRoteiro } from './pages/roteiro.js';
-import { renderDiretorio } from './pages/diretorio.js';
-import { renderConfiguracoes } from './pages/configuracoes.js';
-import { renderLogin } from './pages/login.js';
-import { renderCliente } from './pages/cliente.js';
-import { renderImportar } from './pages/importar.js';
-import { renderQuadro } from './pages/quadro.js';
-import { renderProducao } from './pages/producao.js';
-import { renderConsistencia } from './pages/consistencia.js';
+/* ── AS TELAS SÃO BAIXADAS QUANDO SÃO ABERTAS ────────────────────────────
+   Todas eram importadas aqui no topo, e abrir o login baixava as quinze —
+   inclusive o leitor de PDF, o teleprompter e os dados de exemplo — em cinco
+   ou seis ondas de arquivos, uma esperando a outra (medido: 2,9s só nisso,
+   antes de qualquer consulta ao banco). Agora cada rota pede o próprio
+   módulo, e depois do primeiro desenho as telas do dia a dia são baixadas em
+   segundo plano (ver adiantarTelas), para a navegação continuar instantânea. */
+const tela = (caminho, nome) => async (...args) => (await import(caminho))[nome](...args);
+
+const renderPainel        = tela('./pages/painel.js', 'renderPainel');
+const renderCronograma    = tela('./pages/cronograma.js', 'renderCronograma');
+const renderRoteiro       = tela('./pages/roteiro.js', 'renderRoteiro');
+const renderDiretorio     = tela('./pages/diretorio.js', 'renderDiretorio');
+const renderConfiguracoes = tela('./pages/configuracoes.js', 'renderConfiguracoes');
+const renderLogin         = tela('./pages/login.js', 'renderLogin');
+const renderCliente       = tela('./pages/cliente.js', 'renderCliente');
+const renderImportar      = tela('./pages/importar.js', 'renderImportar');
+const renderQuadro        = tela('./pages/quadro.js', 'renderQuadro');
+const renderProducao      = tela('./pages/producao.js', 'renderProducao');
+const renderConsistencia  = tela('./pages/consistencia.js', 'renderConsistencia');
 
 /* ═══════════════════════════════════════════════════════════════════════════
    5K9 CHRONOS — roteador.
@@ -165,11 +174,23 @@ const abrindoPublica = ehPublica(caminhoAtual());
 Promise.all([
     abrindoPublica ? Promise.resolve(null)  : store.iniciarSessao(),
     abrindoPublica ? Promise.resolve(false) : store.aplicarDiretorio(),
-]).then(() => {
-    roteador();
+]).then(async () => {
+    await roteador();
+    adiantarTelas();
     // Login/logout em outra aba, ou token expirado: reavalia a rota atual em
     // vez de deixar a tela desatualizada.
     store.aoMudarSessao(() => { caminhoCorrente = null; roteador(); });
 });
+
+/* As telas da rotina da equipe, baixadas quando o navegador estiver ocioso
+   depois do primeiro desenho. Na rota do cliente não: ele só vê a tela dele,
+   no celular, e não deve pagar pelo download do painel. */
+function adiantarTelas() {
+    if (abrindoPublica || (store.exigeLogin && !store.usuario())) return;
+    const ocioso = window.requestIdleCallback || ((fn) => setTimeout(fn, 1500));
+    ocioso(() => ['./pages/quadro.js', './pages/roteiro.js', './pages/painel.js',
+                  './pages/cronograma.js', './pages/producao.js']
+        .forEach(m => import(m).catch(() => {})));
+}
 
 export { roteador };
