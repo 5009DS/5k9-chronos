@@ -308,6 +308,9 @@ export const store = {
      */
     visualizacao: (token) => db.visualizacao(token),
 
+    /** A demanda de um link de convidado, ou null quando o link não vale. */
+    convidado: (token) => db.convidado(token),
+
     registrarRetorno: async (token, retorno) => {
         const linha = await db.registrarRetorno(token, retorno);
         // O retorno muda o status do conteúdo; o painel interno precisa

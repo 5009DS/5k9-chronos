@@ -23,6 +23,7 @@ const renderImportar      = tela('./pages/importar.js', 'renderImportar');
 const renderQuadro        = tela('./pages/quadro.js', 'renderQuadro');
 const renderProducao      = tela('./pages/producao.js', 'renderProducao');
 const renderConsistencia  = tela('./pages/consistencia.js', 'renderConsistencia');
+const renderConvidado     = tela('./pages/convidado.js', 'renderConvidado');
 
 /* ═══════════════════════════════════════════════════════════════════════════
    5K9 CHRONOS — roteador.
@@ -65,6 +66,7 @@ const ROTAS = [
     ['/login',             () => renderLogin(app)],
     ['/c/:token',          (token) => renderCliente(app, token, null)],
     ['/c/:token/:conteudo', (token, conteudo) => renderCliente(app, token, conteudo)],
+    ['/d/:token',          (token) => renderConvidado(app, token)],
 ];
 
 const casar = (caminho, padrao) => {
@@ -88,7 +90,9 @@ const resolver = (caminho) => {
 };
 
 /** A rota é a do cliente? Usada pelo portão de sessão e pela topnav. */
-export const ehPublica = (caminho) => caminho.startsWith('/c/');
+/* /c/ é o cliente; /d/ é o convidado — uma demanda aberta sem login
+   (pages/convidado.js). As duas ficam fora do portão de login. */
+export const ehPublica = (caminho) => caminho.startsWith('/c/') || caminho.startsWith('/d/');
 
 let caminhoCorrente = null;
 

@@ -194,7 +194,7 @@ export const ligarAtalhosBusca = () => {
     if (atalhosLigados) return;
     atalhosLigados = true;
     document.addEventListener('keydown', (e) => {
-        if (aberta || window.location.pathname.startsWith('/c/')) return;
+        if (aberta || /^\/(c|d)\//.test(window.location.pathname)) return;
         // O teleprompter é tela cheia e usa o teclado inteiro.
         if (document.body.classList.contains('tp-travado')) return;
 

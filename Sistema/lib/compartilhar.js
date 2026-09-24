@@ -29,13 +29,17 @@ const quando = (c) => {
 /**
  * @param {object} c        o conteúdo
  * @param {object} cliente  para o nome no topo
+ * @param {object} [opcoes]
+ * @param {string} [opcoes.link]  outro endereço no lugar do da demanda
  * @returns {string} texto pronto para colar
  */
-export const mensagemDaDemanda = (c, cliente) => {
+export const mensagemDaDemanda = (c, cliente, { link = null } = {}) => {
     const carrossel = esteiraDe(c.formato) === 'carrossel';
     const etapa = etapaAtual(c.etiquetas)?.nome;
     const detalhes = [quando(c), carrossel ? 'Carrossel' : 'Reels', etapa].filter(Boolean).join(' · ');
-    const link = `${window.location.origin}${caminhoDoConteudo(c)}`;
+    // O link de convidado substitui o da demanda quando a mensagem vai para
+    // quem não tem login (pages/convidado.js).
+    link = link || `${window.location.origin}${caminhoDoConteudo(c)}`;
 
     return [
         `*${[cliente?.nome, c.titulo].filter(Boolean).join(' · ')}*`,
@@ -64,3 +68,7 @@ export const copiarMensagem = async (c, cliente) => {
         return false;
     }
 };
+
+/** O endereço do link de convidado de uma demanda (/d/<token>). */
+export const linkDeConvidado = (c) =>
+    c?.convite_token ? `${window.location.origin}/d/${c.convite_token}` : null;

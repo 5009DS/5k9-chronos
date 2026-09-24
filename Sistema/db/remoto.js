@@ -262,6 +262,9 @@ export const remoto = {
     /** Cronograma de um token ou apelido, sem rascunhos. `null` se não vale. */
     visualizacao: (token) => chamarRPC('vz_visualizacao', { p_token: token }),
 
+    /** Uma demanda aberta para convidado (/d/<token>), só leitura. */
+    convidado: (token) => chamarRPC('vz_convidado', { p_token: token }),
+
     registrarRetorno: (token, retorno) => chamarRPC('vz_registrar_retorno', {
         p_token:    token,
         p_conteudo: retorno.conteudo_id,

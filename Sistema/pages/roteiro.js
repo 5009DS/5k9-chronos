@@ -13,7 +13,8 @@ import { linkDoCliente } from '../lib/apelido.js';
 import { abrirTeleprompter } from '../lib/teleprompter.js';
 import { etapasDa, etapaAtual, proximaEtapa, esteiraDe, chipEtiqueta, etiquetaMeta, injectEstilosEtiqueta, chipsEstado, comEtapa } from '../lib/etiquetas.js';
 import { moverParaEtapa, mensagemDeMovimento } from '../lib/etapas.js';
-import { copiarMensagem } from '../lib/compartilhar.js';
+import { copiarMensagem, mensagemDaDemanda, linkDeConvidado } from '../lib/compartilhar.js';
+import { gerarToken } from '../store.js';
 import {
     conversas, estadoMeta, ato, daEquipe, textoOriginal, entradaDaEquipe,
 } from '../lib/conversa.js';
@@ -206,6 +207,10 @@ export const renderRoteiro = async (container, conteudoId) => {
                 </a>` : ''}
             <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-editar">
                 <i data-lucide="pencil"></i> Editar ficha
+            </button>
+            <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-convidado"
+                    title="Um link só desta demanda, para quem não tem login">
+                <i data-lucide="user-round-plus"></i> Convidado${c.convite_token ? ' <span class="rt-convite-ativo" title="Há um link de convidado ativo"></span>' : ''}
             </button>
             <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-copiar-link"
                     title="Copia o link da demanda — e o do Drive, quando houver — pronto para colar no WhatsApp">
@@ -1525,6 +1530,68 @@ export const renderRoteiro = async (container, conteudoId) => {
             : 'Link copiado. Esta demanda ainda não tem link do Drive.');
     });
 
+    /* ── LINK DE CONVIDADO ────────────────────────────────────────────────
+       Para passar UMA demanda a quem não tem login (um editor de fora): um
+       endereço secreto, só leitura, com roteiro e Drive (pages/convidado.js).
+       O painel mostra o estado e as três ações: criar, copiar, desativar. */
+    document.getElementById('rt-convidado')?.addEventListener('click', () => {
+        const desenharPainel = (painel) => {
+            const link = linkDeConvidado(c);
+            painel.querySelector('#rt-cv-corpo').innerHTML = link ? `
+                <p class="rt-cv-texto">Quem tiver este link vê <b>só esta demanda</b>, sem login e sem poder mudar nada:
+                    título, data, formato, etapa, o roteiro${c.drive_url ? ' e o <b>Drive</b>' : ''}.
+                    A anotação interna e a conversa com o cliente não aparecem.</p>
+                <div class="rt-cv-link">
+                    <input class="ds-input" readonly value="${esc(link)}" id="rt-cv-endereco">
+                    <button class="ds-btn ds-btn--primary ds-btn--sm" id="rt-cv-copiar"><i data-lucide="copy"></i> Copiar link</button>
+                </div>
+                <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-cv-mensagem">
+                    <i data-lucide="message-circle"></i> Copiar como mensagem${c.drive_url ? ' (com o Drive)' : ''}
+                </button>
+                <hr class="ds-divider">
+                <div class="rt-cv-perigo">
+                    <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-cv-novo"><i data-lucide="refresh-cw"></i> Gerar outro link</button>
+                    <button class="ds-btn ds-btn--ghost ds-btn--sm rt-cv-desativar" id="rt-cv-desativar"><i data-lucide="link-2-off"></i> Desativar</button>
+                </div>
+                <p class="rt-cv-dica">Desativar ou gerar outro faz o link antigo parar de funcionar na hora.</p>` : `
+                <p class="rt-cv-texto">Crie um link para passar <b>só esta demanda</b> a alguém sem login — um editor de fora,
+                    por exemplo. Ele vê o roteiro${c.drive_url ? ' e o Drive' : ''}, sem poder mudar nada, e sem acesso ao resto do sistema.</p>
+                <button class="ds-btn ds-btn--primary" id="rt-cv-criar"><i data-lucide="link"></i> Criar link de convidado</button>`;
+            if (window.lucide) lucide.createIcons();
+
+            const trocarToken = async (novo, aviso) => {
+                Object.assign(c, await store.conteudos.salvar({ ...c, convite_token: novo }));
+                desenharPainel(painel);
+                toast(aviso);
+            };
+            const copiar = async (texto, aviso) => {
+                try { await navigator.clipboard.writeText(texto); toast(aviso); }
+                catch { painel.querySelector('#rt-cv-endereco')?.select(); toast('Não foi possível copiar — o link ficou selecionado.'); }
+            };
+            painel.querySelector('#rt-cv-criar')?.addEventListener('click', () =>
+                trocarToken(gerarToken(), 'Link de convidado criado.'));
+            painel.querySelector('#rt-cv-copiar')?.addEventListener('click', () =>
+                copiar(linkDeConvidado(c), 'Link de convidado copiado.'));
+            painel.querySelector('#rt-cv-mensagem')?.addEventListener('click', () =>
+                copiar(mensagemDaDemanda(c, cliente, { link: linkDeConvidado(c) }), 'Mensagem copiada, com o link de convidado.'));
+            painel.querySelector('#rt-cv-novo')?.addEventListener('click', () =>
+                trocarToken(gerarToken(), 'Novo link criado. O anterior parou de funcionar.'));
+            painel.querySelector('#rt-cv-desativar')?.addEventListener('click', () =>
+                trocarToken(null, 'Link de convidado desativado.'));
+        };
+
+        openDrawer({
+            title: 'Link de convidado',
+            subtitle: c.titulo,
+            body: `<div class="rt-cv" id="rt-cv-corpo"></div>`,
+            footer: `<span style="flex:1"></span><button class="ds-btn ds-btn--ghost" id="rt-cv-fechar">Fechar</button>`,
+            onMount: (painel) => {
+                painel.querySelector('#rt-cv-fechar').addEventListener('click', () => { closeDrawer(); recarregar(); });
+                desenharPainel(painel);
+            },
+        });
+    });
+
     document.getElementById('rt-editar').addEventListener('click', () =>
         formularioConteudo(c, cliente, c.data.slice(0, 7), recarregar,
             [...new Set(conteudos.flatMap(x => x.etiquetas || []))],
@@ -2125,6 +2192,16 @@ const ESTILOS = `
 .rt-orfao i, .rt-orfao svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 2px; }
 .rt-orfao a { color: inherit; font-weight: 600; }
 
+.rt-convite-ativo { width: 7px; height: 7px; border-radius: 50%; background: var(--success); display: inline-block; margin-left: 2px; }
+.rt-cv { display: flex; flex-direction: column; gap: var(--space-4); }
+.rt-cv-texto { margin: 0; font-size: var(--text-sm); color: var(--text-secondary); line-height: var(--leading-body); }
+.rt-cv-texto b { color: var(--text-primary); }
+.rt-cv-link { display: flex; gap: var(--space-2); }
+.rt-cv-link .ds-input { flex: 1; min-width: 0; font-size: var(--text-sm); }
+.rt-cv-perigo { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.rt-cv-desativar:hover { color: var(--danger); }
+.rt-cv-dica { margin: 0; font-size: var(--text-xs); color: var(--text-tertiary); }
+.rt-cv > .ds-btn { align-self: flex-start; }
 .rt-drive { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-3); }
 .rt-drive__abrir {
     flex: 1; min-width: 0;

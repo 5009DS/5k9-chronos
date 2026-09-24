@@ -33,7 +33,7 @@
          equipe: o link do cliente não usa a biblioteca (db/remoto.js).
          O endereço é o mesmo de SUPABASE_JS, em db/remoto.js. -->
     <script>
-        if (!location.pathname.startsWith('/c/')) {
+        if (!/^\/(c|d)\//.test(location.pathname)) {
             var l = document.createElement('link');
             l.rel = 'modulepreload'; l.crossOrigin = 'anonymous';
             l.href = 'https://esm.sh/@supabase/supabase-js@2.117.1/es2022/supabase-js.bundle.mjs';
@@ -83,6 +83,7 @@
                 /^\/cliente\//.test(p) ? 'cronograma' :
                 /^\/producao\//.test(p) ? 'producao' :
                 /^\/c\//.test(p) ? 'cliente' :
+                /^\/d\//.test(p) ? 'convidado' :
                 /^\/login/.test(p) ? 'login' : null;
             if (!m) return;
             var l = document.createElement('link');

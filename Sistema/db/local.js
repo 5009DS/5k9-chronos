@@ -113,6 +113,23 @@ export const local = {
      * sai daqui. Se as duas versões divergissem, a prévia mentiria sobre o
      * que o cliente vê, que é o único trabalho desta tela.
      */
+    /* O link de convidado: uma demanda, só leitura. O mesmo recorte de
+       vz_convidado (db/migracao-convidado.sql) — nada de nota, status,
+       conversa ou banco. */
+    convidado: async (token) => {
+        if (String(token || '').length < 8) return null;
+        const c = ler('conteudos').find(x => x.convite_token === token);
+        if (!c) return null;
+        const cliente = ler('clientes').find(x => x.id === c.cliente_id);
+        const { id, titulo, tema, fase, objetivo, formato, data, intencao, etiquetas, drive_url } = c;
+        return {
+            conteudo: { id, titulo, tema, fase, objetivo, formato, data, intencao, etiquetas: etiquetas || [], drive_url },
+            cliente: cliente?.nome || '',
+            blocos: ler('blocos').filter(b => b.conteudo_id === c.id)
+                .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)),
+        };
+    },
+
     visualizacao: async (token) => {
         // Token OU apelido, exatamente como a função vz_visualizacao do banco.
         // Quando os dois lados divergem, a prévia mente sobre o que o cliente
@@ -129,7 +146,7 @@ export const local = {
             .filter(c => c.cliente_id === cliente.id
                       && c.status !== 'rascunho'
                       && !c.banco_em)
-            .map(({ nota, banco_em, drive_url, ...c }) => ({
+            .map(({ nota, banco_em, drive_url, convite_token, ...c }) => ({
                 ...c, etiquetas: etiquetasPublicas(c.etiquetas),
             }));
         const ids = new Set(conteudos.map(c => c.id));

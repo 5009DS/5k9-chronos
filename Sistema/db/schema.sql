@@ -138,6 +138,9 @@ create table if not exists vz_conteudos (
     -- Onde está o material bruto da peça (pasta do Drive). Da equipe: sai
     -- recortado da tela do cliente. Ver db/migracao-drive.sql.
     drive_url   text,
+    -- Link de convidado (/d/<token>): uma demanda aberta, só leitura, sem
+    -- login. Nulo é "sem convite". Ver db/migracao-convidado.sql.
+    convite_token text,
     criado_em   timestamptz not null default now()
 );
 
@@ -285,7 +288,7 @@ as $$
         -- nota do cadastro, logo abaixo.
         'conteudos', coalesce((
             select jsonb_agg(
-                (to_jsonb(i) - 'nota' - 'banco_em' - 'drive_url')
+                (to_jsonb(i) - 'nota' - 'banco_em' - 'drive_url' - 'convite_token')
                 -- Só as etiquetas de PRODUÇÃO passam. O texto livre é recado da
                 -- equipe para a equipe e fica deste lado. A mesma lista existe
                 -- em lib/etiquetas.js; quem manda é esta.
