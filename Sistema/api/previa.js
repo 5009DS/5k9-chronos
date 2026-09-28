@@ -1,6 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    PRÉVIA DO LINK — o card do WhatsApp com o título da demanda.
 
+   Atende dois tipos de link: o interno (/conteudo/…, card para a equipe) e o
+   do CLIENTE (/c/cliente e /c/cliente/set/titulo), com título, tema, data e o
+   status na língua dele — ver db/migracao-previa-cliente.sql.
+
    O sistema é uma página só, montada no navegador: quem visita
    /conteudo/set/alguma-coisa recebe o mesmo index.html de sempre, e o robô do
    WhatsApp — que não roda JavaScript — só enxerga "5K9 Chronos".
@@ -41,16 +45,17 @@ const dataCurta = (iso) => {
     return `${dia}, ${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`;
 };
 
-const buscarPrevia = async (ref) => {
+/** Chama uma função do banco; qualquer falha vira null (card genérico). */
+const rpc = async (funcao, corpo) => {
     try {
-        const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/vz_previa`, {
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${funcao}`, {
             method: 'POST',
             headers: {
                 apikey: SUPABASE_ANON,
                 Authorization: `Bearer ${SUPABASE_ANON}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ p_ref: ref }),
+            body: JSON.stringify(corpo),
             signal: AbortSignal.timeout(3000),
         });
         if (!r.ok) return null;
@@ -61,13 +66,43 @@ const buscarPrevia = async (ref) => {
     }
 };
 
+/* O status na língua do CLIENTE — a mesma da tela dele (pages/cliente.js,
+   estadoCliente). O card do link dele não pode falar "em_revisao". */
+const STATUS_CLIENTE = {
+    desenvolvimento: '🛠️ Em produção',
+    em_revisao:      '⏳ Aguardando sua aprovação',
+    aprovado:        '✅ Aprovado por você',
+    ajuste:          '✏️ Ajuste pedido',
+    pronto:          '📦 Pronto para publicar',
+    publicado:       '🚀 Publicado',
+};
+
+/** O card do link do CLIENTE: uma demanda (com ref) ou o cronograma dele. */
+const cardDoCliente = (previa) => {
+    if (!previa) return null;
+    if (!previa.titulo) return {
+        titulo: `Cronograma de conteúdo · ${previa.cliente}`,
+        descricao: 'Seus conteúdos do mês, com roteiro e estratégia, num link só. 5K9 Studio.',
+    };
+    const quando = previa.sem_data ? '📅 Data a definir' : `📅 ${dataCurta(previa.data)}`;
+    const partes = [quando, STATUS_CLIENTE[previa.status]].filter(Boolean).join(' · ');
+    return {
+        titulo: previa.titulo,
+        descricao: previa.tema ? `${partes}\n${previa.tema}` : partes,
+    };
+};
+
+/** O card do link INTERNO de uma demanda (/conteudo/…). */
+const cardInterno = (previa) => previa && {
+    titulo: previa.titulo,
+    descricao: [previa.cliente, dataCurta(previa.data), FORMATO_ARTE.test(previa.formato || '') ? 'Carrossel' : 'Reels']
+        .filter(Boolean).join(' · ') + ' — abra para ver o roteiro e os detalhes.',
+};
+
 /** A página que o robô lê. Exportada para poder ser testada sem rede. */
-const montarPagina = (previa, url) => {
-    const titulo = previa?.titulo || '5K9 Chronos';
-    const descricao = previa
-        ? [previa.cliente, dataCurta(previa.data), FORMATO_ARTE.test(previa.formato || '') ? 'Carrossel' : 'Reels']
-            .filter(Boolean).join(' · ') + ' — abra para ver o roteiro e os detalhes.'
-        : 'Cronograma e roteiros de conteúdo do 5K9 Studio.';
+const montarPagina = (card, url) => {
+    const titulo = card?.titulo || '5K9 Chronos';
+    const descricao = card?.descricao || 'Cronograma e roteiros de conteúdo do 5K9 Studio.';
 
     return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -88,19 +123,34 @@ const montarPagina = (previa, url) => {
 </html>`;
 };
 
+const limpar = (v) => {
+    const bruto = String(v || '').replace(/^\/+|\/+$/g, '').slice(0, 200);
+    try { return decodeURIComponent(bruto); } catch { return bruto; }   // endereço torto: usa como veio
+};
+
 module.exports = async (req, res) => {
-    // /conteudo/set/apelido chega aqui como ?ref=set/apelido (ver vercel.json)
-    const ref = String(req.query?.ref || '').replace(/^\/+|\/+$/g, '').slice(0, 200);
-    let limpo = ref;
-    try { limpo = decodeURIComponent(ref); } catch { /* endereço torto: usa como veio */ }
-    const previa = limpo ? await buscarPrevia(limpo) : null;
-    const url = `https://${req.headers.host || 'chronos.5k9.studio'}/conteudo/${ref}`;
+    /* Dois caminhos chegam aqui (ver vercel.json):
+         /conteudo/set/apelido      → ?ref=set/apelido            (equipe)
+         /c/cliente[/set/apelido]   → ?cliente=cliente&ref=…      (cliente) */
+    const ref = limpar(req.query?.ref);
+    const cliente = limpar(req.query?.cliente);
+    const host = `https://${req.headers.host || 'chronos.5k9.studio'}`;
+
+    let card, url;
+    if (cliente) {
+        card = cardDoCliente(await rpc('vz_previa_cliente', { p_token: cliente, p_ref: ref || null }));
+        url = `${host}/c/${encodeURI(cliente)}${ref ? `/${encodeURI(ref)}` : ''}`;
+    } else {
+        card = ref ? cardInterno(await rpc('vz_previa', { p_ref: ref })) : null;
+        url = `${host}/conteudo/${encodeURI(ref)}`;
+    }
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     // O robô guarda o card por conta própria; um minuto aqui só evita
     // perguntar ao banco a cada colagem do mesmo link.
     res.setHeader('Cache-Control', 'public, max-age=60');
-    res.status(200).send(montarPagina(previa, url));
+    res.status(200).send(montarPagina(card, url));
 };
 
 module.exports.montarPagina = montarPagina;
+module.exports.cardDoCliente = cardDoCliente;

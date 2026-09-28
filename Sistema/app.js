@@ -66,6 +66,8 @@ const ROTAS = [
     ['/login',             () => renderLogin(app)],
     ['/c/:token',          (token) => renderCliente(app, token, null)],
     ['/c/:token/:conteudo', (token, conteudo) => renderCliente(app, token, conteudo)],
+    // O endereço legível do conteúdo, como o da equipe: /c/cliente/set/titulo.
+    ['/c/:token/:mes/:apelido', (token, mes, apelido) => renderCliente(app, token, `${mes}/${apelido}`)],
     ['/d/:token',          (token) => renderConvidado(app, token)],
 ];
 

@@ -1,6 +1,7 @@
 import { store } from '../store.js';
 import { theme } from '../theme.js';
-import { navegar } from '../lib/rotas.js';
+import { navegar, acharPorEndereco } from '../lib/rotas.js';
+import { apelidoDeConteudo } from '../lib/formato.js';
 import { usarDiretorio, objetivo, nomeFase, fase } from '../lib/diretorio.js';
 import { mesEmSemanas, cobertura, porData, proximo, retornosDe, aguardaData } from '../lib/cronograma.js';
 import { chipFase, cartaoLeitura, explicacaoObjetivo, roteiroHTML, vazioHTML } from '../lib/pecas.js';
@@ -352,7 +353,7 @@ const painelDoCliente = (conteudos, token, retornos) => {
     };
 
     const linha = (c, comEtapa) => `
-        <a class="cl-linha" href="/c/${esc(token)}/${esc(c.id)}">
+        <a class="cl-linha" href="/c/${esc(token)}/${esc(apelidoDeConteudo(c))}">
             <span class="vz-ponto vz-ponto--${esc(c.fase || '')}"></span>
             <span class="cl-linha__titulo">${esc(c.titulo)}</span>
             ${chipFormato(c)}
@@ -524,7 +525,7 @@ const cartaoConteudo = (c, token, comRoteiro) => {
     const o = objetivo(c.objetivo);
     return `
         <a class="vz-conteudo ${ajusteTravado(c.etiquetas) ? 'cl-gravado' : ''}"
-           href="/c/${esc(token)}/${esc(c.id)}">
+           href="/c/${esc(token)}/${esc(apelidoDeConteudo(c))}">
             <span class="vz-fita vz-fita--${esc(c.fase || '')}"></span>
             <div class="vz-conteudo__corpo">
                 <div class="vz-conteudo__topo">
@@ -572,7 +573,15 @@ const estadoCurto = (c) => {
 
 const desenharConteudo = (container, token, visao, conteudoId) => {
     const { cliente, conteudos, blocos, retornos } = visao;
-    const c = conteudos.find(x => x.id === conteudoId);
+    /* O endereço é legível, como o da equipe: /c/cliente/set/titulo. O id cru
+       de antes continua abrindo (todo link já mandado usa ele), e a barra de
+       endereço se corrige para a forma nova — sem passar pelo roteador, que
+       redesenharia a tela à toa (lib/rotas.js, acharPorEndereco). */
+    const { conteudo: c } = acharPorEndereco(conteudos, conteudoId);
+    if (c) {
+        const canonico = `/c/${token}/${apelidoDeConteudo(c)}`;
+        if (decodeURIComponent(window.location.pathname) !== canonico) history.replaceState({}, '', canonico);
+    }
 
     if (!c) {
         return desenharAviso(container, 'file-question', 'Conteúdo não encontrado',
@@ -580,7 +589,7 @@ const desenharConteudo = (container, token, visao, conteudoId) => {
             `<a href="/c/${esc(token)}" class="ds-btn ds-btn--primary">Ver o cronograma</a>`);
     }
 
-    const meus = ordenar(blocos.filter(b => b.conteudo_id === conteudoId));
+    const meus = ordenar(blocos.filter(b => b.conteudo_id === c.id));
     const o = objetivo(c.objetivo);
     const f = fase(c.fase);
     const historico = retornosDe(retornos, c.id);
@@ -1079,8 +1088,9 @@ function ligarAcoes(container, token, c) {
         // Recarrega a rota atual em vez de remendar o DOM: o retorno muda o
         // status, a barra, o histórico e o cartão no cronograma. Redesenhar
         // com o dado novo é mais curto que sincronizar quatro pedaços.
-        const caminho = window.location.pathname;
-        await renderCliente(container, token, caminho.split('/')[3] || null);
+        // Pelo id, e não pelo endereço: desde o endereço legível
+        // (/c/cliente/set/titulo), a quarta parte do caminho é o MÊS.
+        await renderCliente(container, token, c.id);
     };
 
     aprovar?.addEventListener('click', async () => {

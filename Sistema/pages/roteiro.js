@@ -5,7 +5,7 @@ import { openDrawer, closeDrawer } from '../components/drawer.js';
 import { lerRoteiroUnico, lerCarrossel } from '../lib/importar.js';
 import { toast } from '../components/toast.js';
 import { acharPorEndereco, caminhoDoConteudo, parecidosComEndereco, caminhoAnterior } from '../lib/rotas.js';
-import { esc, dataBR, quandoRelativo, nomeDia, duracao, segundosDeFala, normalizarLink, linkCurto } from '../lib/formato.js';
+import { esc, dataBR, quandoRelativo, nomeDia, duracao, segundosDeFala, normalizarLink, linkCurto, apelidoDeConteudo } from '../lib/formato.js';
 import { objetivo, classificar, nomeFase } from '../lib/diretorio.js';
 import { retornosDe } from '../lib/cronograma.js';
 import { timeSalvo } from '../lib/gestor.js';
@@ -202,7 +202,7 @@ export const renderRoteiro = async (container, conteudoId) => {
                 <i data-lucide="arrow-left"></i> ${esc(volta.rotulo)}
             </a>
             ${cliente ? `
-                <a class="ds-btn ds-btn--ghost ds-btn--sm" href="/c/${esc(cliente.token)}/${esc(c.id)}" target="_blank" rel="noopener">
+                <a class="ds-btn ds-btn--ghost ds-btn--sm" href="/c/${esc(cliente.apelido || cliente.token)}/${esc(apelidoDeConteudo(c))}" target="_blank" rel="noopener">
                     <i data-lucide="external-link"></i> Como o cliente vê
                 </a>` : ''}
             <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-editar">
