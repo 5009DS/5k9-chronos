@@ -443,9 +443,22 @@ const calendarioHTML = (conteudos, mes, token, comRoteiro, diaAberto) => {
 
     const doDia = (data) => (conteudos || []).filter(c => c.data === data);
 
-    // O primeiro dia com conteúdo abre sozinho quando ninguém escolheu nada.
-    const primeiroCheio = dias.find(data => doDia(data).length);
-    const aberto = diaAberto || primeiroCheio;
+    /* ── QUE DIA ABRE SOZINHO ─────────────────────────────────────────────
+       Era "o primeiro dia com conteúdo", e o primeiro quadrado da grade é do
+       MÊS ANTERIOR (a grade nasce de semanas inteiras): em setembro, o
+       cliente abria o calendário marcado em 31 de agosto — uma peça já
+       publicada, da semana passada.
+
+       Agora abre no dia de HOJE quando ele está no mês visto; senão, no
+       próximo dia com conteúdo daqui para a frente, que é o que vem a
+       seguir. Mês inteiro no passado (ou outro mês qualquer) volta ao
+       primeiro dia com conteúdo — ali não há "hoje" a mostrar. */
+    const escolhaPadrao = () => {
+        if (dias.includes(hoje())) return hoje();
+        return dias.find(data => data >= hoje() && doDia(data).length)
+            || dias.find(data => doDia(data).length);
+    };
+    const aberto = diaAberto || escolhaPadrao();
     const daLista = aberto ? doDia(aberto) : [];
 
     const casa = (data) => {
@@ -459,9 +472,11 @@ const calendarioHTML = (conteudos, mes, token, comRoteiro, diaAberto) => {
             data === aberto ? 'is-aberto' : '',
         ].filter(Boolean).join(' ');
 
+        /* Hoje é clicável mesmo vazio: ele é o dia aberto por padrão, e um
+           botão marcado e desabilitado ao mesmo tempo é contraditório. */
         return `
             <button type="button" class="${classes}" data-dia="${data}"
-                    ${pecas.length ? '' : 'disabled'}
+                    ${pecas.length || data === hoje() ? '' : 'disabled'}
                     aria-label="${esc(dataBR(data))} — ${pecas.length ? `${pecas.length} publicação${pecas.length > 1 ? 'ões' : ''}` : 'sem publicação'}">
                 <span class="cl-dia__n">${d}</span>
                 <span class="cl-dia__pontos">
@@ -480,8 +495,11 @@ const calendarioHTML = (conteudos, mes, token, comRoteiro, diaAberto) => {
 
             ${aberto ? `
                 <div class="cl-dia-aberto">
-                    <h3 class="cl-dia-aberto__titulo">${esc(dataBR(aberto))} · ${esc(nomeDiaCurto(aberto))}</h3>
-                    ${daLista.map(c => cartaoConteudo(c, token, comRoteiro)).join('')}
+                    <h3 class="cl-dia-aberto__titulo">
+                        ${esc(dataBR(aberto))} · ${esc(nomeDiaCurto(aberto))}${aberto === hoje() ? ' · hoje' : ''}
+                    </h3>
+                    ${daLista.length ? daLista.map(c => cartaoConteudo(c, token, comRoteiro)).join('')
+                        : `<p class="cl-dia-vazio">Nada publicado neste dia. Toque num dia marcado para ver o que vem.</p>`}
                 </div>` : ''}
         </section>`;
 };
@@ -1366,6 +1384,11 @@ function injectStyles() {
             margin: 0; font-size: var(--text-xs); font-weight: 700;
             text-transform: uppercase; letter-spacing: var(--tracking-wide);
             color: var(--text-tertiary);
+        }
+        .cl-dia-vazio {
+            margin: 0; padding: var(--space-4);
+            border: 1px dashed var(--border-subtle); border-radius: var(--radius-md);
+            font-size: var(--text-sm); color: var(--text-tertiary); text-align: center;
         }
         .cl-semanas { display: flex; flex-direction: column; gap: var(--space-6); }
         .cl-semana-vazia {
