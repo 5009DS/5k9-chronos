@@ -1,5 +1,5 @@
 import { store } from '../store.js';
-import { comEtapa, statusDaEtapa, etiquetaMeta, etapaAtual, etapasDa, esteiraDe, proximaEtapa, ETAPA_ESCRITA, ETAPA_APROVACAO } from './etiquetas.js';
+import { comEtapa, statusDaEtapa, etiquetaMeta, etapaAtual, etapasDa, esteiraDe, proximaEtapa, ETAPA_ESCRITA, ETAPA_APROVACAO, ETAPA_APROVADO } from './etiquetas.js';
 import { entradaDaEquipe } from './conversa.js';
 import { aprovouNoHistorico, equipeDevolveu } from './consistencia.js';
 
@@ -124,4 +124,25 @@ export const itensDeEtapa = (c, ir) => {
                 onClick: () => ir(et.nome),
             })),
     ];
+};
+
+/* ── A APROVAÇÃO DO MOMENTO ───────────────────────────────────────────────
+   "Mandar para o cliente" quer dizer coisas diferentes conforme onde a peça
+   está: antes de produzir, o que ele aprova é o ROTEIRO; depois de gravada ou
+   diagramada, é a PEÇA PRONTA. Uma coisa só — "volte para roteiro em
+   aprovação" — mandaria o cliente reler um texto que já virou vídeo.
+
+   Devolve null quando não há aprovação a pedir: a peça já está esperando o
+   cliente, ou já passou do ponto (pronta ou publicada). */
+export const etapaDeAprovacao = (c) => {
+    const atual = etapaAtual(c?.etiquetas);
+    if (atual?.esperaCliente) return null;            // já está com ele
+    if (atual && atual.etapa >= 6.8) return null;     // pronto para publicar, publicado
+    /* "Roteiro aprovado" é resposta DELE, já dada. Mandar o link de novo não
+       pode reabrir sozinho uma aprovação que existe — reabrir é ato
+       explícito, pelo botão de etapa. */
+    if (atual?.nome === ETAPA_APROVADO) return null;
+    if (!atual || atual.etapa < 3) return ETAPA_APROVACAO;
+    // Produzida: a aprovação é da gravação (vídeo) ou da arte (carrossel).
+    return etapasDa(esteiraDe(c.formato)).find(e => e.etapa === 6)?.nome || ETAPA_APROVACAO;
 };

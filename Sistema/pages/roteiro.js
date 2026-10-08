@@ -12,8 +12,8 @@ import { timeSalvo } from '../lib/gestor.js';
 import { linkDoCliente } from '../lib/apelido.js';
 import { abrirTeleprompter } from '../lib/teleprompter.js';
 import { etapasDa, etapaAtual, proximaEtapa, esteiraDe, chipEtiqueta, etiquetaMeta, injectEstilosEtiqueta, chipsEstado, comEtapa } from '../lib/etiquetas.js';
-import { moverParaEtapa, mensagemDeMovimento } from '../lib/etapas.js';
-import { copiarMensagem, mensagemDaDemanda, linkDeConvidado } from '../lib/compartilhar.js';
+import { moverParaEtapa, mensagemDeMovimento, etapaDeAprovacao } from '../lib/etapas.js';
+import { copiarMensagem, mensagemDaDemanda, linkDeConvidado, mensagemParaCliente } from '../lib/compartilhar.js';
 import { gerarToken } from '../store.js';
 import {
     conversas, estadoMeta, ato, daEquipe, textoOriginal, entradaDaEquipe,
@@ -205,6 +205,11 @@ export const renderRoteiro = async (container, conteudoId) => {
                 <a class="ds-btn ds-btn--ghost ds-btn--sm" href="/c/${esc(cliente.apelido || cliente.token)}/${esc(apelidoDeConteudo(c))}" target="_blank" rel="noopener">
                     <i data-lucide="external-link"></i> Como o cliente vê
                 </a>` : ''}
+            ${cliente ? `
+                <button class="ds-btn ds-btn--sm rt-liberar" id="rt-link-cliente"
+                        title="Copia o link do cliente e põe a demanda na aprovação dele">
+                    <i data-lucide="send"></i> Link do cliente
+                </button>` : ''}
             <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-editar">
                 <i data-lucide="pencil"></i> Editar ficha
             </button>
@@ -1518,6 +1523,47 @@ export const renderRoteiro = async (container, conteudoId) => {
         ]);
     });
 
+    /* ── LINK DO CLIENTE: COPIAR E LIBERAR NUM CLIQUE ─────────────────────
+       Mandar uma peça para o cliente eram três passos em telas diferentes —
+       mover a etapa, conferir se o status liberou, montar a mensagem com o
+       endereço certo. Quem não mexe no sistema todo dia errava um deles, e o
+       erro é silencioso: o link vai, o cliente abre e não encontra nada,
+       porque a peça ainda era rascunho.
+
+       Um clique faz os três. A etapa de destino é a do MOMENTO da peça
+       (lib/etapas.js, etapaDeAprovacao): roteiro antes de produzir, gravação
+       ou arte depois. Peça já com o cliente, pronta ou publicada só copia —
+       não há aprovação a pedir. Tudo com desfazer. */
+    document.getElementById('rt-link-cliente')?.addEventListener('click', async (e) => {
+        const botao = e.currentTarget;
+        botao.disabled = true;
+        try {
+            const destino = etapaDeAprovacao(c);
+            let desfazer = null;
+            if (destino) {
+                const r = await moverParaEtapa(c, destino, { autor: autorPadrao() });
+                desfazer = r.desfazer;
+                Object.assign(c, { etiquetas: comEtapa(c.etiquetas, destino), status: r.novoStatus || c.status });
+            }
+
+            let copiou = true;
+            try { await navigator.clipboard.writeText(mensagemParaCliente(c, cliente)); }
+            catch { copiou = false; }
+
+            const aviso = !copiou ? 'Não foi possível copiar o link — ' : 'Link do cliente copiado. ';
+            toast(aviso + (destino
+                    ? `A demanda foi para "${destino}" e já aparece para ele.`
+                    : 'A demanda já estava liberada para ele.')
+                + (blocos.length ? '' : ' Atenção: ela ainda não tem roteiro escrito.'), {
+                segundos: 14,
+                ...(desfazer ? { label: 'Desfazer', onClick: async () => { await desfazer(); recarregar(); } } : {}),
+            });
+            recarregar();
+        } finally {
+            botao.disabled = false;
+        }
+    });
+
     /* COPIAR LINK, e não "compartilhar": o uso real é no computador, copiando
        o endereço da barra e colando no WhatsApp. O card que o WhatsApp monta
        com esse endereço nunca terá o Drive (ver lib/compartilhar.js) — então
@@ -2191,6 +2237,17 @@ const ESTILOS = `
 }
 .rt-orfao i, .rt-orfao svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 2px; }
 .rt-orfao a { color: inherit; font-weight: 600; }
+
+.rt-liberar {
+    background: var(--gradient-violet, var(--accent-solid, var(--accent)));
+    background-size: 200% 200%;
+    border: 1px solid transparent; color: var(--accent-contrast, #fff);
+    font-weight: 600; box-shadow: var(--shadow-md);
+    animation: ds-drift 18s var(--ease-inout) infinite;
+}
+.rt-liberar:hover { filter: brightness(1.08); }
+.rt-liberar:disabled { opacity: 0.6; }
+@media (prefers-reduced-motion: reduce) { .rt-liberar { animation: none; } }
 
 .rt-convite-ativo { width: 7px; height: 7px; border-radius: 50%; background: var(--success); display: inline-block; margin-left: 2px; }
 .rt-cv { display: flex; flex-direction: column; gap: var(--space-4); }

@@ -1,6 +1,6 @@
 import { caminhoDoConteudo } from './rotas.js';
 import { esteiraDe, etapaAtual } from './etiquetas.js';
-import { hoje, somarDias, nomeDiaCurto, dataBR } from './formato.js';
+import { hoje, somarDias, nomeDiaCurto, dataBR, apelidoDeConteudo } from './formato.js';
 import { aguardaData } from './cronograma.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -72,3 +72,27 @@ export const copiarMensagem = async (c, cliente) => {
 /** O endereço do link de convidado de uma demanda (/d/<token>). */
 export const linkDeConvidado = (c) =>
     c?.convite_token ? `${window.location.origin}/d/${c.convite_token}` : null;
+
+/* ── O LINK DO CLIENTE ────────────────────────────────────────────────────
+   O endereço da demanda na tela DELE (/c/cliente/set/titulo), com o apelido
+   do cliente quando existe — é o que ele reconhece. */
+export const linkDoCliente = (c, cliente) => cliente
+    ? `${window.location.origin}/c/${cliente.apelido || cliente.token}/${apelidoDeConteudo(c)}`
+    : null;
+
+/**
+ * A mensagem que vai para o cliente: o que é a peça, em que formato, e o
+ * endereço onde ele aprova. Curta de propósito — quem recebe não é da equipe
+ * e não precisa de etapa, Drive nem data de produção.
+ */
+export const mensagemParaCliente = (c, cliente) => {
+    const carrossel = esteiraDe(c.formato) === 'carrossel';
+    return [
+        `*${c.titulo}*`,
+        `${carrossel ? '🎨 Carrossel' : '🎬 Reels'}`
+            + (aguardaData(c) ? '' : ` · publicação ${nomeDiaCurto(c.data)}, ${dataBR(c.data).slice(0, 5)}`),
+        '',
+        'Dê uma olhada e aprove por aqui:',
+        linkDoCliente(c, cliente),
+    ].join('\n');
+};
