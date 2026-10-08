@@ -5,7 +5,7 @@ import { apelidoDeConteudo } from '../lib/formato.js';
 import { usarDiretorio, objetivo, nomeFase, fase } from '../lib/diretorio.js';
 import { mesEmSemanas, cobertura, porData, proximo, retornosDe, aguardaData } from '../lib/cronograma.js';
 import { chipFase, cartaoLeitura, explicacaoObjetivo, roteiroHTML, vazioHTML } from '../lib/pecas.js';
-import { ordenar, duracaoTotal, temFala } from '../lib/roteiro.js';
+import { ordenar, duracaoTotal, temFala, palavraTexto } from '../lib/roteiro.js';
 import { esteiraDe } from '../lib/etiquetas.js';
 import {
     esc, mesExtenso, somarMeses, chaveMes, semanaCurta, semanaAtual,
@@ -687,7 +687,7 @@ const desenharConteudo = (container, token, visao, conteudoId) => {
                 <!-- ══ O roteiro ═══════════════════════════════════════ -->
                 <section class="cl-roteiro">
                     <div class="cl-roteiro__cabeca">
-                        <h2 class="cl-secao-titulo">Roteiro</h2>
+                        <h2 class="cl-secao-titulo">${esc(palavraTexto(c.formato, { maiuscula: true }))}</h2>
                         ${/* Quem grava é quem está deste lado da tela. O
                               prompter nasceu na tela da equipe, e o lugar em
                               que ele é USADO é este: o celular apoiado ao lado
@@ -712,7 +712,7 @@ const desenharConteudo = (container, token, visao, conteudoId) => {
                         </p>` : ''}
                     ${meus.length
                         ? roteiroHTML(meus)
-                        : vazioHTML('file-text', 'Roteiro ainda não escrito',
+                        : vazioHTML('file-text', `${palavraTexto(c.formato, { maiuscula: true })} ainda não escrito`,
                             'A equipe está preparando. Você recebe um aviso quando estiver pronto.')}
                 </section>
 
@@ -1137,7 +1137,7 @@ function ligarAcoes(container, token, c) {
                     <label class="cl-form__rotulo" for="cl-autor">Seu nome</label>
                     <input class="ds-input" id="cl-autor" type="text" placeholder="Para a equipe saber com quem falar"
                            value="${esc(lembrarNome() || '')}" autocomplete="name">
-                    <p class="cl-form__dica">A equipe recebe o pedido junto com o roteiro. Você pode pedir ajuste quantas vezes precisar.</p>
+                    <p class="cl-form__dica">A equipe recebe o pedido junto com o texto. Você pode pedir ajuste quantas vezes precisar.</p>
                     <p class="cl-form__erro" id="cl-erro" hidden></p>
                 </div>`,
             footer: `

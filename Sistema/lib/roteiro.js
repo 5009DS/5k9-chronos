@@ -1,4 +1,5 @@
 import { segundosDeFala, duracao, esc } from './formato.js';
+import { esteiraDe } from './etiquetas.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    ROTEIRO — o modelo de blocos.
@@ -256,4 +257,16 @@ export const previa = (blocos, limite = 120) => {
     const texto = String(primeiro?.texto || '').replace(/\s+/g, ' ').trim();
     if (!texto) return '';
     return esc(texto.length > limite ? `${texto.slice(0, limite).trimEnd()}…` : texto);
+};
+
+/* ── A PALAVRA CERTA PARA CADA FORMATO ────────────────────────────────────
+   O que se escreve num reels é um ROTEIRO; num carrossel, é o CONTEÚDO dos
+   cards. A tela dizia "Roteiro" nos dois, e "colar roteiro" num carrossel
+   soa como se o sistema não soubesse o que está abrindo.
+
+   Uma função só, usada por toda frase que fala do texto da peça — a da
+   equipe, a do convidado e a do cliente —, para as três nunca divergirem. */
+export const palavraTexto = (formato, { maiuscula = false } = {}) => {
+    const p = esteiraDe(formato) === 'carrossel' ? 'conteúdo' : 'roteiro';
+    return maiuscula ? p.charAt(0).toUpperCase() + p.slice(1) : p;
 };

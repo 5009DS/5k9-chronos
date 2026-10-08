@@ -134,7 +134,10 @@ export const ETIQUETAS = [
 
     { nome: 'arte aguardando aprovação', publica: true, etapa: 6, esteira: 'carrossel',
       proxima: 'pronto para publicar', esperaCliente: true,
-      icone: 'image-check', tom: 'espera',
+      /* `image-check` não existe nesta versão do Lucide, e um nome inválido
+         não desenha nada — a etapa ficava sem ícone no menu e no chip.
+         `gallery-thumbnails` é o par visual de `monitor-play` do vídeo. */
+      icone: 'gallery-thumbnails', tom: 'espera',
       dica: 'A arte pronta está com a médica.' },
 
     /* Fora do caminho feliz: some quando a peça avança, e leva de volta ao

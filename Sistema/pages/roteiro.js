@@ -20,7 +20,7 @@ import {
 } from '../lib/conversa.js';
 import {
     TIPOS, tipo as tipoBloco, ordenar, mover, renumerar, blocoNovo, proximaOrdem,
-    duracaoTotal, contarPalavras, avisosDeEstrutura, paraTexto, temFala,
+    duracaoTotal, contarPalavras, avisosDeEstrutura, paraTexto, temFala, palavraTexto,
 } from '../lib/roteiro.js';
 import {
     chipFase, chipStatus, cartaoLeitura, explicacaoObjetivo, avisosHTML,
@@ -320,7 +320,7 @@ export const renderRoteiro = async (container, conteudoId) => {
                     ${fio.doConteudo.estado && fio.doConteudo.estado !== 'fechado' ? `
                         <div class="rt-fio__acoes">
                             <button class="ds-btn ds-btn--primary ds-btn--sm" data-responder-conteudo="ajustado">
-                                <i data-lucide="pencil-line"></i> Ajustamos o roteiro
+                                <i data-lucide="pencil-line"></i> Ajustamos o ${esc(palavraTexto(c.formato))}
                             </button>
                             <button class="ds-btn ds-btn--ghost ds-btn--sm" data-responder-conteudo="resposta">
                                 <i data-lucide="message-square-reply"></i> Responder
@@ -335,7 +335,7 @@ export const renderRoteiro = async (container, conteudoId) => {
             <article class="ds-card vz-secao">
                 <div class="vz-secao__cabeca">
                     <div>
-                        <h2 class="ds-card-title">Roteiro</h2>
+                        <h2 class="ds-card-title">${esc(palavraTexto(c.formato, { maiuscula: true }))}</h2>
                         <span class="ds-card-sub" id="rt-medida">${esc(medida(blocos, c.formato))}</span>
                     </div>
                     <div class="rt-acoes-topo">
@@ -344,7 +344,7 @@ export const renderRoteiro = async (container, conteudoId) => {
                                 <i data-lucide="captions"></i> Teleprompter
                             </button>` : ''}
                         <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-colar">
-                            <i data-lucide="clipboard-paste"></i> Colar roteiro
+                            <i data-lucide="clipboard-paste"></i> Colar ${esc(palavraTexto(c.formato))}
                         </button>
                         <button class="ds-btn ds-btn--ghost ds-btn--sm" id="rt-copiar">
                             <i data-lucide="copy"></i> Copiar texto
@@ -355,7 +355,7 @@ export const renderRoteiro = async (container, conteudoId) => {
                                 ${selecionando ? 'Cancelar seleção' : 'Selecionar'}
                             </button>
                             <button class="ds-btn ds-btn--ghost ds-btn--sm rt-perigo" id="rt-excluir-tudo">
-                                <i data-lucide="trash-2"></i> Excluir roteiro
+                                <i data-lucide="trash-2"></i> Excluir ${esc(palavraTexto(c.formato))}
                             </button>` : ''}
                     </div>
                 </div>
@@ -371,11 +371,11 @@ export const renderRoteiro = async (container, conteudoId) => {
                     ${blocos.length
                         ? blocos.map((b, i) => blocoEditavel(b, i, blocos.length, fio.porBloco.get(b.id),
                                                             selecionando, selecionadas.has(b.id))).join('')
-                        : vazioHTML('clipboard-paste', 'Roteiro em branco',
-                            'Cole o roteiro inteiro de uma vez — o sistema separa em blocos e marca o gancho, '
+                        : vazioHTML('clipboard-paste', `${palavraTexto(c.formato, { maiuscula: true })} em branco`,
+                            `Cole o ${palavraTexto(c.formato)} inteiro de uma vez — o sistema separa em blocos e marca o gancho, `
                           + 'as falas e a chamada para ação. Ou monte à mão, bloco a bloco, abaixo.',
                             `<button class="ds-btn ds-btn--primary" id="rt-colar-vazio">
-                                <i data-lucide="clipboard-paste"></i> Colar roteiro
+                                <i data-lucide="clipboard-paste"></i> Colar ${esc(palavraTexto(c.formato))}
                              </button>`)}
                 </div>
 
@@ -458,7 +458,7 @@ export const renderRoteiro = async (container, conteudoId) => {
             const texto = paraTexto(c, blocos);
             try {
                 await navigator.clipboard.writeText(texto);
-                toast('Roteiro copiado.');
+                toast(`${palavraTexto(c.formato, { maiuscula: true })} copiado.`);
             } catch {
                 toast('Não foi possível copiar. Selecione o texto na tela.');
             }
@@ -770,7 +770,7 @@ export const renderRoteiro = async (container, conteudoId) => {
 
         openDrawer({
             title: ajustou
-                ? (bloco ? 'Ajustamos esta fala' : 'Ajustamos o roteiro')
+                ? (bloco ? 'Ajustamos esta fala' : `Ajustamos o ${palavraTexto(c.formato)}`)
                 : 'Responder ao cliente',
             subtitle: c.titulo,
             body: `
@@ -1166,7 +1166,7 @@ export const renderRoteiro = async (container, conteudoId) => {
        clicar nele por engano e perder trinta falas não pode ser um clique. */
     function confirmarExcluirTudo() {
         openDrawer({
-            title: 'Excluir o roteiro inteiro',
+            title: `Excluir o ${palavraTexto(c.formato)} inteiro`,
             subtitle: c.titulo,
             body: `
                 <div class="rt-resp">
@@ -1201,7 +1201,7 @@ export const renderRoteiro = async (container, conteudoId) => {
                     botao.textContent = 'Excluindo…';
                     const todos = [...blocos];
                     closeDrawer();
-                    const esvaziou = await excluirBlocos(todos, { rotulo: 'Roteiro excluído.' });
+                    const esvaziou = await excluirBlocos(todos, { rotulo: `${palavraTexto(c.formato, { maiuscula: true })} excluído.` });
                     selecionando = false;
                     selecionadas.clear();
                     if (!esvaziou) desenhar();
@@ -1275,7 +1275,7 @@ export const renderRoteiro = async (container, conteudoId) => {
         const temRoteiro = blocos.length > 0;
 
         openDrawer({
-            title: 'Colar roteiro',
+            title: `Colar ${palavraTexto(c.formato)}`,
             subtitle: c.titulo,
             body: `
                 <div class="rt-colar">
@@ -1326,7 +1326,7 @@ export const renderRoteiro = async (container, conteudoId) => {
                 <span style="flex:1"></span>
                 <button class="ds-btn ds-btn--ghost" id="rt-cancelar">Cancelar</button>
                 <button class="ds-btn ds-btn--primary" id="rt-gravar" disabled>
-                    ${temRoteiro ? 'Gravar' : 'Criar roteiro'}
+                    ${temRoteiro ? 'Gravar' : `Criar ${esc(palavraTexto(c.formato))}`}
                 </button>`,
             onMount: (painel) => {
                 injectEstilosPainel();
@@ -1554,7 +1554,7 @@ export const renderRoteiro = async (container, conteudoId) => {
             toast(aviso + (destino
                     ? `A demanda foi para "${destino}" e já aparece para ele.`
                     : 'A demanda já estava liberada para ele.')
-                + (blocos.length ? '' : ' Atenção: ela ainda não tem roteiro escrito.'), {
+                + (blocos.length ? '' : ` Atenção: ela ainda não tem ${palavraTexto(c.formato)} escrito.`), {
                 segundos: 14,
                 ...(desfazer ? { label: 'Desfazer', onClick: async () => { await desfazer(); recarregar(); } } : {}),
             });

@@ -4,7 +4,7 @@ import { toast } from '../components/toast.js';
 import { esc, escLinhas, dataBR, nomeDia, linkCurto } from '../lib/formato.js';
 import { chipFase, roteiroHTML } from '../lib/pecas.js';
 import { etapaAtual, esteiraDe, chipEtiqueta, injectEstilosEtiqueta } from '../lib/etiquetas.js';
-import { paraTexto, contarPalavras, duracaoTotal, temFala } from '../lib/roteiro.js';
+import { paraTexto, contarPalavras, duracaoTotal, temFala, palavraTexto } from '../lib/roteiro.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    CONVIDADO — uma demanda aberta para quem não tem login (/d/<token>).
@@ -90,7 +90,7 @@ export const renderConvidado = async (container, token) => {
                 <section class="ds-card cv-roteiro">
                     <div class="cv-roteiro__cabeca">
                         <div>
-                            <h2 class="ds-card-title">${carrossel ? 'Texto dos cards' : 'Roteiro'}</h2>
+                            <h2 class="ds-card-title">${esc(palavraTexto(c.formato, { maiuscula: true }))}</h2>
                             ${medida ? `<span class="ds-card-sub">${esc(medida)}</span>` : ''}
                         </div>
                         ${blocos.length ? `
@@ -98,7 +98,7 @@ export const renderConvidado = async (container, token) => {
                                 <i data-lucide="copy"></i> Copiar texto
                             </button>` : ''}
                     </div>
-                    ${blocos.length ? roteiroHTML(blocos) : `<p class="cv-aviso">O roteiro ainda não foi escrito.</p>`}
+                    ${blocos.length ? roteiroHTML(blocos) : `<p class="cv-aviso">O ${esc(palavraTexto(c.formato))} ainda não foi escrito.</p>`}
                 </section>
 
                 <p class="cv-rodape">
@@ -111,7 +111,7 @@ export const renderConvidado = async (container, token) => {
     container.querySelector('#cv-copiar')?.addEventListener('click', async () => {
         try {
             await navigator.clipboard.writeText(paraTexto(c, blocos));
-            toast('Roteiro copiado.');
+            toast(`${palavraTexto(c.formato, { maiuscula: true })} copiado.`);
         } catch {
             toast('Não foi possível copiar. Selecione o texto na tela.');
         }
