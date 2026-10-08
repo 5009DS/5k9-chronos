@@ -89,8 +89,8 @@ export const mensagemParaCliente = (c, cliente) => {
     const carrossel = esteiraDe(c.formato) === 'carrossel';
     return [
         `*${c.titulo}*`,
-        `${carrossel ? '🎨 Carrossel' : '🎬 Reels'}`
-            + (aguardaData(c) ? '' : ` · publicação ${nomeDiaCurto(c.data)}, ${dataBR(c.data).slice(0, 5)}`),
+        `${carrossel ? '🎨 Carrossel' : '🎬 Reels'} · `
+            + (aguardaData(c) ? 'data a definir' : `publicação ${nomeDiaCurto(c.data)}, ${dataBR(c.data).slice(0, 5)}`),
         '',
         'Dê uma olhada e aprove por aqui:',
         linkDoCliente(c, cliente),

@@ -7,7 +7,7 @@ import { toast } from '../components/toast.js';
 import { acharPorEndereco, caminhoDoConteudo, parecidosComEndereco, caminhoAnterior } from '../lib/rotas.js';
 import { esc, dataBR, quandoRelativo, nomeDia, duracao, segundosDeFala, normalizarLink, linkCurto, apelidoDeConteudo } from '../lib/formato.js';
 import { objetivo, classificar, nomeFase } from '../lib/diretorio.js';
-import { retornosDe } from '../lib/cronograma.js';
+import { retornosDe, aguardaData, comPendencia, AGUARDANDO_DATA } from '../lib/cronograma.js';
 import { timeSalvo } from '../lib/gestor.js';
 import { linkDoCliente } from '../lib/apelido.js';
 import { abrirTeleprompter } from '../lib/teleprompter.js';
@@ -1539,11 +1539,32 @@ export const renderRoteiro = async (container, conteudoId) => {
         botao.disabled = true;
         try {
             const destino = etapaDeAprovacao(c);
+            /* ── SAI DO CALENDÁRIO AO IR PARA APROVAÇÃO ───────────────────
+               A data de publicação só se decide DEPOIS que o cliente aprova.
+               Enquanto ele não responde, uma data no cronograma é promessa
+               feita por ninguém — e era ela que aparecia na tela dele.
+
+               A data gravada não se perde: "sem data" é a pendência
+               `aguardando data` (lib/cronograma.js), e a peça volta para o dia
+               que tinha quando alguém o confirmar. Peça pronta ou publicada
+               fica intacta: lá a data é um fato, não uma intenção. */
+            const emAprovacao = !!destino || !!etapaAtual(c.etiquetas)?.esperaCliente;
+            const tirarData = emAprovacao && !aguardaData(c);
+
             let desfazer = null;
             if (destino) {
                 const r = await moverParaEtapa(c, destino, { autor: autorPadrao() });
-                desfazer = r.desfazer;
+                desfazer = r.desfazer;   // restaura etiquetas e status anteriores, pendência inclusa
                 Object.assign(c, { etiquetas: comEtapa(c.etiquetas, destino), status: r.novoStatus || c.status });
+            }
+            if (tirarData) {
+                const semData = comPendencia(c.etiquetas, AGUARDANDO_DATA, true);
+                const anteriores = [...(c.etiquetas || [])];
+                await store.conteudos.salvar({ ...c, etiquetas: semData });
+                Object.assign(c, { etiquetas: semData });
+                desfazer = desfazer || (async () => {
+                    await store.conteudos.salvar({ ...c, etiquetas: anteriores });
+                });
             }
 
             let copiou = true;
@@ -1554,6 +1575,7 @@ export const renderRoteiro = async (container, conteudoId) => {
             toast(aviso + (destino
                     ? `A demanda foi para "${destino}" e já aparece para ele.`
                     : 'A demanda já estava liberada para ele.')
+                + (tirarData ? ' A data saiu do cronograma até ele aprovar.' : '')
                 + (blocos.length ? '' : ` Atenção: ela ainda não tem ${palavraTexto(c.formato)} escrito.`), {
                 segundos: 14,
                 ...(desfazer ? { label: 'Desfazer', onClick: async () => { await desfazer(); recarregar(); } } : {}),
