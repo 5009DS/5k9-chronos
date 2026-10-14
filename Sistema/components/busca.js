@@ -1,6 +1,6 @@
 import { store } from '../store.js';
 import { buscar } from '../lib/busca.js';
-import { caminhoDoConteudo, navegar } from '../lib/rotas.js';
+import { caminhoDoConteudo, navegar, acharPorEndereco } from '../lib/rotas.js';
 import { esc, diaCurto } from '../lib/formato.js';
 import { chipsEstado, injectEstilosEtiqueta } from '../lib/etiquetas.js';
 import { tipo } from '../lib/roteiro.js';
@@ -50,6 +50,7 @@ export const abrirBusca = async (consultaInicial = '') => {
                        aria-autocomplete="list">
                 <kbd class="bs-kbd">esc</kbd>
             </label>
+            <div class="bs-escopo" id="bs-escopo" hidden></div>
             <div class="bs-lista" id="bs-lista" role="listbox"></div>
             <div class="bs-rodape">
                 <span><kbd>↑</kbd><kbd>↓</kbd> navegar</span>
@@ -61,10 +62,19 @@ export const abrirBusca = async (consultaInicial = '') => {
 
     const input = fundo.querySelector('.bs-input');
     const lista = fundo.querySelector('.bs-lista');
+    const caixaEscopo = fundo.querySelector('#bs-escopo');
     let resultados = [];
     let ativo = 0;
     let dados = null;
     let espera = null;
+    /* ── ONDE PROCURAR ────────────────────────────────────────────────────
+       Dentro de um cliente, a pergunta quase sempre é "qual era aquele roteiro
+       DESTE cliente" — e resultados de outros seis clientes só atrapalham a
+       achar. Então a busca nasce restrita ao cliente da tela aberta, e uma
+       linha logo abaixo do campo diz isso e oferece ampliar. Fora de um
+       cliente (a home, o diretório), procura em todos, como sempre. */
+    let doCliente = null;     // { id, nome } do cliente da tela, ou null
+    let soEle = false;        // true = resultados só dele
 
     const onTecla = (e) => {
         if (e.key === 'Escape') { e.preventDefault(); fecharBusca(); return; }
@@ -101,6 +111,26 @@ export const abrirBusca = async (consultaInicial = '') => {
         });
     };
 
+    const desenharEscopo = () => {
+        if (!doCliente) { caixaEscopo.hidden = true; return; }
+        caixaEscopo.hidden = false;
+        caixaEscopo.innerHTML = soEle
+            ? `<span><i data-lucide="user-round"></i> Em <b>${esc(doCliente.nome)}</b></span>
+               <button type="button" class="bs-escopo__trocar" data-escopo="todos">Buscar em todos os clientes</button>`
+            : `<span><i data-lucide="users-round"></i> Em <b>todos os clientes</b></span>
+               <button type="button" class="bs-escopo__trocar" data-escopo="ele">Só ${esc(doCliente.nome)}</button>`;
+        input.placeholder = soEle
+            ? `Buscar em ${doCliente.nome}: título, frase do roteiro, tema…`
+            : 'Buscar por título, frase do roteiro, tema…';
+        caixaEscopo.querySelector('[data-escopo]').addEventListener('click', () => {
+            soEle = !soEle;
+            desenharEscopo();
+            desenhar();
+            input.focus();
+        });
+        if (window.lucide) lucide.createIcons();
+    };
+
     const desenhar = () => {
         const consulta = input.value.trim();
         if (!dados) {
@@ -113,15 +143,24 @@ export const abrirBusca = async (consultaInicial = '') => {
                 Acento e maiúscula não importam.</p>`;
             return;
         }
-        resultados = buscar(consulta, dados);
+        const universo = soEle && doCliente
+            ? { ...dados, conteudos: dados.conteudos.filter(c => c.cliente_id === doCliente.id) }
+            : dados;
+        resultados = buscar(consulta, universo);
         if (!resultados.length) {
-            lista.innerHTML = `<p class="bs-aviso">Nada encontrado para “${esc(consulta)}”.</p>`;
+            /* Nada no cliente não quer dizer nada no sistema: oferecer ampliar
+               ali mesmo poupa fechar, sair da tela e procurar de novo. */
+            lista.innerHTML = `<p class="bs-aviso">Nada encontrado para “${esc(consulta)}”${soEle ? ` em ${esc(doCliente.nome)}` : ''}.</p>
+                ${soEle ? `<p class="bs-aviso bs-aviso--acao"><button type="button" class="bs-escopo__trocar" id="bs-ampliar">Buscar em todos os clientes</button></p>` : ''}`;
+            lista.querySelector('#bs-ampliar')?.addEventListener('click', () => {
+                soEle = false; desenharEscopo(); desenhar(); input.focus();
+            });
             return;
         }
         lista.innerHTML = `
             <p class="bs-contagem">${resultados.length === 40 ? 'Os 40 mais relevantes' :
                 resultados.length === 1 ? '1 conteúdo' : `${resultados.length} conteúdos`}</p>
-            ${resultados.map((r, i) => itemHTML(r, i, dados.nomes)).join('')}`;
+            ${resultados.map((r, i) => itemHTML(r, i, dados.nomes, soEle)).join('')}`;
         lista.querySelectorAll('.bs-item').forEach((el, i) => {
             el.addEventListener('mousemove', () => { if (ativo !== i) marcar(i); });
             el.addEventListener('click', (e) => {
@@ -148,6 +187,10 @@ export const abrirBusca = async (consultaInicial = '') => {
     try {
         const { clientes, conteudos, blocos } = await store.tudo();
         dados = { conteudos, blocos, nomes: new Map(clientes.map(c => [c.id, c.nome])) };
+        const id = clienteDaTela(conteudos);
+        const nome = id && dados.nomes.get(id);
+        if (nome) { doCliente = { id, nome }; soEle = true; }
+        desenharEscopo();
     } catch (e) {
         console.error('[busca] não carregou os conteúdos:', e);
         lista.innerHTML = `<p class="bs-aviso">Não foi possível carregar os conteúdos agora.</p>`;
@@ -166,7 +209,19 @@ const abrirResultado = (conteudo, novaAba) => {
 const marcado = (pedacos) => pedacos
     .map(p => p.marcado ? `<mark>${esc(p.texto)}</mark>` : esc(p.texto)).join('');
 
-const itemHTML = (r, i, nomes) => {
+/* O cliente da tela aberta, quando ela é de um cliente só. As telas do
+   cliente levam o id no endereço; a demanda leva o apelido do conteúdo, e o
+   cliente sai dele (o mesmo resolvedor do roteador). */
+const clienteDaTela = (conteudos) => {
+    const p = decodeURIComponent(window.location.pathname);
+    const direto = p.match(/^\/(?:quadro|cliente|producao|importar)\/([^/]+)/);
+    if (direto) return direto[1];
+    const demanda = p.match(/^\/conteudo\/(.+)$/);
+    if (demanda) return acharPorEndereco(conteudos, demanda[1]).conteudo?.cliente_id || null;
+    return null;
+};
+
+const itemHTML = (r, i, nomes, soDeUm = false) => {
     const c = r.conteudo;
     const noTitulo = r.campo.onde === 'Título';
     const onde = r.campo.bloco ? `Roteiro · ${tipo(r.campo.bloco.tipo).nome}` : r.campo.onde;
@@ -175,7 +230,7 @@ const itemHTML = (r, i, nomes) => {
            href="${esc(caminhoDoConteudo(c))}">
             <span class="bs-item__topo">
                 <span class="bs-item__titulo">${noTitulo ? marcado(r.trecho) : esc(c.titulo || 'Sem título')}</span>
-                <span class="bs-item__meta">${esc(nomes.get(c.cliente_id) || '')} · ${esc(diaCurto(c.data))}</span>
+                <span class="bs-item__meta">${soDeUm ? '' : `${esc(nomes.get(c.cliente_id) || '')} · `}${esc(diaCurto(c.data))}</span>
             </span>
             ${noTitulo ? '' : `
             <span class="bs-item__trecho"><b>${esc(onde)}</b> ${marcado(r.trecho)}</span>`}
@@ -269,6 +324,24 @@ function injectStyles() {
             color: var(--text-tertiary);
         }
 
+        .bs-escopo {
+            display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+            padding: var(--space-2) var(--space-4);
+            border-bottom: 1px solid var(--border-subtle);
+            font-size: var(--text-xs); color: var(--text-tertiary);
+        }
+        .bs-escopo[hidden] { display: none; }
+        .bs-escopo span { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+        .bs-escopo span svg { width: 13px; height: 13px; flex-shrink: 0; }
+        .bs-escopo b { color: var(--text-primary); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .bs-escopo__trocar {
+            flex-shrink: 0; padding: 3px 10px; border-radius: var(--radius-pill);
+            border: 1px solid var(--border-default); background: none;
+            font-family: var(--font-sans); font-size: var(--text-xs); font-weight: 600;
+            color: var(--text-secondary); cursor: pointer;
+        }
+        .bs-escopo__trocar:hover { border-color: var(--accent-border); color: var(--accent); }
+        .bs-aviso--acao { padding-top: 0; }
         .bs-lista { overflow-y: auto; padding: var(--space-2); flex: 1; }
         .bs-aviso { margin: 0; padding: var(--space-6) var(--space-4); text-align: center;
                     font-size: var(--text-sm); color: var(--text-tertiary); }

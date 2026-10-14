@@ -4,6 +4,7 @@ import { toast } from '../components/toast.js';
 import { navegar, caminhoDoConteudo } from '../lib/rotas.js';
 import { ativarArraste } from '../lib/arrastar.js';
 import { nomeFase, noDiaCerto } from '../lib/diretorio.js';
+import { palavraTexto } from '../lib/roteiro.js';
 import { injectEstilosEtiqueta, chipsEstado, etapaAtual, etiquetaMeta, chipEtiqueta, ETAPAS, etapaNaEsteira, esteiraDe } from '../lib/etiquetas.js';
 import { moverParaEtapa, mensagemDeMovimento, itensDeEtapa } from '../lib/etapas.js';
 import { enviarNoWhatsApp, copiarMensagem } from '../lib/compartilhar.js';
@@ -85,6 +86,9 @@ const vagaDoDia = (iso) => VAGAS.find(v => v.dias.includes(indiceDia(iso))) || V
 export const renderQuadro = async (container, clienteId, mesInicial = null) => {
     const { cliente, conteudos: todos, blocos } = await store.doCliente(clienteId);
     const comRoteiro = new Set((blocos || []).map(b => b.conteudo_id));
+    // Quantos blocos cada peça tem — o chip de formato mostra se há texto.
+    const blocosPorPeca = new Map();
+    for (const b of blocos || []) blocosPorPeca.set(b.conteudo_id, (blocosPorPeca.get(b.conteudo_id) || 0) + 1);
 
     // O banco de temas sai das contas do quadro pelo mesmo motivo que sai das
     // do cronograma: conteúdo guardado não ocupa vaga (ver cronograma.js).
@@ -430,6 +434,7 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
                         <div class="qd-cartao__corpo">
                             <div class="qd-cartao__topo">
                                 ${chipFase(c.fase, { curto: true })}
+                                ${chipFormato(c)}
                                 <span class="qd-cartao__dia">guardado em ${esc(diaCurto(String(c.banco_em).slice(0, 10)))}</span>
                             </div>
                             <h3 class="qd-cartao__titulo"><a href="${esc(caminhoDoConteudo(c))}" draggable="false">${esc(c.titulo)}</a></h3>
@@ -493,9 +498,21 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
 
     /* O formato ao lado da fase: com dois caminhos de produção, "é reels ou
        carrossel?" é a primeira pergunta sobre uma demanda em aberto. */
+    /* O chip de formato diz também SE JÁ HÁ TEXTO: com roteiro (ou conteúdo,
+       no carrossel) escrito, ganha um ✓ e borda cheia; sem texto, borda
+       tracejada e mais apagada. Saber isso exigia abrir o cartão — e é a
+       primeira pergunta de quem vai gravar ou diagramar. Sem ocupar espaço
+       novo: o chip já estava lá. */
     const chipFormato = (c) => {
         const f = FORMATOS.find(x => x.id === esteiraDe(c.formato));
-        return `<span class="qd-formato" title="${esc(c.formato || f.rotulo)}"><i data-lucide="${f.icone}"></i>${f.rotulo}</span>`;
+        const n = blocosPorPeca.get(c.id) || 0;
+        const palavra = palavraTexto(c.formato, { maiuscula: true });
+        const dica = n
+            ? `${palavra} escrito · ${n} bloco${n > 1 ? 's' : ''}`
+            : `Sem ${palavraTexto(c.formato)} ainda`;
+        return `<span class="qd-formato ${n ? 'qd-formato--escrito' : 'qd-formato--vazio'}" title="${esc(dica)}" aria-label="${esc(`${f.rotulo} — ${dica}`)}">
+            <i data-lucide="${f.icone}"></i>${f.rotulo}${n ? '<i data-lucide="check" class="qd-formato__ok"></i>' : ''}
+        </span>`;
     };
 
     const cartao = (c, todos, { semData = false } = {}) => {
@@ -912,6 +929,9 @@ body.ar-arrastando .qd-doca { opacity: 1; transform: translate(-50%, 0); pointer
     font-size: var(--text-xs); font-weight: 600; white-space: nowrap;
 }
 .qd-formato svg { width: 12px; height: 12px; }
+.qd-formato--escrito { border-color: var(--border-default); }
+.qd-formato__ok { width: 11px !important; height: 11px !important; color: var(--success); stroke-width: 3; margin-left: 1px; }
+.qd-formato--vazio { border-style: dashed; color: var(--text-tertiary); }
 .qd-liberar {
     display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
     margin: 0; padding: var(--space-2) var(--space-4);
