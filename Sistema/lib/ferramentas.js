@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    FERRAMENTAS DO ESTÚDIO — a lista que alimenta o trocador da topnav.
 
-   Este arquivo é IDÊNTICO nos cinco sistemas (5K9 Forms, 5K9 Gestor, 5K9
-   Chronos, 5K9 Dionísio e 5K9 Partners). A única linha que muda entre eles é
-   a constante ATUAL, no fim. Ao criar uma ferramenta nova, acrescente uma
+   Este arquivo é IDÊNTICO nos seis sistemas (5K9 Forms, 5K9 Gestor, 5K9
+   Chronos, 5K9 Dionísio, 5K9 Partners e 5K9 Apollo). A única linha que muda
+   entre eles é a constante ATUAL, no fim. Ao criar uma ferramenta nova, acrescente uma
    entrada aqui e copie o arquivo para os outros repositórios — é a lista que
    faz cada sistema saber que os outros existem.
 
@@ -55,6 +55,14 @@ export const FERRAMENTAS = [
         icone: 'layout-grid',
         host: 'partners.5k9.studio',
         porta: 5177,
+    },
+    {
+        id: 'apollo',
+        nome: 'Apollo',
+        descricao: 'Entregas, revisão e aprovação',
+        icone: 'images',
+        host: 'apollo.5k9.studio',
+        porta: 5178,
     },
 ];
 
