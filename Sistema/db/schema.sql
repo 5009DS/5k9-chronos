@@ -451,3 +451,64 @@ revoke all on function vz_visualizacao(text)                              from a
 revoke all on function vz_registrar_retorno(text, text, text, text, text, text, text) from anon, public;
 grant execute on function vz_visualizacao(text)                              to anon, authenticated;
 grant execute on function vz_registrar_retorno(text, text, text, text, text, text, text) to anon, authenticated;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- PEDIDOS, DECISÕES E EQUIPE — o raciocínio está em db/migracao-pedidos.sql.
+-- ═══════════════════════════════════════════════════════════════════════════
+create table if not exists vz_equipe (
+    id         text primary key default gen_random_uuid()::text,
+    nome       text not null,
+    email      text,
+    ativo      boolean not null default true,
+    criado_em  timestamptz not null default now()
+);
+
+create table if not exists vz_pedidos (
+    id            text primary key default gen_random_uuid()::text,
+    cliente_id    text not null references vz_clientes(id) on delete cascade,
+    texto         text not null,                       -- o pedido, em uma frase
+    detalhe       text,                                -- a mensagem original, colada do grupo
+    quem_pediu    text,
+    pedido_em     date not null default current_date,  -- quando o cliente pediu
+    -- O responsável é o id da equipe, e não o nome como em vz_conteudos: o
+    -- aviso por email precisa chegar a uma pessoa, e nome não tem endereço.
+    responsavel_id text references vz_equipe(id) on delete set null,
+    prazo         date,
+    status        text not null default 'novo',        -- novo | fazendo | entregue | confirmado
+    -- A demanda que atende o pedido, quando ele virou peça.
+    conteudo_id   text references vz_conteudos(id) on delete set null,
+    criado_por    text,
+    concluido_em  timestamptz,
+    criado_em     timestamptz not null default now()
+);
+
+create index if not exists vz_pedidos_cliente on vz_pedidos (cliente_id);
+create index if not exists vz_pedidos_responsavel on vz_pedidos (responsavel_id) where status <> 'confirmado';
+
+create table if not exists vz_decisoes (
+    id          text primary key default gen_random_uuid()::text,
+    cliente_id  text not null references vz_clientes(id) on delete cascade,
+    texto       text not null,
+    ativa       boolean not null default true,
+    criado_por  text,
+    criado_em   timestamptz not null default now()
+);
+
+create index if not exists vz_decisoes_cliente on vz_decisoes (cliente_id);
+
+alter table vz_equipe   enable row level security;
+alter table vz_pedidos  enable row level security;
+alter table vz_decisoes enable row level security;
+
+drop policy if exists "vz_equipe: somente autenticado"   on vz_equipe;
+drop policy if exists "vz_pedidos: somente autenticado"  on vz_pedidos;
+drop policy if exists "vz_decisoes: somente autenticado" on vz_decisoes;
+
+create policy "vz_equipe: somente autenticado" on vz_equipe
+    for all to authenticated using (true) with check (true);
+create policy "vz_pedidos: somente autenticado" on vz_pedidos
+    for all to authenticated using (true) with check (true);
+create policy "vz_decisoes: somente autenticado" on vz_decisoes
+    for all to authenticated using (true) with check (true);
+

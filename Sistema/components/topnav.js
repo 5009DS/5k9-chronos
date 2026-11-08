@@ -24,6 +24,7 @@ import { abrirBusca, ligarAtalhosBusca, rotuloAtalho } from './busca.js';
 
 const NAV_ITEMS = [
     { href: '/',             label: 'Clientes',  match: (p) => p === '/' || p.startsWith('/cliente') || p.startsWith('/conteudo') || p.startsWith('/quadro') || p.startsWith('/producao') || p.startsWith('/importar') },
+    { href: '/pedidos',      label: 'Pedidos',   match: (p) => p.startsWith('/pedidos') },
     { href: '/diretorio',    label: 'Diretório', match: (p) => p.startsWith('/diretorio') },
 ];
 

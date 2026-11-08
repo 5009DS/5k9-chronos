@@ -24,6 +24,7 @@ const renderQuadro        = tela('./pages/quadro.js', 'renderQuadro');
 const renderProducao      = tela('./pages/producao.js', 'renderProducao');
 const renderConsistencia  = tela('./pages/consistencia.js', 'renderConsistencia');
 const renderConvidado     = tela('./pages/convidado.js', 'renderConvidado');
+const renderPedidos       = tela('./pages/pedidos.js', 'renderPedidos');
 
 /* ═══════════════════════════════════════════════════════════════════════════
    5K9 CHRONOS — roteador.
@@ -59,6 +60,8 @@ const ROTAS = [
     ['/quadro/:id',        (id) => renderQuadro(app, id)],
     ['/producao/:id',      (id) => renderProducao(app, id)],
     ['/conferencia',       () => renderConsistencia(app)],
+    ['/pedidos',           () => renderPedidos(app, null)],
+    ['/pedidos/:id',       (id) => renderPedidos(app, id)],
     ['/importar/:id',      (id) => renderImportar(app, id)],
     ['/importar/:id/:modo', (id, modo) => renderImportar(app, id, modo)],
     ['/diretorio',         () => renderDiretorio(app)],

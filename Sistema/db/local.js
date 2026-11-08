@@ -65,6 +65,11 @@ export const local = {
         if (colecao === 'conteudos') {
             gravar('blocos', ler('blocos').filter(b => b.conteudo_id !== id));
             gravar('retornos', ler('retornos').filter(r => r.conteudo_id !== id));
+            // vz_pedidos.conteudo_id é `on delete set null`: o pedido fica.
+            gravar('pedidos', ler('pedidos').map(p => p.conteudo_id === id ? { ...p, conteudo_id: null } : p));
+        }
+        if (colecao === 'equipe') {
+            gravar('pedidos', ler('pedidos').map(p => p.responsavel_id === id ? { ...p, responsavel_id: null } : p));
         }
 
         /* O primeiro degrau da mesma cascata, que faltava: vz_conteudos aponta
@@ -77,6 +82,8 @@ export const local = {
            esquema: o cache dizia zero blocos e o armazenamento local dizia
            320. Quem estava errado era este arquivo. */
         if (colecao === 'clientes') {
+            gravar('pedidos',  ler('pedidos').filter(p => p.cliente_id !== id));
+            gravar('decisoes', ler('decisoes').filter(d => d.cliente_id !== id));
             const orfaos = new Set(ler('conteudos').filter(c => c.cliente_id === id).map(c => c.id));
             if (orfaos.size) {
                 gravar('conteudos', ler('conteudos').filter(c => !orfaos.has(c.id)));

@@ -5,6 +5,7 @@ import { navegar, caminhoDoConteudo } from '../lib/rotas.js';
 import { ativarArraste } from '../lib/arrastar.js';
 import { nomeFase, noDiaCerto } from '../lib/diretorio.js';
 import { palavraTexto } from '../lib/roteiro.js';
+import { lerPedidos, aberto } from '../lib/pedidos.js';
 import { injectEstilosEtiqueta, chipsEstado, etapaAtual, etiquetaMeta, chipEtiqueta, ETAPAS, etapaNaEsteira, esteiraDe } from '../lib/etiquetas.js';
 import { moverParaEtapa, mensagemDeMovimento, itensDeEtapa } from '../lib/etapas.js';
 import { enviarNoWhatsApp, copiarMensagem } from '../lib/compartilhar.js';
@@ -84,7 +85,10 @@ const vagaDoDia = (iso) => VAGAS.find(v => v.dias.includes(indiceDia(iso))) || V
  *   movimento, e ela perdia o lugar no meio do trabalho.
  */
 export const renderQuadro = async (container, clienteId, mesInicial = null) => {
-    const { cliente, conteudos: todos, blocos } = await store.doCliente(clienteId);
+    const [{ cliente, conteudos: todos, blocos }, pedidos] = await Promise.all([
+        store.doCliente(clienteId), lerPedidos(),
+    ]);
+    const pedidosAbertos = pedidos.filter(p => p.cliente_id === clienteId && aberto(p));
     const comRoteiro = new Set((blocos || []).map(b => b.conteudo_id));
     // Quantos blocos cada peça tem — o chip de formato mostra se há texto.
     const blocosPorPeca = new Map();
@@ -134,6 +138,10 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
         title: esc(cliente.nome),
         subtitle: 'Quadro do mês. Arraste para mover — um dia pode ter mais de um conteúdo.',
         actions: `
+            <a class="ds-btn ds-btn--ghost" href="/pedidos/${esc(clienteId)}" title="O que o cliente pediu e ainda não foi confirmado">
+                <i data-lucide="list-checks"></i> Pedidos
+                ${pedidosAbertos.length ? `<span class="cr-conta">${pedidosAbertos.length}</span>` : ''}
+            </a>
             <button class="ds-btn ds-btn--ghost" id="qd-banco" aria-pressed="${BANCO_ABERTO.has(clienteId)}">
                 <i data-lucide="archive"></i> Banco de temas
                 ${noBanco.length ? `<span class="cr-conta">${noBanco.length}</span>` : ''}

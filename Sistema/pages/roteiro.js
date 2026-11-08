@@ -15,6 +15,8 @@ import { etapasDa, etapaAtual, proximaEtapa, esteiraDe, chipEtiqueta, etiquetaMe
 import { moverParaEtapa, mensagemDeMovimento, etapaDeAprovacao } from '../lib/etapas.js';
 import { copiarMensagem, mensagemDaDemanda, linkDeConvidado, mensagemParaCliente } from '../lib/compartilhar.js';
 import { gerarToken } from '../store.js';
+import { lerDecisoes, lerPedidos } from '../lib/pedidos.js';
+import { decisoesHTML, pedidosDaDemandaHTML, injectEstilosPedidos } from '../components/pedidos.js';
 import {
     conversas, estadoMeta, ato, daEquipe, textoOriginal, entradaDaEquipe,
 } from '../lib/conversa.js';
@@ -51,9 +53,10 @@ import { formularioConteudo } from './cronograma.js';
    ═══════════════════════════════════════════════════════════════════════════ */
 
 export const renderRoteiro = async (container, conteudoId) => {
-    const [conteudos, clientes, todosBlocos, retornos] = await Promise.all([
+    const [conteudos, clientes, todosBlocos, retornos, todasDecisoes, todosPedidos] = await Promise.all([
         store.conteudos.listar(), store.clientes.listar(),
         store.blocos.listar(), store.retornos.listar(),
+        lerDecisoes(), lerPedidos(),
     ]);
 
     /* O endereço pode ser o id cru (link antigo), o apelido com o mês certo,
@@ -237,6 +240,7 @@ export const renderRoteiro = async (container, conteudoId) => {
 
     container.insertAdjacentHTML('beforeend', ESTILOS);
     injectEstilosEtiqueta();
+    injectEstilosPedidos();
 
     const recarregar = () => renderRoteiro(container, c.id);
 
@@ -244,6 +248,9 @@ export const renderRoteiro = async (container, conteudoId) => {
         const avisos = avisosDeEstrutura(blocos);
 
         content.innerHTML = `
+            ${decisoesHTML(todasDecisoes.filter(d => d.cliente_id === c.cliente_id), cliente)}
+            ${pedidosDaDemandaHTML(todosPedidos.filter(p => p.conteudo_id === c.id))}
+
             <!-- ══ Ficha estratégica ═══════════════════════════════════ -->
             <article class="ds-card vz-secao">
                 <div class="vz-secao__cabeca">

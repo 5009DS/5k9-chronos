@@ -147,12 +147,18 @@ const cascatearNoCache = (nome, id) => {
     if (nome === "conteudos") {
         mexerNoCache("blocos",   (l) => l.filter(b => b.conteudo_id !== id));
         mexerNoCache("retornos", (l) => l.filter(r => r.conteudo_id !== id));
+        mexerNoCache("pedidos",  (l) => l.map(p => p.conteudo_id === id ? { ...p, conteudo_id: null } : p));
+    }
+    if (nome === "equipe") {
+        mexerNoCache("pedidos", (l) => l.map(p => p.responsavel_id === id ? { ...p, responsavel_id: null } : p));
     }
     if (nome === "blocos") {
         // on delete set null: o retorno fica, sem a fala que ele comentava.
         mexerNoCache("retornos", (l) => l.map(r => r.bloco_id === id ? { ...r, bloco_id: null } : r));
     }
     if (nome === "clientes") {
+        mexerNoCache("pedidos",  (l) => l.filter(p => p.cliente_id !== id));
+        mexerNoCache("decisoes", (l) => l.filter(d => d.cliente_id !== id));
         const guardado = cache.get("conteudos");
         // Os filhos precisam ser lidos ANTES de sumirem da lista.
         const filhos = Array.isArray(guardado?.dados)
@@ -166,6 +172,11 @@ const cascatearNoCache = (nome, id) => {
 };
 
 const COLECOES = ['clientes', 'conteudos', 'blocos', 'retornos'];
+/* As da aba de Pedidos ficam fora de `tudo()`: o painel e o cronograma não
+   precisam delas, e somá-las ali seria uma consulta a mais em toda tela. Mas
+   entram na cópia de segurança — perder os pedidos é perder a memória que
+   elas existem para guardar. */
+const COLECOES_PEDIDOS = ['equipe', 'pedidos', 'decisoes'];
 
 const colecao = (nome) => ({
     listar: () => comCache(nome, () => db.listar(nome)),
@@ -277,6 +288,9 @@ export const store = {
     conteudos: colecao('conteudos'),
     blocos:    colecao('blocos'),
     retornos:  colecao('retornos'),
+    equipe:    colecao('equipe'),
+    pedidos:   colecao('pedidos'),
+    decisoes:  colecao('decisoes'),
 
     /** Tudo de uma vez, em paralelo — é o que o painel consome. */
     tudo: async () => {
@@ -362,10 +376,14 @@ export const store = {
     /** Exportação/importação de segurança (ver pages/configuracoes.js). */
     exportar: async () => {
         const dados = await store.tudo();
+        // Sem as tabelas de pedidos (migração ainda não rodada), a cópia sai sem elas.
+        for (const c of COLECOES_PEDIDOS) {
+            try { dados[c] = await store[c].listar(); } catch { /* fica de fora */ }
+        }
         return { versao: 1, exportado_em: new Date().toISOString(), ...dados };
     },
     importar: async (pacote) => {
-        for (const c of COLECOES) {
+        for (const c of [...COLECOES, ...COLECOES_PEDIDOS]) {
             if (Array.isArray(pacote[c])) await store[c].substituir(pacote[c]);
         }
         cache.clear();
