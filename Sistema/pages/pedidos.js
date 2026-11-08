@@ -157,6 +157,7 @@ export const renderPedidos = async (container, clienteId = null) => {
            antigo: é a ordem em que alguém deveria pegar. */
         return itens.sort((a, b) =>
             (atrasado(b) - atrasado(a))
+            || (pesoPrioridade(b) - pesoPrioridade(a))
             || String(a.prazo || '9999').localeCompare(String(b.prazo || '9999'))
             || String(a.pedido_em || '').localeCompare(String(b.pedido_em || '')));
     };
@@ -168,7 +169,7 @@ export const renderPedidos = async (container, clienteId = null) => {
         const idx = COLUNAS.findIndex(c => c.id === (p.status || 'novo'));
         const proxima = COLUNAS[idx + 1];
         return `
-        <article class="pd-cartao ${atrasado(p) ? 'pd-cartao--atrasado' : ''}" data-arrastavel="${esc(p.id)}">
+        <article class="pd-cartao ${atrasado(p) ? 'pd-cartao--atrasado' : ''} ${p.prioridade === 'urgente' || p.prioridade === 'alta' ? `pd-cartao--prio-${p.prioridade}` : ''}" data-arrastavel="${esc(p.id)}">
             <div class="pd-cartao__topo">
                 ${clienteId ? '' : `<span class="pd-cartao__cliente">${esc(nomeCliente.get(p.cliente_id) || 'Cliente removido')}</span>`}
                 <span class="pd-cartao__idade">${esc(idadeTexto(p))}${p.quem_pediu ? ` · ${esc(p.quem_pediu)}` : ''}</span>
@@ -177,6 +178,7 @@ export const renderPedidos = async (container, clienteId = null) => {
             ${p.detalhe ? `<span class="pd-cartao__marca" title="${esc(p.detalhe.slice(0, 300))}"><i data-lucide="quote"></i> mensagem original</span>` : ''}
             <div class="pd-cartao__pe">
                 ${avataresHTML(resp)}
+                ${chipPrioridade(p)}
                 ${prazo ? `<span class="pd-prazo pd-prazo--${prazo.tom}"><i data-lucide="calendar-clock"></i>${esc(prazo.texto)}</span>` : ''}
                 ${demanda ? `<a class="pd-demanda" href="${esc(caminhoDoConteudo(demanda))}" title="${esc(demanda.titulo)}"><i data-lucide="file-text"></i></a>` : ''}
                 ${nComentarios.get(p.id) ? `<span class="pd-coments" title="${nComentarios.get(p.id)} comentário${nComentarios.get(p.id) > 1 ? 's' : ''}"><i data-lucide="message-circle"></i>${nComentarios.get(p.id)}</span>` : ''}
@@ -602,6 +604,10 @@ const ESTILOS = `
     background: var(--surface-1); cursor: grab;
 }
 .pd-cartao--atrasado { border-left: 3px solid var(--danger); }
+/* Prioridade na borda, como no quadro do mês. Atrasado continua vencendo:
+   vermelho de atraso é mais urgente que qualquer bandeira. */
+.pd-cartao--prio-urgente:not(.pd-cartao--atrasado) { border-left: 3px solid #EF4444; }
+.pd-cartao--prio-alta:not(.pd-cartao--atrasado) { border-left: 3px solid #F59E0B; }
 /* A demanda: mesma moldura, com a marca "demanda" e uma borda de outra cor
    para não se confundir com o pedido do cliente. */
 .pd-cartao--demanda { border-left: 3px solid var(--info); }

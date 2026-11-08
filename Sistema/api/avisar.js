@@ -58,9 +58,11 @@ module.exports = async (req, res) => {
             : pedido.prazo === hoje ? 'vence hoje'
             : `até ${diaMes(pedido.prazo)}`;
 
+        const PRIORIDADE = { urgente: 'Urgente', alta: 'Alta', normal: 'Normal', baixa: 'Baixa' };
         const linhas = [
             ['Cliente', nomeCliente],
             ['Prazo', prazo],
+            ...(PRIORIDADE[pedido.prioridade] ? [['Prioridade', PRIORIDADE[pedido.prioridade]]] : []),
             ...(pedido.quem_pediu ? [['Quem pediu', pedido.quem_pediu]] : []),
         ];
 
@@ -73,7 +75,7 @@ module.exports = async (req, res) => {
             try {
             await enviar({
                 para: pessoa.email,
-                assunto: `${nomeCliente}: ${pedido.texto}`.slice(0, 140),
+                assunto: `${pedido.prioridade === 'urgente' ? '[Urgente] ' : ''}${nomeCliente}: ${pedido.texto}`.slice(0, 140),
                 html: moldura({
                     titulo: `${esc(pessoa.nome.split(' ')[0])}, ${de ? `${esc(de)} te marcou` : 'você foi marcado'} num pedido`,
                     corpo: `

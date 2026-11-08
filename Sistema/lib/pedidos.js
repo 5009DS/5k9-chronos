@@ -1,4 +1,5 @@
 import { store } from '../store.js';
+import { CONTAS_MASTER } from './supabase-config.js';
 import { toast } from '../components/toast.js';
 import { hoje, diasAte, dataBR, esc } from './formato.js';
 
@@ -63,6 +64,18 @@ export const euSou = (equipe) => {
     let id = null;
     try { id = localStorage.getItem(CHAVE_EU); } catch { /* sem armazenamento */ }
     return { pessoa: equipe.find(p => p.id === id) || null, pelaSessao: false };
+};
+
+/* ── QUEM ASSINA ──────────────────────────────────────────────────────────
+   O nome que vai em "anotado por": a pessoa da Equipe; sem pessoa (login
+   master), "Estúdio". Antes caía no começo do email ("5009business"). */
+export const assinatura = (equipe) => euSou(equipe).pessoa?.nome || (store.usuario() ? 'Estúdio' : null);
+
+/** O nome para mostrar. Corrige os registros antigos assinados com o email do master. */
+export const nomeDeQuemAnotou = (texto) => {
+    if (!texto) return '';
+    const mestres = CONTAS_MASTER.map(e => e.split('@')[0].toLowerCase());
+    return mestres.includes(String(texto).toLowerCase()) ? 'Estúdio' : String(texto).split(' ')[0];
 };
 
 export const lembrarEu = (id) => {

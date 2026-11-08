@@ -3,7 +3,8 @@ import { abrirFormulario } from './campos.js';
 import { openDrawer, closeDrawer } from './drawer.js';
 import { toast } from './toast.js';
 import { esc, hoje, dataBR } from '../lib/formato.js';
-import { COLUNAS, colunaDe, ativos, euSou, avisarResponsaveis, responsaveisDe, avatarHTML, injectEstilosAvatar } from '../lib/pedidos.js';
+import { COLUNAS, colunaDe, ativos, euSou, avisarResponsaveis, responsaveisDe, avatarHTML, injectEstilosAvatar, assinatura } from '../lib/pedidos.js';
+import { PRIORIDADES } from '../lib/tarefas.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    PEDIDOS — os painéis que mais de uma tela abre.
@@ -55,6 +56,10 @@ export const abrirPedido = ({ pedido = null, clienteId = null, clientes, conteud
               : 'Cadastre a equipe no botão "Equipe" da tela de Pedidos.' },
         { nome: 'prazo', rotulo: 'Prazo', tipo: 'data', largura: 'metade' },
         { nome: 'pedido_em', rotulo: 'Pedido em', tipo: 'data', largura: 'metade' },
+        { nome: 'prioridade', rotulo: 'Prioridade', tipo: 'select', largura: 'metade', opcoes: [
+            { valor: '', rotulo: '— sem prioridade —' },
+            ...PRIORIDADES.map(p => ({ valor: p.id, rotulo: p.nome })),
+          ] },
         { nome: 'quem_pediu', rotulo: 'Quem pediu',
           placeholder: cliente?.nome || 'Nome de quem pediu' },
         ...(pedido ? [{
@@ -86,10 +91,11 @@ export const abrirPedido = ({ pedido = null, clienteId = null, clientes, conteud
                 ...dados,
                 responsaveis: dados.responsaveis || [],
                 responsavel_id: null,
+                prioridade: dados.prioridade || null,
                 cliente_id: dados.cliente_id || fixo,
                 pedido_em: dados.pedido_em || hoje(),
                 status: dados.status || 'novo',
-                criado_por: pedido?.criado_por || eu?.nome || store.usuario()?.nome || null,
+                criado_por: pedido?.criado_por || assinatura(equipe),
             });
             /* Email só para quem ENTROU agora, e nunca para si mesmo: anotar um
                pedido próprio não precisa de aviso, e editar o prazo não deve
@@ -128,7 +134,7 @@ export const abrirDecisao = ({ decisao = null, cliente, equipe, aoSalvar }) => {
         aoSalvar: async (dados) => {
             const linha = await store.decisoes.salvar({
                 ...dados, cliente_id: cliente.id, ativa: decisao?.ativa ?? true,
-                criado_por: decisao?.criado_por || eu?.nome || store.usuario()?.nome || null,
+                criado_por: decisao?.criado_por || assinatura(equipe),
             });
             toast(decisao ? 'Decisão atualizada.' : 'Decisão registrada.');
             aoSalvar?.(linha);

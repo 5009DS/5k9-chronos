@@ -3,9 +3,10 @@ import { toast } from './toast.js';
 import { abrirMenu } from './menu.js';
 import { esc, hoje, dataBR } from '../lib/formato.js';
 import { caminhoDoConteudo } from '../lib/rotas.js';
+import { PRIORIDADES, chipPrioridade, itensDePrioridade, injectEstilosTarefas } from '../lib/tarefas.js';
 import {
     COLUNAS, colunaDe, ativos, euSou, responsaveisDe, avatarHTML, avataresHTML,
-    prazoTexto, idadeTexto, comStatus, avisarResponsaveis, injectEstilosAvatar,
+    prazoTexto, idadeTexto, comStatus, avisarResponsaveis, injectEstilosAvatar, nomeDeQuemAnotou,
 } from '../lib/pedidos.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -69,6 +70,7 @@ export const linkDoPedido = (p) => `${location.origin}/pedidos/${encodeURICompon
  */
 export const abrirTarefa = async ({ pedido, clientes, conteudos, equipe, aoMudar }) => {
     injectEstilosAvatar();
+    injectEstilosTarefas();
     injectEstilos();
     fecharTarefa();
 
@@ -152,7 +154,7 @@ export const abrirTarefa = async ({ pedido, clientes, conteudos, equipe, aoMudar
                 <span>/</span>
                 <a href="/pedidos/${esc(p.cliente_id)}">${esc(cliente?.nome || 'Cliente')}</a>
             </nav>
-            <span class="tj__criado">${esc(idadeTexto(p))}${p.criado_por ? ` · anotado por ${esc(p.criado_por.split(' ')[0])}` : ''}</span>
+            <span class="tj__criado">${esc(idadeTexto(p))}${p.criado_por ? ` · anotado por ${esc(nomeDeQuemAnotou(p.criado_por))}` : ''}</span>
             <span class="tj__espaco"></span>
             <button class="ds-icon-btn ds-icon-btn--sm" id="tj-link" title="Copiar o link deste pedido" aria-label="Copiar link">
                 <i data-lucide="link"></i>
@@ -199,6 +201,12 @@ export const abrirTarefa = async ({ pedido, clientes, conteudos, equipe, aoMudar
                     <dd><button class="tj-valor" id="tj-quem" aria-haspopup="menu">
                         ${resp.length ? `${avataresHTML(resp, { tamanho: 22 })}<span>${esc(resp.map(x => x.nome.split(' ')[0]).join(', '))}</span>`
                                       : '<span class="tj-vazio">ninguém ainda</span>'}
+                    </button></dd>
+                </div>
+                <div class="tj-campo">
+                    <dt><i data-lucide="flag"></i>Prioridade</dt>
+                    <dd><button class="tj-valor" id="tj-prio" aria-haspopup="menu">
+                        ${chipPrioridade(p, { sempreComNome: true }) || '<span class="tj-vazio">definir</span>'}
                     </button></dd>
                 </div>
                 <div class="tj-campo">
@@ -296,6 +304,14 @@ export const abrirTarefa = async ({ pedido, clientes, conteudos, equipe, aoMudar
         });
 
         $('#tj-quem').addEventListener('click', (e) => { e.stopPropagation(); menuQuem(e.currentTarget); });
+        $('#tj-prio').addEventListener('click', (e) => {
+            e.stopPropagation();
+            abrirMenu(e.currentTarget, itensDePrioridade(p.prioridade, (v) => {
+                if ((p.prioridade || null) === v) return;
+                const nome = PRIORIDADES.find(x => x.id === v)?.nome.toLowerCase();
+                salvar({ prioridade: v }, nome ? `definiu a prioridade como ${nome}` : 'tirou a prioridade');
+            }), { alinhar: 'esquerda' });
+        });
         $('#tj-prazo').addEventListener('change', (e) => {
             const v = e.target.value || null;
             salvar({ prazo: v }, v ? `definiu o prazo para ${dataBR(v).slice(0, 5)}` : 'tirou o prazo');
@@ -583,11 +599,76 @@ export const abrirTarefa = async ({ pedido, clientes, conteudos, equipe, aoMudar
         const mais = e.target.closest('#tj-mais');
         if (mais) {
             e.stopPropagation();
+            const demanda = conteudos.find(c => c.id === p.conteudo_id);
             abrirMenu(mais, [
-                { id: 'excluir', label: 'Excluir pedido', icon: 'trash-2', variante: 'danger', onClick: excluir },
+                demanda
+                    ? { id: 'demanda', label: 'Abrir a demanda', icon: 'file-text', href: caminhoDoConteudo(demanda) }
+                    : { id: 'demanda', label: 'Transformar em demanda', icon: 'file-plus-2', onClick: transformar },
+                { id: 'duplicar', label: 'Duplicar pedido', icon: 'copy', onClick: duplicar },
+                { id: 'excluir', label: 'Excluir pedido', icon: 'trash-2', variante: 'danger', separadorAntes: true, onClick: excluir },
             ]);
         }
     });
+
+    /* ── Transformar em demanda ────────────────────────────────────────
+       O pedido vira um conteúdo no BANCO DE TEMAS do cliente — sem dia,
+       porque quem distribui o mês é o admin. Leva título, descrição (na
+       anotação interna), quem cuida e prioridade, e fica ligado ao pedido:
+       quem abrir um chega no outro. */
+    const transformar = async () => {
+        if (!p.cliente_id) return;
+        const dia = p.prazo || hoje();
+        let demanda;
+        try {
+            demanda = await store.conteudos.salvar({
+                cliente_id: p.cliente_id,
+                titulo: p.texto,
+                tema: null, fase: null, objetivo: null, formato: null, canal: null,
+                data: dia, data_original: dia,
+                status: 'rascunho',
+                etiquetas: [],
+                banco_em: new Date().toISOString(),
+                responsaveis: responsaveisDe(p),
+                prioridade: p.prioridade || null,
+                nota: [`Veio do pedido "${p.texto}"${p.quem_pediu ? ` (pedido por ${p.quem_pediu})` : ''}.`, p.detalhe || '']
+                    .filter(Boolean).join('\n\n'),
+            });
+        } catch (e) {
+            console.error('[tarefa] transformar:', e);
+            toast('Não foi possível criar a demanda. Tente de novo.');
+            return;
+        }
+        conteudos.push(demanda);
+        await salvar({ conteudo_id: demanda.id }, `transformou em demanda: "${demanda.titulo}"`);
+        toast('Demanda criada no banco de temas do cliente, ligada a este pedido.', {
+            label: 'Abrir', onClick: () => { location.href = caminhoDoConteudo(demanda); },
+        });
+    };
+
+    /* ── Duplicar ─────────────────────────────────────────────────────────
+       A cópia nasce zerada: coluna Novo, pedida hoje, tópicos desmarcados,
+       sem demanda ligada e sem a conversa — e abre no lugar desta. */
+    const duplicar = async () => {
+        let copia;
+        try {
+            const { id, criado_em, concluido_em, conteudo_id, ...resto } = p;
+            copia = await store.pedidos.salvar({
+                ...resto,
+                status: 'novo', concluido_em: null, conteudo_id: null,
+                pedido_em: hoje(),
+                checklist: (Array.isArray(p.checklist) ? p.checklist : [])
+                    .map(t => ({ ...t, id: crypto.randomUUID().slice(0, 8), feito: false })),
+                criado_por: meuNome,
+            });
+        } catch (e) {
+            console.error('[tarefa] duplicar:', e);
+            toast('Não foi possível duplicar. Tente de novo.');
+            return;
+        }
+        mudou = true;
+        toast('Pedido duplicado. Você está na cópia.');
+        abrirTarefa({ pedido: copia, clientes, conteudos, equipe, aoMudar });
+    };
 
     const excluir = async () => {
         if (!confirm('Excluir este pedido? A conversa dele some junto da tela.')) return;
@@ -648,7 +729,11 @@ function injectEstilos() {
     const style = document.createElement('style');
     style.id = 'tj-estilos';
     style.textContent = `
-.tj { position: fixed; inset: 0; z-index: 900; display: grid; place-items: center; padding: var(--space-6); font-family: var(--font-sans); color: var(--text-primary); }
+/* As camadas: painel lateral 500 < esta janela 540 < os menus dela 560 <
+   avisos (toast) 600. O menu do sistema mora em 450 e abriria ATRÁS da
+   janela — enquanto ela existe, ele sobe. */
+body:has(.tj) .ds-menu { z-index: 560; }
+.tj { position: fixed; inset: 0; z-index: 540; display: grid; place-items: center; padding: var(--space-6); font-family: var(--font-sans); color: var(--text-primary); }
 .tj__scrim { position: absolute; inset: 0; background: rgba(5, 5, 10, 0.62); backdrop-filter: blur(4px); opacity: 0; transition: opacity .2s; }
 .tj__janela {
     position: relative; width: min(1180px, 100%); height: min(860px, 100%);
@@ -722,6 +807,8 @@ select.tj-input option { background: var(--surface-2); color: var(--text-primary
 .tj-data .tj-input { width: auto; flex: 0 1 auto; min-width: 0; }
 .tj-data select.tj-input { flex: 1; }
 .tj-vazio { color: var(--text-tertiary); }
+.tj-valor .tf-prio { font-size: 14px; }
+.tj-valor .tf-prio svg { width: 15px; height: 15px; }
 .tj-abrir { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; color: var(--text-secondary); }
 .tj-abrir:hover { background: var(--surface-2); color: var(--accent); }
 .tj-abrir svg { width: 16px; height: 16px; }
