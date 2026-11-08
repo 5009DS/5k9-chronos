@@ -173,10 +173,14 @@ export const remoto = {
     sessao: async () => {
         const s = await cliente();
         const { data: { session } } = await s.auth.getSession();
-        return session?.user
-            ? { id: session.user.id, email: session.user.email,
-                nome: session.user.user_metadata?.nome
-                      || (session.user.email || '').split('@')[0] }
+        const u = session?.user;
+        return u
+            ? { id: u.id, email: u.email,
+                /* "email" é o login de email e senha (o master e as contas do
+                   Forms); "google" é o login próprio de cada um da equipe. */
+                provedor: u.app_metadata?.provider || 'email',
+                nome: u.user_metadata?.nome || u.user_metadata?.full_name
+                      || u.user_metadata?.name || (u.email || '').split('@')[0] }
             : null;
     },
 
@@ -191,6 +195,19 @@ export const remoto = {
     entrar: async (email, senha) => {
         const s = await cliente();
         return s.auth.signInWithPassword({ email, password: senha });
+    },
+
+    /* Sai daqui para o Google e volta para a raiz do Chronos com a sessão
+       no endereço; a biblioteca lê e guarda sozinha (detectSessionInUrl). O
+       endereço de volta precisa estar em Authentication → URL Configuration
+       → Redirect URLs, senão o Supabase manda para o Site URL, que é o do
+       Forms. */
+    entrarComGoogle: async () => {
+        const s = await cliente();
+        return s.auth.signInWithOAuth({
+            provider: 'google',
+            options: { redirectTo: `${location.origin}/`, queryParams: { prompt: 'select_account' } },
+        });
     },
 
     sair: async () => {

@@ -184,7 +184,13 @@ const colecao = (nome) => ({
     listar: () => comCache(nome, () => db.listar(nome)),
 
     salvar: async (registro) => {
+        /* Conteúdo NOVO (sem id) leva a assinatura de quem criou. O banco
+           preenche sozinho pelo token (db/migracao-login-google.sql); mandar
+           daqui é o que faz o modo local e o cache já nascerem com ela. */
+        const novo = nome === 'conteudos' && !registro.id;
+        if (novo && !registro.criado_por && usuario?.email) registro = { ...registro, criado_por: usuario.email };
         const linha = await db.salvar(nome, registro);
+        if (novo) aoCriarConteudo.forEach(fn => { try { fn(linha); } catch (e) { console.warn(e); } });
         /* A linha vem do BANCO, não do que foi enviado: ela traz id gerado,
            carimbo de criação e o que mais o servidor tenha decidido. */
         mexerNoCache(nome, (lista) => {
@@ -212,6 +218,11 @@ const colecao = (nome) => ({
     },
 });
 
+/* Quem quer saber de conteúdo novo: o aviso por email de "tema novo"
+   (lib/avisos.js). Fica fora das telas para valer em todas — o formulário, a
+   importação e qualquer outra que venha a criar conteúdo. */
+const aoCriarConteudo = [];
+
 // ── Sessão ──────────────────────────────────────────────────────────────
 // Em modo local não existe login: `usuario` fica null e o app trata isso como
 // acesso aberto. Em modo remoto, null significa "precisa entrar" — exceto na
@@ -228,6 +239,38 @@ const ouvintes = [];
  * adivinhável por força bruta, e a unicidade ainda é garantida pelo índice
  * único da coluna.
  */
+/* ── A SEGUNDA TRAVA DO LOGIN COM GOOGLE ──────────────────────────────────
+   A primeira é o gancho do banco, que nem deixa nascer conta de quem não está
+   na Equipe (db/migracao-login-google.sql). Esta cobre o que o gancho não
+   vê: alguém que TINHA conta e saiu da equipe. Tirado da lista, ele é
+   deslogado aqui na próxima vez que abrir o Chronos.
+
+   Email e senha passam direto: é o login master e o das contas do Forms. */
+let erroDeLogin = null;
+
+const conferir = async (u) => {
+    if (!u || u.provedor === 'email') return u;
+    let equipe = [];
+    try { equipe = await db.listar('equipe'); } catch { /* sem a tabela: ninguém passa */ }
+    const email = (u.email || '').toLowerCase();
+    if (equipe.some(p => p.ativo !== false && (p.email || '').toLowerCase() === email)) return u;
+    erroDeLogin = `${u.email} não está na equipe do Chronos. Peça para o Andrew cadastrar você em Pedidos → Equipe.`;
+    try { await db.sair(); } catch { /* já não vale de qualquer jeito */ }
+    return null;
+};
+
+/* Quando o Google ou o gancho recusam, o Supabase volta para o Chronos com o
+   motivo no endereço (?error_description=… ou #error_description=…). Lido
+   uma vez, e o endereço é limpo para o recado não ficar no histórico. */
+const lerErroDaVolta = () => {
+    const procurar = (texto) => new URLSearchParams(texto).get('error_description');
+    const motivo = procurar(location.search.slice(1)) || procurar(location.hash.slice(1));
+    if (!motivo) return;
+    erroDeLogin = /equipe|chronos/i.test(motivo) ? motivo
+        : 'O Google não autorizou a entrada. Tente de novo, ou use o email e a senha do estúdio.';
+    history.replaceState(null, '', location.pathname);
+};
+
 const ALFABETO = 'abcdefghjkmnpqrstuvwxyz23456789';
 export const gerarToken = () => Array.from(
     crypto.getRandomValues(new Uint8Array(10)),
@@ -258,11 +301,12 @@ export const store = {
        Entrar e sair NESTA aba não dependem daqui: as duas telas navegam por
        conta própria depois da chamada (pages/login.js e components/topnav.js). */
     iniciarSessao: async () => {
-        usuario = await db.sessao();
+        lerErroDaVolta();
+        usuario = await conferir(await db.sessao());
         if (db.aoMudarSessao) {
             await db.aoMudarSessao(async () => {
                 const antes = usuario?.id ?? null;
-                usuario = await db.sessao();
+                usuario = await conferir(await db.sessao());
                 if ((usuario?.id ?? null) === antes) return;
 
                 cache.clear();
@@ -275,6 +319,11 @@ export const store = {
     /** Token da sessão para chamar as funções do servidor. null em modo local. */
     token: () => db.token ? db.token() : Promise.resolve(null),
     usuario: () => usuario,
+
+    entrarComGoogle: () => db.entrarComGoogle(),
+    /** Por que a última tentativa de entrar não deu certo, para o login dizer. */
+    erroDeLogin: () => erroDeLogin,
+    aoCriarConteudo: (fn) => aoCriarConteudo.push(fn),
 
     entrar: async (email, senha) => {
         const r = await db.entrar(email, senha);

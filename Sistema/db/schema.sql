@@ -516,3 +516,18 @@ create policy "vz_pedidos: somente autenticado" on vz_pedidos
 create policy "vz_decisoes: somente autenticado" on vz_decisoes
     for all to authenticated using (true) with check (true);
 
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- LOGIN COM GOOGLE, PAPÉIS E "QUEM SUBIU" — ver db/migracao-login-google.sql,
+-- que tem também o gancho da lista de convidados e o recorte de criado_por
+-- na função do link do cliente. Em banco novo, rode aquele arquivo depois
+-- deste.
+-- ═══════════════════════════════════════════════════════════════════════════
+alter table vz_equipe add column if not exists papel text not null default 'equipe';
+alter table vz_conteudos add column if not exists criado_por text default (auth.jwt() ->> 'email');
+alter table vz_conteudos add column if not exists avisado_em timestamptz;
+
+-- A demanda como tarefa — ver db/migracao-prioridade.sql.
+alter table vz_conteudos add column if not exists prioridade text;
+alter table vz_conteudos add column if not exists responsaveis text[] not null default '{}';
+alter table vz_conteudos add column if not exists checklist jsonb not null default '[]'::jsonb;

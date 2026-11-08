@@ -3,7 +3,7 @@ import { abrirFormulario } from './campos.js';
 import { openDrawer, closeDrawer } from './drawer.js';
 import { toast } from './toast.js';
 import { esc, hoje, dataBR } from '../lib/formato.js';
-import { COLUNAS, colunaDe, ativos, euSou, avisarResponsaveis, responsaveisDe, avatarHTML } from '../lib/pedidos.js';
+import { COLUNAS, colunaDe, ativos, euSou, avisarResponsaveis, responsaveisDe, avatarHTML, injectEstilosAvatar } from '../lib/pedidos.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    PEDIDOS — os painéis que mais de uma tela abre.
@@ -154,6 +154,11 @@ export const abrirEquipe = ({ equipe, aoSalvar }) => {
             <input class="ds-input" data-campo="nome" placeholder="Nome" value="${esc(p.nome || '')}" autocomplete="off">
             <input class="ds-input" data-campo="email" type="email" inputmode="email" placeholder="email@exemplo.com"
                    value="${esc(p.email || '')}" autocomplete="off">
+            <select class="ds-input pd-eq__papel" data-campo="papel" aria-label="Papel de ${esc(p.nome || 'quem está nesta linha')}"
+                    title="Admin organiza o mês e manda o aviso de mês organizado">
+                <option value="equipe" ${p.papel !== 'admin' ? 'selected' : ''}>Equipe</option>
+                <option value="admin" ${p.papel === 'admin' ? 'selected' : ''}>Admin</option>
+            </select>
             <button type="button" class="ds-icon-btn ds-icon-btn--sm" data-tirar="${i}" title="Tirar da equipe" aria-label="Tirar da equipe">
                 <i data-lucide="x"></i>
             </button>
@@ -161,7 +166,7 @@ export const abrirEquipe = ({ equipe, aoSalvar }) => {
 
     openDrawer({
         title: 'Equipe',
-        subtitle: 'Quem pode ser marcado num pedido',
+        subtitle: 'Quem entra no Chronos e pode ser marcado num pedido',
         body: `
             <div class="pd-eq">
                 <div id="pd-eq-linhas"></div>
@@ -169,8 +174,8 @@ export const abrirEquipe = ({ equipe, aoSalvar }) => {
                     <i data-lucide="plus"></i> Adicionar pessoa
                 </button>
                 <p class="ds-hint"><i data-lucide="mail"></i>
-                    O email é para onde vão os avisos de pedido. Se a pessoa entra no Chronos com
-                    login próprio, use o mesmo email do login — o sistema passa a saber quem ela é.
+                    Use o email da conta Google da pessoa: é com ele que ela entra no Chronos, e é
+                    para ele que vão os avisos. Quem sai da lista perde o acesso.
                 </p>
                 <p class="pd-eq__erro" id="pd-eq-erro" hidden></p>
             </div>`,
@@ -185,6 +190,7 @@ export const abrirEquipe = ({ equipe, aoSalvar }) => {
                 const p = linhas[Number(el.dataset.i)];
                 p.nome = el.querySelector('[data-campo="nome"]').value.trim();
                 p.email = el.querySelector('[data-campo="email"]').value.trim();
+                p.papel = el.querySelector('[data-campo="papel"]').value;
             });
             const desenhar = () => {
                 caixa.innerHTML = linhas.map((p, i) => p.tirar ? '' : linhaHTML(p, i)).join('');
@@ -226,7 +232,8 @@ export const abrirEquipe = ({ equipe, aoSalvar }) => {
                     }
                     for (const p of validas) {
                         const { tirar, ...limpo } = p;
-                        await store.equipe.salvar({ ...limpo, email: limpo.email || null, ativo: true });
+                        await store.equipe.salvar({ ...limpo, email: limpo.email?.toLowerCase() || null,
+                                                    papel: limpo.papel || 'equipe', ativo: true });
                     }
                     closeDrawer();
                     toast('Equipe salva.');
@@ -278,19 +285,11 @@ export const pedidosDaDemandaHTML = (pedidos) => {
 };
 
 export function injectEstilosPedidos() {
+    injectEstilosAvatar();
     if (document.getElementById('pedidos-estilos')) return;
     const style = document.createElement('style');
     style.id = 'pedidos-estilos';
     style.textContent = `
-        .pd-avatar {
-            display: inline-grid; place-items: center; flex-shrink: 0;
-            width: var(--tam, 22px); height: var(--tam, 22px); border-radius: 50%;
-            background: var(--cor); color: #fff;
-            font-size: calc(var(--tam, 22px) * 0.42); font-weight: 700; letter-spacing: 0.02em;
-        }
-        .pd-avatares { display: inline-flex; }
-        .pd-avatares .pd-avatar + .pd-avatar { margin-left: -6px; }
-        .pd-avatares .pd-avatar { box-shadow: 0 0 0 2px var(--surface-1); }
         .pd-avatar--vazio {
             background: transparent; color: var(--text-disabled);
             border: 1px dashed var(--border-default);
@@ -298,11 +297,17 @@ export function injectEstilosPedidos() {
         .pd-avatar--vazio svg { width: 60%; height: 60%; }
 
         .pd-eq { display: flex; flex-direction: column; gap: var(--space-3); }
-        .pd-eq__linha { display: grid; grid-template-columns: 1fr 1.4fr auto; gap: var(--space-2); align-items: center; }
+        /* Nome e papel em cima, email inteiro embaixo: o email é o que mais
+           precisa ser lido por completo — é ele que abre a porta do login. */
+        .pd-eq__linha { display: grid; grid-template-columns: 1fr 110px auto; grid-template-areas: "nome papel tirar" "email email ."; gap: var(--space-2); align-items: center;
+            padding-bottom: var(--space-2); border-bottom: 1px solid var(--border-subtle); }
+        .pd-eq__linha [data-campo="nome"] { grid-area: nome; }
+        .pd-eq__linha [data-campo="email"] { grid-area: email; }
+        .pd-eq__linha [data-campo="papel"] { grid-area: papel; }
+        .pd-eq__linha [data-tirar] { grid-area: tirar; }
         #pd-eq-linhas { display: flex; flex-direction: column; gap: var(--space-2); }
         #pd-eq-mais { align-self: flex-start; }
         .pd-eq__erro { margin: 0; font-size: var(--text-sm); color: var(--danger); }
-        @media (max-width: 520px) { .pd-eq__linha { grid-template-columns: 1fr auto; } .pd-eq__linha [data-campo="email"] { grid-column: 1; } }
 
         .pd-regras {
             border: 1px solid var(--accent-border); border-radius: var(--radius-md);

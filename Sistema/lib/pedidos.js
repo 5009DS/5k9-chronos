@@ -70,6 +70,36 @@ export const lembrarEu = (id) => {
     catch { /* sem armazenamento: escolhe de novo na próxima */ }
 };
 
+/* ── QUEM MANDA ───────────────────────────────────────────────────────────
+   Admin organiza o mês e manda o aviso de "mês organizado". O login master
+   (email e senha do estúdio) é admin sem precisar estar na lista; em modo
+   local, sem login nenhum, todo mundo é. O servidor confere de novo do lado
+   dele (api/mes-organizado.js): isto aqui só decide o que a tela mostra. */
+export const souAdmin = (equipe) => {
+    if (!store.exigeLogin) return true;
+    const u = store.usuario();
+    if (!u) return false;
+    if (u.provedor === 'email') return true;
+    const email = (u.email || '').toLowerCase();
+    return equipe.some(p => p.ativo !== false && p.papel === 'admin' && (p.email || '').toLowerCase() === email);
+};
+
+/* ── QUEM SUBIU ───────────────────────────────────────────────────────────
+   `criado_por` é o email de quem criou (o banco preenche pelo login). Vira a
+   pessoa da equipe com esse email; um email que não está na equipe é o login
+   master, e aparece como "Estúdio". Conteúdo antigo não tem autor. */
+export const autorDe = (conteudo, equipe) => {
+    const email = (conteudo?.criado_por || '').toLowerCase();
+    if (!email) return null;
+    return equipe.find(p => (p.email || '').toLowerCase() === email) || { nome: 'Estúdio', email };
+};
+
+/** O círculo do autor, pequeno, com "Subido por …" no título. */
+export const autorHTML = (conteudo, equipe, { tamanho = 18 } = {}) => {
+    const p = autorDe(conteudo, equipe);
+    return p ? `<span class="pd-autor" title="Subido por ${esc(p.nome)}"><i data-lucide="arrow-up"></i>${avatarHTML(p, { tamanho })}</span>` : '';
+};
+
 /* ── A PESSOA EM UM CÍRCULO ───────────────────────────────────────────────
    Iniciais com uma cor que sai do nome: a mesma pessoa tem sempre a mesma cor,
    em qualquer tela, sem ninguém precisar escolher. */
@@ -148,3 +178,27 @@ export const avisarResponsaveis = async (pedido, pessoas, eu) => {
         toast('O pedido foi salvo, mas o email de aviso não saiu.');
     }
 };
+
+/* O círculo aparece fora da aba de Pedidos (quadro, demanda), então o estilo
+   dele mora aqui, junto de quem o desenha, e não no componente da aba. */
+export function injectEstilosAvatar() {
+    if (document.getElementById('pd-avatar-estilos')) return;
+    const style = document.createElement('style');
+    style.id = 'pd-avatar-estilos';
+    style.textContent = `
+        .pd-avatar {
+            display: inline-grid; place-items: center; flex-shrink: 0;
+            width: var(--tam, 22px); height: var(--tam, 22px); border-radius: 50%;
+            background: var(--cor); color: #fff;
+            font-size: calc(var(--tam, 22px) * 0.42); font-weight: 700; letter-spacing: 0.02em;
+        }
+        .pd-avatares { display: inline-flex; }
+        .pd-avatares .pd-avatar + .pd-avatar { margin-left: -6px; }
+        .pd-avatares .pd-avatar { box-shadow: 0 0 0 2px var(--surface-1); }
+        /* O autor é a pessoa com uma setinha para cima ("subiu"), mais apagada
+           que quem cuida: é história da demanda, não tarefa de ninguém. */
+        .pd-autor { display: inline-flex; align-items: center; gap: 1px; margin-left: auto; opacity: 0.75; color: var(--text-tertiary, var(--text-secondary)); }
+        .pd-autor > i, .pd-autor > svg { width: 11px; height: 11px; }
+    `;
+    document.head.appendChild(style);
+}

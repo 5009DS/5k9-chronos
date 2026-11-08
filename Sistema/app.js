@@ -186,6 +186,9 @@ Promise.all([
 ]).then(async () => {
     await roteador();
     adiantarTelas();
+    /* O aviso de "tema novo" escuta a criação de conteúdo em qualquer tela.
+       Fora da rota do cliente, que não cria nada e não deve baixar isto. */
+    if (!abrindoPublica) import('./lib/avisos.js').then(m => m.ligarAvisos()).catch(() => {});
     // Login/logout em outra aba, ou token expirado: reavalia a rota atual em
     // vez de deixar a tela desatualizada.
     store.aoMudarSessao(() => { caminhoCorrente = null; roteador(); });

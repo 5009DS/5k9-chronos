@@ -1,3 +1,5 @@
+import { lerEquipe } from '../lib/pedidos.js';
+import { PRIORIDADES, campoQuemCuida, avisarMarcados } from '../lib/tarefas.js';
 import { store } from '../store.js';
 import { renderShell } from '../components/pageshell.js';
 import { abrirFormulario } from '../components/campos.js';
@@ -1224,7 +1226,10 @@ function injectEstilosBanco() {
    "O que avaliar antes de começar" não tem sinal nenhum, e as nove falas
    abaixo dele têm todos. Quem abre a ficha pela tela do roteiro passa o texto;
    quem cria um conteúdo do zero ainda não tem o que passar. */
-export function formularioConteudo(c, cliente, mesSugerido, aoTerminar, etiquetasEmUso = [], textoDoRoteiro = '') {
+export async function formularioConteudo(c, cliente, mesSugerido, aoTerminar, etiquetasEmUso = [], textoDoRoteiro = '') {
+    // A equipe do Chronos vira o "Quem cuida"; sem ninguém cadastrado, vale o campo antigo.
+    const equipe = await lerEquipe();
+    const quemCuida = campoQuemCuida(equipe);
     const opcoesFase = [
         { valor: '', rotulo: '— escolha a fase —' },
         ...listarFases().map(f => ({ valor: f.id, rotulo: `${nomeFase(f.id)} — ${f.posicao_cronograma}` })),
@@ -1265,7 +1270,11 @@ export function formularioConteudo(c, cliente, mesSugerido, aoTerminar, etiqueta
                que é outro banco — chave estrangeira entre projetos não existe.
                Guardar o nome também faz o dado sobreviver à ponte desligada e a
                alguém sair da equipe: o histórico continua dizendo quem fez. */
-            ...(timeSalvo().length ? [{
+            { nome: 'prioridade', rotulo: 'Prioridade', tipo: 'select', largura: 'metade', opcoes: [
+                { valor: '', rotulo: '— sem prioridade —' },
+                ...PRIORIDADES.map(p => ({ valor: p.id, rotulo: p.nome })),
+              ] },
+            ...(quemCuida ? [quemCuida] : timeSalvo().length ? [{
                 nome: 'responsavel', rotulo: 'Responsável', tipo: 'select', largura: 'metade',
                 opcoes: [{ valor: '', rotulo: '— sem responsável —' },
                          ...timeSalvo().map(i => ({ valor: i.nome, rotulo: i.papel ? `${i.nome} · ${i.papel}` : i.nome }))],
@@ -1445,6 +1454,7 @@ export function formularioConteudo(c, cliente, mesSugerido, aoTerminar, etiqueta
                preservada. */
             const etapaNova = dados._etapa || null;
             const registro = Object.fromEntries(Object.entries(dados).filter(([k]) => !k.startsWith('_')));
+            registro.prioridade = dados.prioridade || null;
             /* Link colado de qualquer jeito vira endereço que abre. Vazio numa
                peça que nunca teve link não vai no registro: não há o que
                apagar, e a peça continua gravável mesmo antes da migração. */
@@ -1459,6 +1469,7 @@ export function formularioConteudo(c, cliente, mesSugerido, aoTerminar, etiqueta
                acompanha. Arrastar é outra coisa: lá a origem fica parada, e é
                a diferença entre as duas que revela o deslocamento. */
             let linha = await store.conteudos.salvar({ ...registro, cliente_id: cliente.id, data_original: dados.data });
+            if (quemCuida) avisarMarcados(linha, c?.responsaveis, equipe);
             if ((etapaAtual(linha.etiquetas)?.nome || null) !== etapaNova) {
                 await moverParaEtapa(linha, etapaNova);
             }

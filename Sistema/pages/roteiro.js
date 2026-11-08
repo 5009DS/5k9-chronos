@@ -15,7 +15,9 @@ import { etapasDa, etapaAtual, proximaEtapa, esteiraDe, chipEtiqueta, etiquetaMe
 import { moverParaEtapa, mensagemDeMovimento, etapaDeAprovacao } from '../lib/etapas.js';
 import { copiarMensagem, mensagemDaDemanda, linkDeConvidado, mensagemParaCliente } from '../lib/compartilhar.js';
 import { gerarToken } from '../store.js';
-import { lerDecisoes, lerPedidos } from '../lib/pedidos.js';
+import { lerDecisoes, lerPedidos, lerEquipe, autorDe, avataresHTML } from '../lib/pedidos.js';
+import { chipPrioridade, itensDePrioridade, responsaveisDoConteudo, checklistDe, campoQuemCuida, avisarMarcados, injectEstilosTarefas } from '../lib/tarefas.js';
+import { abrirFormulario } from '../components/campos.js';
 import { decisoesHTML, pedidosDaDemandaHTML, injectEstilosPedidos } from '../components/pedidos.js';
 import {
     conversas, estadoMeta, ato, daEquipe, textoOriginal, entradaDaEquipe,
@@ -53,10 +55,10 @@ import { formularioConteudo } from './cronograma.js';
    ═══════════════════════════════════════════════════════════════════════════ */
 
 export const renderRoteiro = async (container, conteudoId) => {
-    const [conteudos, clientes, todosBlocos, retornos, todasDecisoes, todosPedidos] = await Promise.all([
+    const [conteudos, clientes, todosBlocos, retornos, todasDecisoes, todosPedidos, equipe] = await Promise.all([
         store.conteudos.listar(), store.clientes.listar(),
         store.blocos.listar(), store.retornos.listar(),
-        lerDecisoes(), lerPedidos(),
+        lerDecisoes(), lerPedidos(), lerEquipe(),
     ]);
 
     /* O endereço pode ser o id cru (link antigo), o apelido com o mês certo,
@@ -199,7 +201,8 @@ export const renderRoteiro = async (container, conteudoId) => {
             { href: `/quadro/${c.cliente_id}`, label: cliente?.nome || 'Cliente' },
         ],
         title: c.titulo,
-        subtitle: `${cliente?.nome || 'Cliente removido'} · ${nomeDia(c.data)}, ${dataBR(c.data)} · ${quandoRelativo(c.data)}`,
+        subtitle: `${cliente?.nome || 'Cliente removido'} · ${nomeDia(c.data)}, ${dataBR(c.data)} · ${quandoRelativo(c.data)}`
+            + (autorDe(c, equipe) ? ` · subido por ${esc(autorDe(c, equipe).nome.split(' ')[0])}` : ''),
         actions: `
             <a class="ds-btn ds-btn--ghost ds-btn--sm" href="${esc(volta.href)}">
                 <i data-lucide="arrow-left"></i> ${esc(volta.rotulo)}
@@ -241,6 +244,7 @@ export const renderRoteiro = async (container, conteudoId) => {
     container.insertAdjacentHTML('beforeend', ESTILOS);
     injectEstilosEtiqueta();
     injectEstilosPedidos();
+    injectEstilosTarefas();
 
     const recarregar = () => renderRoteiro(container, c.id);
 
@@ -285,6 +289,8 @@ export const renderRoteiro = async (container, conteudoId) => {
                 ${explicacaoObjetivo(c.fase, c.objetivo)}
                 ${c.nota ? `<p class="rt-interna"><i data-lucide="lock"></i> ${esc(c.nota)}</p>` : ''}
             </article>
+
+            ${tarefaHTML()}
 
             ${historico.length ? `
                 <article class="ds-card vz-secao">
@@ -427,7 +433,86 @@ export const renderRoteiro = async (container, conteudoId) => {
     }
 
     // ─────────────────────────────────────────────────────────────────────
+    /* ── A DEMANDA COMO TAREFA ─────────────────────────────────────────
+       Prioridade, quem cuida e o checklist, num cartão só e enxuto: cada
+       um se muda com um clique, sem abrir a ficha inteira. */
+    function tarefaHTML() {
+        const quem = responsaveisDoConteudo(c, equipe);
+        const lista = checklistDe(c);
+        const feitos = lista.filter(i => i.feito).length;
+        return `
+            <article class="ds-card vz-secao rt-tarefa">
+                <div class="rt-tarefa__topo">
+                    <div class="rt-tarefa__campo">
+                        <span class="rt-tarefa__rotulo">Prioridade</span>
+                        <button class="rt-tarefa__valor" id="rt-prio" aria-haspopup="menu">
+                            ${chipPrioridade(c, { sempreComNome: true }) || '<span class="rt-tarefa__vazio"><i data-lucide="flag"></i>definir</span>'}
+                        </button>
+                    </div>
+                    ${campoQuemCuida(equipe) ? `
+                        <div class="rt-tarefa__campo">
+                            <span class="rt-tarefa__rotulo">Quem cuida</span>
+                            <button class="rt-tarefa__valor" id="rt-quem">
+                                ${quem.length
+                                    ? `${avataresHTML(quem, { tamanho: 22 })}<span>${esc(quem.map(p => p.nome.split(' ')[0]).join(', '))}</span>`
+                                    : '<span class="rt-tarefa__vazio"><i data-lucide="user-round-plus"></i>ninguém</span>'}
+                            </button>
+                        </div>` : ''}
+                </div>
+                <div class="rt-check">
+                    <div class="rt-check__cabeca">
+                        <span class="rt-tarefa__rotulo">Checklist${lista.length ? ` · ${feitos}/${lista.length}` : ''}</span>
+                        ${lista.length ? `<span class="rt-check__barra"><span style="width:${Math.round(feitos / lista.length * 100)}%"></span></span>` : ''}
+                    </div>
+                    ${lista.map(i => `
+                        <div class="rt-check__item ${i.feito ? 'is-feito' : ''}">
+                            <label><input type="checkbox" data-check="${esc(i.id)}" ${i.feito ? 'checked' : ''}><span>${esc(i.texto)}</span></label>
+                            <button class="ds-icon-btn ds-icon-btn--sm" data-check-tirar="${esc(i.id)}" aria-label="Tirar item" title="Tirar item"><i data-lucide="x"></i></button>
+                        </div>`).join('')}
+                    <input class="ds-input rt-check__novo" id="rt-check-novo" maxlength="200"
+                           placeholder="${lista.length ? 'Mais um item…' : 'Adicionar item: legenda, capa, trilha…'}" autocomplete="off">
+                </div>
+            </article>`;
+    }
+
+    async function salvarTarefa(mudanca) {
+        Object.assign(c, await store.conteudos.salvar({ ...c, ...mudanca }));
+        desenhar();
+    }
+
+    function ligarTarefa() {
+        content.querySelector('#rt-prio')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            abrirMenu(e.currentTarget, itensDePrioridade(c.prioridade, (v) => salvarTarefa({ prioridade: v })), { alinhar: 'esquerda' });
+        });
+        content.querySelector('#rt-quem')?.addEventListener('click', () => {
+            abrirFormulario({
+                titulo: 'Quem cuida', subtitulo: esc(c.titulo),
+                campos: [campoQuemCuida(equipe)],
+                valores: { responsaveis: c.responsaveis || [] },
+                aoSalvar: async ({ responsaveis }) => {
+                    const antes = c.responsaveis || [];
+                    await salvarTarefa({ responsaveis });
+                    avisarMarcados(c, antes, equipe);
+                },
+            });
+        });
+        content.querySelectorAll('[data-check]').forEach(el => el.addEventListener('change', () =>
+            salvarTarefa({ checklist: checklistDe(c).map(i => i.id === el.dataset.check ? { ...i, feito: el.checked } : i) })));
+        content.querySelectorAll('[data-check-tirar]').forEach(b => b.addEventListener('click', () =>
+            salvarTarefa({ checklist: checklistDe(c).filter(i => i.id !== b.dataset.checkTirar) })));
+        const novo = content.querySelector('#rt-check-novo');
+        novo?.addEventListener('keydown', async (e) => {
+            if (e.key !== 'Enter' || !novo.value.trim()) return;
+            e.preventDefault();
+            await salvarTarefa({ checklist: [...checklistDe(c), { id: crypto.randomUUID().slice(0, 8), texto: novo.value.trim(), feito: false }] });
+            // Continua digitando o próximo: a lista costuma ser feita de uma vez.
+            content.querySelector('#rt-check-novo')?.focus();
+        });
+    }
+
     function ligarEventos() {
+        ligarTarefa();
         content.querySelector('#rt-colar').addEventListener('click', abrirColar);
         content.querySelector('#rt-colar-vazio')?.addEventListener('click', abrirColar);
 
@@ -2347,6 +2432,34 @@ const ESTILOS = `
 /* Em modo de seleção o clique é para marcar. Os campos continuam editáveis —
    travá-los seria impedir a correção que a pessoa acabou de ver ao reler. */
 .rt-blocos--selecionando .rt-bloco { cursor: default; }
+
+
+/* ── A demanda como tarefa ── */
+.rt-tarefa { display: flex; flex-direction: column; gap: var(--space-4); }
+.rt-tarefa__topo { display: flex; flex-wrap: wrap; gap: var(--space-6); }
+.rt-tarefa__campo { display: flex; align-items: center; gap: var(--space-3); }
+.rt-tarefa__rotulo { font-size: var(--text-xs, 12px); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-tertiary, var(--text-secondary)); }
+.rt-tarefa__valor {
+    display: inline-flex; align-items: center; gap: var(--space-2);
+    padding: 4px 10px; border-radius: var(--radius-md); border: 1px solid transparent;
+    background: none; color: var(--text-primary); font: inherit; font-size: var(--text-sm); cursor: pointer;
+}
+.rt-tarefa__valor:hover { border-color: var(--border-subtle); background: var(--surface-2); }
+.rt-tarefa__valor .tf-prio { font-size: var(--text-sm); }
+.rt-tarefa__vazio { display: inline-flex; align-items: center; gap: 5px; color: var(--text-tertiary, var(--text-secondary)); }
+.rt-tarefa__vazio i, .rt-tarefa__vazio svg { width: 14px; height: 14px; }
+.rt-check { display: flex; flex-direction: column; gap: 4px; }
+.rt-check__cabeca { display: flex; align-items: center; gap: var(--space-3); margin-bottom: 4px; }
+.rt-check__barra { flex: 1; max-width: 160px; height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+.rt-check__barra span { display: block; height: 100%; background: var(--success, #10B981); transition: width var(--dur-fast, .15s); }
+.rt-check__item { display: flex; align-items: center; gap: var(--space-2); border-radius: var(--radius-sm, 6px); padding: 2px 4px; }
+.rt-check__item:hover { background: var(--surface-2); }
+.rt-check__item label { flex: 1; display: flex; align-items: center; gap: var(--space-2); cursor: pointer; font-size: var(--text-sm); }
+.rt-check__item input { accent-color: var(--accent); width: 15px; height: 15px; }
+.rt-check__item.is-feito span { text-decoration: line-through; color: var(--text-tertiary, var(--text-secondary)); }
+.rt-check__item [data-check-tirar] { opacity: 0; }
+.rt-check__item:hover [data-check-tirar], .rt-check__item [data-check-tirar]:focus-visible { opacity: 0.7; }
+.rt-check__novo { margin-top: 4px; font-size: var(--text-sm); }
 
 .rt-interna {
     display: flex; align-items: flex-start; gap: var(--space-2);

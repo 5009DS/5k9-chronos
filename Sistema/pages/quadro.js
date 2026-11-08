@@ -5,7 +5,10 @@ import { navegar, caminhoDoConteudo } from '../lib/rotas.js';
 import { ativarArraste } from '../lib/arrastar.js';
 import { nomeFase, noDiaCerto } from '../lib/diretorio.js';
 import { palavraTexto } from '../lib/roteiro.js';
-import { lerPedidos, aberto } from '../lib/pedidos.js';
+import { lerPedidos, lerEquipe, aberto, autorHTML, souAdmin, injectEstilosAvatar, euSou, ativos } from '../lib/pedidos.js';
+import { chipPrioridade, itensDePrioridade, prioridadeDe, pesoPrioridade, quemCuidaHTML, progressoHTML, campoQuemCuida, avisarMarcados, injectEstilosTarefas, PRIORIDADES } from '../lib/tarefas.js';
+import { abrirFormulario } from '../components/campos.js';
+import { abrirMesOrganizado } from '../lib/avisos.js';
 import { injectEstilosEtiqueta, chipsEstado, etapaAtual, etiquetaMeta, chipEtiqueta, ETAPAS, etapaNaEsteira, esteiraDe } from '../lib/etiquetas.js';
 import { moverParaEtapa, mensagemDeMovimento, itensDeEtapa } from '../lib/etapas.js';
 import { enviarNoWhatsApp, copiarMensagem } from '../lib/compartilhar.js';
@@ -85,9 +88,10 @@ const vagaDoDia = (iso) => VAGAS.find(v => v.dias.includes(indiceDia(iso))) || V
  *   movimento, e ela perdia o lugar no meio do trabalho.
  */
 export const renderQuadro = async (container, clienteId, mesInicial = null) => {
-    const [{ cliente, conteudos: todos, blocos }, pedidos] = await Promise.all([
-        store.doCliente(clienteId), lerPedidos(),
+    const [{ cliente, conteudos: todos, blocos }, pedidos, equipe] = await Promise.all([
+        store.doCliente(clienteId), lerPedidos(), lerEquipe(),
     ]);
+    const admin = souAdmin(equipe);
     const pedidosAbertos = pedidos.filter(p => p.cliente_id === clienteId && aberto(p));
     const comRoteiro = new Set((blocos || []).map(b => b.conteudo_id));
     // Quantos blocos cada peça tem — o chip de formato mostra se há texto.
@@ -124,8 +128,12 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
     aoEsc = () => { if (marcados.size) { marcados.clear(); desenhar(); } };
     let soltarArraste = null;
 
-    let { filtro = 'tudo', formato = 'tudo' } = FILTRO_ABERTO.get(clienteId) || {};
-    const lembrarFiltro = () => FILTRO_ABERTO.set(clienteId, { filtro, formato });
+    /* Prioridade e pessoa: os filtros que vieram com a demanda-tarefa.
+       `prio` é 'tudo', 'urgente' ou 'alta' (alta OU urgente); `pessoa` é
+       'tudo', 'eu', 'ninguem' ou o id de alguém da equipe. */
+    let { filtro = 'tudo', formato = 'tudo', prio = 'tudo', pessoa = 'tudo' } = FILTRO_ABERTO.get(clienteId) || {};
+    const lembrarFiltro = () => FILTRO_ABERTO.set(clienteId, { filtro, formato, prio, pessoa });
+    const eu = euSou(equipe).pessoa;
 
     /* ── A TELA PRINCIPAL DO CLIENTE ───────────────────────────────────────
        O quadro virou a porta de entrada do cliente — é a tela que mostra o
@@ -149,6 +157,10 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
             <button class="ds-btn ds-btn--primary" id="qd-novo">
                 <i data-lucide="plus"></i> Novo conteúdo
             </button>
+            ${admin ? `
+                <button class="ds-btn ds-btn--ghost" id="qd-organizado" title="Avisa a equipe por email que este mês está distribuído, com a lista dia a dia">
+                    <i data-lucide="calendar-check"></i> Mês organizado
+                </button>` : ''}
             <button class="ds-icon-btn" id="qd-mais-acoes" aria-label="Mais ações" aria-haspopup="menu" title="Mais ações">
                 <i data-lucide="ellipsis"></i>
             </button>`,
@@ -156,6 +168,8 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
 
     container.insertAdjacentHTML('beforeend', ESTILOS);
     injectEstilosEtiqueta();
+    injectEstilosAvatar();
+    injectEstilosTarefas();
 
     // Leva o mês junto: o redesenho depois de uma troca precisa voltar para
     // onde a pessoa estava, não para o mês corrente.
@@ -170,6 +184,9 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
     const etiquetasEmUso = [...new Set(todos.flatMap(c => c.etiquetas || []))];
     document.getElementById('qd-novo')?.addEventListener('click',
         () => formularioConteudo(null, cliente, mes, recarregar, etiquetasEmUso));
+
+    document.getElementById('qd-organizado')?.addEventListener('click',
+        () => abrirMesOrganizado({ cliente, mes, conteudos: todos, equipe }));
 
     document.getElementById('qd-mais-acoes')?.addEventListener('click', (e) => {
         e.stopPropagation();   // o menu se fecha em qualquer clique no documento
@@ -311,6 +328,34 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
         recarregar();
     }
 
+    /** A mesma prioridade para um ou vários, com um desfazer só. */
+    async function prioridadeEmGrupo(ids, valor) {
+        const grupo = ids.map(id => todos.find(x => x.id === id)).filter(c => c && (c.prioridade || null) !== valor);
+        if (!grupo.length) return;
+        const nome = PRIORIDADES.find(p => p.id === valor)?.nome.toLowerCase();
+        await aplicar({
+            alterados: grupo.map(c => ({ ...c, prioridade: valor })),
+            desfazer: grupo.map(c => ({ ...c })),
+        }, grupo.length === 1
+            ? `"${curto(grupo[0].titulo)}" ${nome ? `agora é prioridade ${nome}` : 'ficou sem prioridade'}.`
+            : `${grupo.length} conteúdos ${nome ? `com prioridade ${nome}` : 'sem prioridade'}.`);
+        if (marcados.size) { marcados.clear(); }
+    }
+
+    /** "Quem cuida" de uma demanda, sem abrir a ficha inteira. */
+    function abrirQuemCuida(alvo) {
+        abrirFormulario({
+            titulo: 'Quem cuida', subtitulo: esc(alvo.titulo),
+            campos: [campoQuemCuida(equipe)],
+            valores: { responsaveis: alvo.responsaveis || [] },
+            aoSalvar: async ({ responsaveis }) => {
+                const linha = await store.conteudos.salvar({ ...alvo, responsaveis });
+                avisarMarcados(linha, alvo.responsaveis, equipe);
+                recarregar();
+            },
+        });
+    }
+
     /** Troca dois conteúdos de data. É o caminho da seleção, sem arraste. */
     async function trocarSelecionados(idA, idB) {
         const a = conteudos.find(x => x.id === idA);
@@ -360,6 +405,17 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
                                 ${f.id !== 'tudo' ? `<span class="cr-filtro__conta">${porFormato[f.id]}</span>` : ''}
                             </button>`).join('')}
                     </div>` : ''}
+                <div class="vz-filtros qd-filtros-tarefa">
+                    <button class="vz-filtro ${prio !== 'tudo' ? 'is-active' : ''}" id="qd-f-prio" aria-haspopup="menu">
+                        <i data-lucide="flag"></i>${prio === 'tudo' ? 'Prioridade' : prio === 'urgente' ? 'Urgente' : 'Alta ou mais'}
+                        <i data-lucide="chevron-down" class="qd-filtro__seta"></i>
+                    </button>
+                    ${ativos(equipe).length ? `
+                        <button class="vz-filtro ${pessoa !== 'tudo' ? 'is-active' : ''}" id="qd-f-pessoa" aria-haspopup="menu">
+                            <i data-lucide="user-round"></i>${esc(rotuloPessoa())}
+                            <i data-lucide="chevron-down" class="qd-filtro__seta"></i>
+                        </button>` : ''}
+                </div>
             </article>
 
             ${/* O aviso de liberar, numa linha só: é lembrete, não cartão. */''}
@@ -452,6 +508,7 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
                                         title="Devolver para o dia em que estava">
                                     <i data-lucide="corner-up-left"></i> ${esc(diaCurto(c.data))}
                                 </button>
+                                ${autorHTML(c, equipe)}
                             </div>
                         </div>
                     </article>`).join('')}
@@ -502,7 +559,22 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
        grade, um cartão que some muda a leitura da semana inteira — a vaga
        parece vazia e não está. Apagado, o lugar continua ocupado à vista. */
     const passa = (c) => (filtro === 'tudo' || c.status === filtro)
-                      && (formato === 'tudo' || esteiraDe(c.formato) === formato);
+                      && (formato === 'tudo' || esteiraDe(c.formato) === formato)
+                      && (prio === 'tudo' || (prio === 'urgente' ? c.prioridade === 'urgente' : pesoPrioridade(c) >= 3))
+                      && passaPessoa(c);
+    const passaPessoa = (c) => {
+        const r = c.responsaveis || [];
+        if (pessoa === 'tudo') return true;
+        if (pessoa === 'ninguem') return !r.length;
+        if (pessoa === 'eu') return !!eu && r.includes(eu.id);
+        return r.includes(pessoa);
+    };
+    function rotuloPessoa() {
+        if (pessoa === 'tudo') return 'Pessoa';
+        if (pessoa === 'eu') return 'Comigo';
+        if (pessoa === 'ninguem') return 'Sem ninguém';
+        return equipe.find(p => p.id === pessoa)?.nome.split(' ')[0] || 'Pessoa';
+    }
 
     /* O formato ao lado da fase: com dois caminhos de produção, "é reels ou
        carrossel?" é a primeira pergunta sobre uma demanda em aberto. */
@@ -553,7 +625,7 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
 
         const marcado = marcados.has(c.id);
         return `
-            <article class="qd-cartao ${escolhido ? 'is-escolhido' : ''} ${marcado ? 'is-marcado' : ''} ${foraDeFase ? 'qd-cartao--fora' : ''} ${apagado}"
+            <article class="qd-cartao ${escolhido ? 'is-escolhido' : ''} ${marcado ? 'is-marcado' : ''} ${foraDeFase ? 'qd-cartao--fora' : ''} ${apagado} ${prioridadeDe(c) ? `qd-cartao--prio-${c.prioridade}` : ''}"
                      data-arrastavel="${esc(c.id)}" data-cartao="${esc(c.id)}" data-solta="${semData ? 'semdata' : `dia:${esc(c.data)}`}"
                      ${marcado && marcados.size > 1 ? `data-lote="${marcados.size}"` : ''}>
                 <div class="qd-cartao__corpo">
@@ -584,6 +656,9 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
                         </button>
                         ${c.status === 'ajuste' ? '<span class="vz-etiqueta vz-etiqueta--risco"><i data-lucide="message-circle-warning"></i>ajuste pedido</span>' : ''}
                         ${outras.map(chipEtiqueta).join('')}
+                        ${chipPrioridade(c)}
+                        ${progressoHTML(c)}
+                        <span class="qd-cartao__pessoas">${quemCuidaHTML(c, equipe)}${autorHTML(c, equipe)}</span>
                     </div>
                 </div>
                 ${/* A coluna da direita: o menu em cima e, quando há link, a
@@ -623,6 +698,9 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
             <span class="qd-lote__sep"></span>
             <button class="ds-btn ds-btn--ghost ds-btn--sm" id="qd-lote-etapa" aria-haspopup="menu">
                 <i data-lucide="git-commit-horizontal"></i> Etapa
+            </button>
+            <button class="ds-btn ds-btn--ghost ds-btn--sm" id="qd-lote-prio" aria-haspopup="menu">
+                <i data-lucide="flag"></i> Prioridade
             </button>
             <button class="ds-btn ds-btn--ghost ds-btn--sm" id="qd-lote-semdata">
                 <i data-lucide="calendar-clock"></i> Sem data
@@ -745,6 +823,33 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
             b.addEventListener('click', () => { filtro = b.dataset.filtro; lembrarFiltro(); desenhar(); }));
         content.querySelectorAll('[data-formato]').forEach(b =>
             b.addEventListener('click', () => { formato = b.dataset.formato; lembrarFiltro(); desenhar(); }));
+        content.querySelector('#qd-f-prio')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const escolher = (v) => () => { prio = v; lembrarFiltro(); desenhar(); };
+            abrirMenu(e.currentTarget, [
+                { id: 'p-tudo', icon: 'flag', label: `Toda prioridade${prio === 'tudo' ? ' ✓' : ''}`, onClick: escolher('tudo') },
+                { id: 'p-urg', icon: 'flag', label: `<span style="color:#EF4444">Só urgente</span>${prio === 'urgente' ? ' ✓' : ''}`, onClick: escolher('urgente') },
+                { id: 'p-alta', icon: 'flag', label: `<span style="color:#F59E0B">Alta ou urgente</span>${prio === 'alta' ? ' ✓' : ''}`, onClick: escolher('alta') },
+            ], { alinhar: 'esquerda' });
+        });
+        content.querySelector('#qd-f-pessoa')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const escolher = (v) => () => { pessoa = v; lembrarFiltro(); desenhar(); };
+            const marca = (v) => pessoa === v ? ' ✓' : '';
+            abrirMenu(e.currentTarget, [
+                { id: 'pe-tudo', icon: 'users', label: `Todo mundo${marca('tudo')}`, onClick: escolher('tudo') },
+                ...(eu ? [{ id: 'pe-eu', icon: 'user-round-check', label: `Comigo${marca('eu')}`, onClick: escolher('eu') }] : []),
+                ...ativos(equipe).filter(p => p.id !== eu?.id).map((p, i) => ({
+                    id: `pe-${p.id}`, icon: 'user-round', separadorAntes: i === 0,
+                    label: `${esc(p.nome.split(' ')[0])}${marca(p.id)}`, onClick: escolher(p.id) })),
+                { id: 'pe-ninguem', icon: 'user-round-x', separadorAntes: true,
+                  label: `Sem ninguém${marca('ninguem')}`, onClick: escolher('ninguem') },
+            ], { alinhar: 'esquerda' });
+        });
+        content.querySelector('#qd-lote-prio')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            abrirMenu(e.currentTarget, itensDePrioridade(null, (v) => prioridadeEmGrupo([...marcados], v)));
+        });
         content.querySelector('#qd-liberar')?.addEventListener('click', () =>
             abrirLiberar(cliente, conteudos.filter(c => chaveMes(c.data) === mes && c.status === 'rascunho' && !aguardaData(c)),
                 comRoteiro, recarregar));
@@ -838,7 +943,12 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
                           : 'Link copiado. Esta demanda ainda não tem link do Drive.') },
                     { id: 'whats', label: 'Enviar no WhatsApp', icon: 'message-circle',
                       onClick: () => enviarNoWhatsApp(alvo, cliente) },
-                    { id: 'trocar', label: 'Trocar de lugar com…', icon: 'arrow-left-right',
+                    { id: 'prio', label: 'Prioridade…', icon: 'flag', separadorAntes: true,
+                      onClick: () => setTimeout(() => abrirMenu(b, itensDePrioridade(alvo.prioridade,
+                          (v) => prioridadeEmGrupo([alvo.id], v))), 0) },
+                    ...(campoQuemCuida(equipe) ? [{ id: 'quem', label: 'Quem cuida…', icon: 'users',
+                      onClick: () => abrirQuemCuida(alvo) }] : []),
+                    { id: 'trocar', label: 'Trocar de lugar com…', icon: 'arrow-left-right', separadorAntes: true,
                       onClick: () => { selecionado = id; desenhar(); } },
                     aguardaData(alvo)
                         ? { id: 'semdata', label: 'Voltar para o dia que tinha', icon: 'calendar-check',
@@ -1136,6 +1246,16 @@ html[data-theme="light"] .qd-lote__dia input { color-scheme: light; }
 .qd-cartao__titulo a { color: var(--text-primary); text-decoration: none; }
 .qd-cartao__titulo a:hover { text-decoration: underline; text-underline-offset: 2px; }
 .qd-cartao__pe { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+/* As pessoas do cartão na ponta direita: quem cuida, e o autor com a setinha. */
+.qd-cartao__pessoas { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+.qd-cartao__pessoas:empty { display: none; }
+.qd-cartao__pessoas .pd-autor { margin-left: 0; }
+/* Urgente marca a borda esquerda: a primeira coisa que o olho acha na grade. */
+.qd-cartao--prio-urgente { box-shadow: inset 3px 0 0 #EF4444; }
+.qd-cartao--prio-alta { box-shadow: inset 3px 0 0 #F59E0B; }
+.qd-filtros-tarefa .vz-filtro { display: inline-flex; align-items: center; gap: 5px; }
+.qd-filtros-tarefa .vz-filtro > i, .qd-filtros-tarefa .vz-filtro > svg { width: 14px; height: 14px; }
+.qd-filtro__seta { opacity: 0.6; }
 .qd-cartao__mais { flex-shrink: 0; opacity: 0.55; transition: opacity var(--dur-fast); }
 .qd-cartao:hover .qd-cartao__mais, .qd-cartao__mais:focus-visible, .qd-cartao.is-escolhido .qd-cartao__mais { opacity: 1; }
 

@@ -1,5 +1,6 @@
 import { store } from '../store.js';
 import { navegar } from '../lib/rotas.js';
+import { esc } from '../lib/formato.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    LOGIN — só existe quando há banco configurado.
@@ -20,8 +21,22 @@ export const renderLogin = async (container) => {
 
                 <div class="lg__texto">
                     <h1 class="ds-card-title">Chronos</h1>
-                    <p class="ds-card-sub">Cronograma e roteiros. Entre com a conta do estúdio.</p>
+                    <p class="ds-card-sub">Cronograma e roteiros.</p>
                 </div>
+
+                <p class="lg__erro" id="lg-erro" ${store.erroDeLogin() ? '' : 'hidden'}>${esc(store.erroDeLogin() || '')}</p>
+
+                ${/* Cada um da equipe entra com a própria conta Google — é o
+                      que deixa o sistema saber quem subiu cada coisa. O email
+                      e a senha ficam para o login master do estúdio. */''}
+                <button class="ds-btn lg__google" type="button" id="lg-google">
+                    <svg viewBox="0 0 18 18" width="18" height="18" aria-hidden="true"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.97 10.72A5.4 5.4 0 0 1 3.68 9c0-.6.1-1.18.29-1.72V4.95H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.05l3.01-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z"/></svg>
+                    Entrar com Google
+                </button>
+
+                <details class="lg__master" id="lg-master">
+                    <summary>Entrar com email e senha do estúdio</summary>
+                    <div class="lg__master-campos">
 
                 <label class="lg__campo">
                     <span>E-mail</span>
@@ -35,9 +50,9 @@ export const renderLogin = async (container) => {
                            autocomplete="current-password" placeholder="••••••••">
                 </label>
 
-                <p class="lg__erro" id="lg-erro" hidden></p>
-
                 <button class="ds-btn ds-btn--primary lg__entrar" type="submit" id="lg-btn">Entrar</button>
+                    </div>
+                </details>
             </form>
         </div>
         ${ESTILOS}
@@ -46,6 +61,22 @@ export const renderLogin = async (container) => {
     const form = document.getElementById('lg-form');
     const erro = document.getElementById('lg-erro');
     const btn  = document.getElementById('lg-btn');
+
+    const google = document.getElementById('lg-google');
+    google.addEventListener('click', async () => {
+        erro.hidden = true;
+        google.disabled = true;
+        google.lastChild.textContent = ' Abrindo o Google…';
+        const { error } = await store.entrarComGoogle();
+        // Sem erro, o navegador já está indo para o Google.
+        if (error) {
+            console.error('[login] google:', error);
+            erro.textContent = 'O login com Google não está disponível agora. Use o email e a senha do estúdio.';
+            erro.hidden = false;
+            google.disabled = false;
+            google.lastChild.textContent = ' Entrar com Google';
+        }
+    });
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -107,6 +138,22 @@ html[data-theme="light"] .lg__logo { content: url("/assets/logo/5k9-lockup-stack
 .lg__campo { display: flex; flex-direction: column; gap: var(--space-2); }
 .lg__campo span { font-size: var(--text-sm); font-weight: 500; color: var(--text-secondary); }
 .lg__entrar { width: 100%; margin-top: var(--space-1); }
+
+.lg__google {
+    width: 100%; justify-content: center; gap: var(--space-3);
+    background: #fff; color: #1f1f1f; border: 1px solid #dadce0; font-weight: 600;
+}
+.lg__google:hover:not(:disabled) { background: #f6f7f8; }
+.lg__google svg { flex: none; }
+
+.lg__master { border-top: 1px solid var(--border-subtle); padding-top: var(--space-4); }
+.lg__master summary {
+    cursor: pointer; list-style: none; text-align: center;
+    font-size: var(--text-sm); color: var(--text-secondary);
+}
+.lg__master summary::-webkit-details-marker { display: none; }
+.lg__master summary:hover { color: var(--text-primary); }
+.lg__master-campos { display: flex; flex-direction: column; gap: var(--space-4); margin-top: var(--space-4); }
 
 .lg__erro {
     margin: 0; padding: var(--space-3) var(--space-4);

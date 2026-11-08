@@ -13,7 +13,8 @@
    ── POR QUE A SERVICE ROLE ───────────────────────────────────────────────
    Às 8h ninguém está logado para emprestar a sessão, como acontece em
    avisar.js. A função lê o banco com a chave de serviço, que fica só na
-   Vercel, e lê apenas três tabelas: equipe, pedidos e clientes.
+   Vercel, e lê apenas quatro tabelas: equipe, pedidos, clientes e — para os
+   temas novos que ficaram sem aviso — conteúdos.
 
    ── QUEM PODE DISPARAR ────────────────────────────────────────────────────
    Só a própria Vercel: ela manda CRON_SECRET no cabeçalho, e sem ele a
@@ -21,7 +22,7 @@
    encher a caixa da equipe.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-const { hojeBR, ler, enviar, moldura, linhaPedido, esc } = require('./_avisos.js');
+const { hojeBR, ler, atualizar, enviar, moldura, linhaPedido, esc, emailsDeTemas } = require('./_avisos.js');
 
 /** Agrupa os pedidos abertos de cada pessoa. Exportado para teste. */
 const montarResumos = ({ equipe, pedidos, clientes, hoje }) => {
@@ -97,6 +98,24 @@ module.exports = async (req, res) => {
                 resultado.push({ para: r.pessoa.nome, enviado: false, erro: e.message });
             }
         }
+
+        /* Temas que ficaram sem aviso: a aba fechou antes do aviso sair, ou o
+           envio falhou. Saem agora, um email por autor, para todos menos ele.
+           Dez minutos de folga para não atropelar quem está subindo agora. */
+        const antes = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+        const temas = await atualizar(
+            `vz_conteudos?avisado_em=is.null&criado_por=not.is.null&criado_em=lt.${encodeURIComponent(antes)}`
+            + '&select=id,cliente_id,titulo,data,formato,banco_em,etiquetas,criado_por',
+            chave, { avisado_em: new Date().toISOString() }).catch(e => {
+                // Sem a coluna (migração não rodada), o resumo dos pedidos segue.
+                console.warn('[resumo-diario] temas:', e.message);
+                return [];
+            });
+        for (const email of temas.length ? emailsDeTemas({ temas, equipe, clientes, host }) : []) {
+            try { await enviar(email); resultado.push({ para: email.para, temas: true, enviado: true }); }
+            catch (e) { resultado.push({ para: email.para, temas: true, enviado: false, erro: e.message }); }
+        }
+
         return res.status(200).json({ hoje, resultado });
     } catch (e) {
         console.error('[resumo-diario]', e);
