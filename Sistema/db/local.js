@@ -68,6 +68,9 @@ export const local = {
             // vz_pedidos.conteudo_id é `on delete set null`: o pedido fica.
             gravar('pedidos', ler('pedidos').map(p => p.conteudo_id === id ? { ...p, conteudo_id: null } : p));
         }
+        if (colecao === 'comentarios') {
+            gravar('comentarios', ler('comentarios').filter(c => c.resposta_a !== id));
+        }
         if (colecao === 'equipe') {
             gravar('pedidos', ler('pedidos').map(p => ({ ...p,
                 responsavel_id: p.responsavel_id === id ? null : p.responsavel_id,

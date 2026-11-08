@@ -154,6 +154,10 @@ const cascatearNoCache = (nome, id) => {
             responsavel_id: p.responsavel_id === id ? null : p.responsavel_id,
             responsaveis: (p.responsaveis || []).filter(r => r !== id) })));
     }
+    if (nome === "comentarios") {
+        // on delete cascade: as respostas vão junto com o comentário.
+        mexerNoCache("comentarios", (l) => l.filter(c => c.resposta_a !== id));
+    }
     if (nome === "blocos") {
         // on delete set null: o retorno fica, sem a fala que ele comentava.
         mexerNoCache("retornos", (l) => l.map(r => r.bloco_id === id ? { ...r, bloco_id: null } : r));
@@ -178,7 +182,7 @@ const COLECOES = ['clientes', 'conteudos', 'blocos', 'retornos'];
    precisam delas, e somá-las ali seria uma consulta a mais em toda tela. Mas
    entram na cópia de segurança — perder os pedidos é perder a memória que
    elas existem para guardar. */
-const COLECOES_PEDIDOS = ['equipe', 'pedidos', 'decisoes'];
+const COLECOES_PEDIDOS = ['equipe', 'pedidos', 'decisoes', 'comentarios'];
 
 const colecao = (nome) => ({
     listar: () => comCache(nome, () => db.listar(nome)),
@@ -345,6 +349,7 @@ export const store = {
     equipe:    colecao('equipe'),
     pedidos:   colecao('pedidos'),
     decisoes:  colecao('decisoes'),
+    comentarios: colecao('comentarios'),
 
     /** Tudo de uma vez, em paralelo — é o que o painel consome. */
     tudo: async () => {

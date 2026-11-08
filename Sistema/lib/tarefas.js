@@ -2,6 +2,7 @@ import { store } from '../store.js';
 import { toast } from '../components/toast.js';
 import { esc } from './formato.js';
 import { avataresHTML, ativos } from './pedidos.js';
+import { etapaAtual, ETIQUETA_SUGESTAO } from './etiquetas.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    A DEMANDA COMO TAREFA — prioridade, quem cuida e checklist.
@@ -97,6 +98,28 @@ export const campoQuemCuida = (equipe) => {
                                   prefixo: avataresHTML([p], { tamanho: 18 }) })),
         dica: 'Quem você marcar recebe um email.',
     } : null;
+};
+
+/* ── SUGESTÃO ────────────────────────────────────────────────────────────
+   A pauta sugerida deixa de ser sugestão quando alguém decide o que fazer
+   com ela: marca quem cuida, ou põe num dia do calendário. */
+export const ehSugestao = (c) => (c?.etiquetas || []).some(e => String(e).trim().toLowerCase() === ETIQUETA_SUGESTAO);
+export const semSugestao = (etiquetas) => (etiquetas || []).filter(e => String(e).trim().toLowerCase() !== ETIQUETA_SUGESTAO);
+
+/* ── A DEMANDA NO QUADRO DE PEDIDOS ──────────────────────────────────────
+   Toda demanda com alguém em "Quem cuida" aparece também em Pedidos, para a
+   pergunta "o que falta cada um fazer" ter uma tela só. A coluna sai da
+   etapa — não existe um segundo status para manter em dia:
+     sem etapa (rascunho, banco)            → Novo
+     produzindo (roteiro, gravação, arte)   → Fazendo
+     esperando a aprovação do cliente       → Entregue
+     pronto para publicar ou publicado      → Confirmado */
+export const colunaDaDemanda = (c) => {
+    const etapa = etapaAtual(c?.etiquetas)?.nome || null;
+    if (!etapa) return 'novo';
+    if (etapa === 'pronto para publicar' || etapa === 'publicado') return 'confirmado';
+    if (/aprovação/.test(etapa) && c.status !== 'ajuste') return 'entregue';
+    return 'fazendo';
 };
 
 /* ── CHECKLIST ────────────────────────────────────────────────────────────

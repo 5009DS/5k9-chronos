@@ -46,6 +46,7 @@ const TABELAS = {
     equipe:    'vz_equipe',
     pedidos:   'vz_pedidos',
     decisoes:  'vz_decisoes',
+    comentarios: 'vz_comentarios',
 };
 
 const tabela = (colecao) => TABELAS[colecao] || colecao;

@@ -83,7 +83,7 @@ module.exports = async (req, res) => {
                         </table>
                         ${pedido.detalhe ? `
                             <div style="border-left:3px solid #d9c4ff;padding:4px 0 4px 12px;color:#3d3d48;font-size:14px;white-space:pre-wrap;">${esc(pedido.detalhe.slice(0, 1500))}</div>` : ''}`,
-                    botao: { href: `${host}/pedidos/${encodeURIComponent(pedido.cliente_id)}`, rotulo: 'Abrir os pedidos' },
+                    botao: { href: `${host}/pedidos/${encodeURIComponent(pedido.cliente_id)}?abrir=${encodeURIComponent(pedido.id)}`, rotulo: 'Abrir o pedido' },
                 }),
                 texto: `${de ? `${de} te marcou` : 'Você foi marcado'} num pedido de ${nomeCliente}:\n\n`
                      + `${pedido.texto}\nPrazo: ${prazo}\n\n${host}/pedidos/${pedido.cliente_id}`,

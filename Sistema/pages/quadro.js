@@ -6,7 +6,7 @@ import { ativarArraste } from '../lib/arrastar.js';
 import { nomeFase, noDiaCerto } from '../lib/diretorio.js';
 import { palavraTexto } from '../lib/roteiro.js';
 import { lerPedidos, lerEquipe, aberto, autorHTML, souAdmin, injectEstilosAvatar, euSou, ativos } from '../lib/pedidos.js';
-import { chipPrioridade, itensDePrioridade, prioridadeDe, pesoPrioridade, quemCuidaHTML, progressoHTML, campoQuemCuida, avisarMarcados, injectEstilosTarefas, PRIORIDADES } from '../lib/tarefas.js';
+import { chipPrioridade, itensDePrioridade, prioridadeDe, pesoPrioridade, quemCuidaHTML, progressoHTML, campoQuemCuida, avisarMarcados, injectEstilosTarefas, PRIORIDADES, ehSugestao, semSugestao } from '../lib/tarefas.js';
 import { abrirFormulario } from '../components/campos.js';
 import { abrirMesOrganizado } from '../lib/avisos.js';
 import { injectEstilosEtiqueta, chipsEstado, etapaAtual, etiquetaMeta, chipEtiqueta, ETAPAS, etapaNaEsteira, esteiraDe } from '../lib/etiquetas.js';
@@ -296,7 +296,7 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
            "saiu do lugar" falaria de uma mudança que ninguém fez. */
         const movimentos = grupo.map(c => c.banco_em
             ? { alterados: [{ ...c, banco_em: null, data: dia, data_original: dia,
-                              etiquetas: comPendencia(c.etiquetas, AGUARDANDO_DATA, false) }],
+                              etiquetas: semSugestao(comPendencia(c.etiquetas, AGUARDANDO_DATA, false)) }],
                 desfazer: [{ ...c }] }
             : moverPara(c, dia));
         const juntos = conteudos.filter(x => !ids.includes(x.id) && x.data === dia && !aguardaData(x)).length;
@@ -349,7 +349,9 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
             campos: [campoQuemCuida(equipe)],
             valores: { responsaveis: alvo.responsaveis || [] },
             aoSalvar: async ({ responsaveis }) => {
-                const linha = await store.conteudos.salvar({ ...alvo, responsaveis });
+                // Marcar alguém é a decisão sobre a pauta: ela deixa de ser sugestão.
+                const linha = await store.conteudos.salvar({ ...alvo, responsaveis,
+                    etiquetas: responsaveis.length ? semSugestao(alvo.etiquetas) : alvo.etiquetas });
                 avisarMarcados(linha, alvo.responsaveis, equipe);
                 recarregar();
             },
@@ -493,8 +495,25 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
                 </button>
             </header>
             <div class="qd-banco__lista">
-                ${noBanco.map(c => `
-                    <article class="qd-cartao qd-banco__item" data-arrastavel="${esc(c.id)}">
+                ${(() => {
+                    /* As sugestões vêm primeiro e em destaque: no meio de
+                       cinquenta temas guardados, pauta nova sumia. */
+                    const sugestoes = noBanco.filter(ehSugestao);
+                    const guardados = noBanco.filter(c => !ehSugestao(c));
+                    return (sugestoes.length ? `
+                        <h3 class="qd-banco__grupo qd-banco__grupo--sugestao">
+                            <i data-lucide="lightbulb"></i> Sugestões para analisar <span>${sugestoes.length}</span>
+                        </h3>
+                        <p class="qd-banco__grupo-dica">Saem daqui quando alguém é marcado para cuidar ou ganham um dia no quadro.</p>
+                        ${sugestoes.map(itemBanco).join('')}
+                        ${guardados.length ? `<h3 class="qd-banco__grupo"><i data-lucide="archive"></i> Guardados <span>${guardados.length}</span></h3>` : ''}` : '')
+                        + guardados.map(itemBanco).join('');
+                })()}
+            </div>
+        </aside>`;
+
+    const itemBanco = (c) => `
+                    <article class="qd-cartao qd-banco__item ${ehSugestao(c) ? 'qd-banco__item--sugestao' : ''}" data-arrastavel="${esc(c.id)}">
                         <div class="qd-cartao__corpo">
                             <div class="qd-cartao__topo">
                                 ${chipFase(c.fase, { curto: true })}
@@ -508,12 +527,11 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
                                         title="Devolver para o dia em que estava">
                                     <i data-lucide="corner-up-left"></i> ${esc(diaCurto(c.data))}
                                 </button>
-                                ${autorHTML(c, equipe)}
+                                ${chipPrioridade(c)}
+                                <span class="qd-cartao__pessoas">${quemCuidaHTML(c, equipe)}${autorHTML(c, equipe)}</span>
                             </div>
                         </div>
-                    </article>`).join('')}
-            </div>
-        </aside>`;
+                    </article>`;
 
     /* ── SEM DATA ─────────────────────────────────────────────────────────
        A gaveta do que já foi gravado (ou escrito) e ainda não tem dia. Antes
@@ -1247,6 +1265,17 @@ html[data-theme="light"] .qd-lote__dia input { color-scheme: light; }
 .qd-cartao__titulo a:hover { text-decoration: underline; text-underline-offset: 2px; }
 .qd-cartao__pe { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
 /* As pessoas do cartão na ponta direita: quem cuida, e o autor com a setinha. */
+.qd-banco__grupo {
+    display: flex; align-items: center; gap: 6px; margin: var(--space-2) 0 0;
+    font-size: var(--text-xs, 12px); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--text-secondary);
+}
+.qd-banco__grupo i, .qd-banco__grupo svg { width: 14px; height: 14px; }
+.qd-banco__grupo span { padding: 0 6px; border-radius: 999px; background: var(--surface-3); font-size: 11px; }
+.qd-banco__grupo--sugestao { color: var(--warning); margin-top: 0; }
+.qd-banco__grupo--sugestao span { background: var(--warning-muted); color: var(--warning); }
+.qd-banco__grupo-dica { margin: -2px 0 2px; font-size: 11px; color: var(--text-tertiary, var(--text-secondary)); }
+.qd-banco__item--sugestao { border-color: color-mix(in oklch, var(--warning) 45%, transparent); background: color-mix(in oklch, var(--warning) 6%, var(--surface-2)); }
 .qd-cartao__pessoas { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
 .qd-cartao__pessoas:empty { display: none; }
 .qd-cartao__pessoas .pd-autor { margin-left: 0; }

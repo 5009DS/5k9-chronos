@@ -170,7 +170,16 @@ export const ETIQUETAS = [
 
     { nome: 'aguardando material', publica: true, icone: 'image', tom: 'espera',
       dica: 'Falta algo que vem do cliente.' },
+
+    /* Pauta que chegou de fora (diagnóstico, ideia solta) e ainda não foi
+       analisada. Fica em destaque no banco de temas e sai sozinha quando
+       alguém é marcado para cuidar dela ou ela ganha um dia no calendário
+       (lib/tarefas.js — semSugestao). Nunca vai para o cliente. */
+    { nome: 'sugestão', publica: false, icone: 'lightbulb', tom: 'atencao',
+      dica: 'Pauta sugerida, ainda não analisada.' },
 ];
+
+export const ETIQUETA_SUGESTAO = 'sugestão';
 
 /* Os nomes que o código precisa citar. Escritos uma vez: "a gravar" digitado
    em quatro arquivos vira "à gravar" no quinto, e a etapa deixa de existir sem

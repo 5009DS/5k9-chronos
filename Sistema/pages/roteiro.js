@@ -16,7 +16,7 @@ import { moverParaEtapa, mensagemDeMovimento, etapaDeAprovacao } from '../lib/et
 import { copiarMensagem, mensagemDaDemanda, linkDeConvidado, mensagemParaCliente } from '../lib/compartilhar.js';
 import { gerarToken } from '../store.js';
 import { lerDecisoes, lerPedidos, lerEquipe, autorDe, avataresHTML } from '../lib/pedidos.js';
-import { chipPrioridade, itensDePrioridade, responsaveisDoConteudo, checklistDe, campoQuemCuida, avisarMarcados, injectEstilosTarefas } from '../lib/tarefas.js';
+import { chipPrioridade, itensDePrioridade, responsaveisDoConteudo, checklistDe, campoQuemCuida, avisarMarcados, injectEstilosTarefas, semSugestao } from '../lib/tarefas.js';
 import { abrirFormulario } from '../components/campos.js';
 import { decisoesHTML, pedidosDaDemandaHTML, injectEstilosPedidos } from '../components/pedidos.js';
 import {
@@ -492,7 +492,8 @@ export const renderRoteiro = async (container, conteudoId) => {
                 valores: { responsaveis: c.responsaveis || [] },
                 aoSalvar: async ({ responsaveis }) => {
                     const antes = c.responsaveis || [];
-                    await salvarTarefa({ responsaveis });
+                    await salvarTarefa({ responsaveis,
+                        etiquetas: responsaveis.length ? semSugestao(c.etiquetas) : c.etiquetas });
                     avisarMarcados(c, antes, equipe);
                 },
             });

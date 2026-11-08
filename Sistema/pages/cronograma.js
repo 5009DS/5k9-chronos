@@ -1,5 +1,5 @@
 import { lerEquipe } from '../lib/pedidos.js';
-import { PRIORIDADES, campoQuemCuida, avisarMarcados } from '../lib/tarefas.js';
+import { PRIORIDADES, campoQuemCuida, avisarMarcados, semSugestao } from '../lib/tarefas.js';
 import { store } from '../store.js';
 import { renderShell } from '../components/pageshell.js';
 import { abrirFormulario } from '../components/campos.js';
@@ -1464,6 +1464,8 @@ export async function formularioConteudo(c, cliente, mesSugerido, aoTerminar, et
             const antigas = (c?.etiquetas || []).filter(e =>
                 etiquetaMeta(e).etapa || !PENDENCIAS.some(p => p.nome === etiquetaMeta(e).nome));
             registro.etiquetas = [...antigas, ...PENDENCIAS.filter(p => dados[`_pend:${p.nome}`]).map(p => p.nome)];
+            // Alguém marcado para cuidar: a pauta deixou de ser só sugestão.
+            if (quemCuida && (dados.responsaveis || []).length) registro.etiquetas = semSugestao(registro.etiquetas);
 
             /* Editar a data na ficha é remanejamento DELIBERADO, então a origem
                acompanha. Arrastar é outra coisa: lá a origem fica parada, e é

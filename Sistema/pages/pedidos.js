@@ -3,7 +3,7 @@ import { renderShell } from '../components/pageshell.js';
 import { toast } from '../components/toast.js';
 import { abrirMenu } from '../components/menu.js';
 import { caminhoDoConteudo } from '../lib/rotas.js';
-import { esc, escLinhas } from '../lib/formato.js';
+import { esc, escLinhas, diaCurto } from '../lib/formato.js';
 import { vazioHTML } from '../lib/pecas.js';
 import { ativarArraste } from '../lib/arrastar.js';
 import {
@@ -11,6 +11,12 @@ import {
     avatarHTML, avataresHTML, responsaveisDe, prazoTexto, idadeTexto, comStatus,
 } from '../lib/pedidos.js';
 import { abrirPedido, abrirDecisao, abrirEquipe, injectEstilosPedidos } from '../components/pedidos.js';
+import { abrirFormulario } from '../components/campos.js';
+import { abrirTarefa } from '../components/tarefa.js';
+import { colunaDaDemanda, chipPrioridade, pesoPrioridade, progressoHTML, campoQuemCuida, avisarMarcados, semSugestao, ehSugestao, injectEstilosTarefas } from '../lib/tarefas.js';
+import { etapaAtual, chipEtiqueta, injectEstilosEtiqueta } from '../lib/etiquetas.js';
+import { itensDeEtapa, moverParaEtapa, mensagemDeMovimento } from '../lib/etapas.js';
+import { aguardaData } from '../lib/cronograma.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    PEDIDOS — o que os clientes pediram, de quem é e em que pé está.
@@ -37,10 +43,12 @@ const FILTRO = new Map();
 
 export const renderPedidos = async (container, clienteId = null) => {
     const { clientes, conteudos } = await store.tudo();
-    let pedidosTodos, decisoesTodas, equipe, erro = null;
+    let pedidosTodos, decisoesTodas, equipe, comentarios = [], erro = null;
     try {
-        [pedidosTodos, decisoesTodas, equipe] = await Promise.all(
-            [store.pedidos.listar(), store.decisoes.listar(), store.equipe.listar()]);
+        [pedidosTodos, decisoesTodas, equipe, comentarios] = await Promise.all(
+            [store.pedidos.listar(), store.decisoes.listar(), store.equipe.listar(),
+             // Sem a tabela da conversa (migração não rodada), os cartões só ficam sem o número.
+             store.comentarios.listar().catch(() => [])]);
     } catch (e) { erro = e; }
 
     // As tabelas ainda não existem: a migração não foi rodada.
@@ -72,21 +80,31 @@ export const renderPedidos = async (container, clienteId = null) => {
     const { pessoa: eu, pelaSessao } = euSou(equipe);
 
     const pedidos = pedidosTodos.filter(p => !clienteId || p.cliente_id === clienteId);
+    /* As demandas do quadro que têm alguém em "Quem cuida" — e as sugestões
+       ainda sem dono, que precisam ser distribuídas. Não são pedidos: vêm de
+       vz_conteudos, a coluna sai da etapa (lib/tarefas.js) e mudar de coluna
+       é mudar a etapa — por isso não se arrastam. */
+    const demandas = conteudos.filter(c => ((c.responsaveis || []).length || ehSugestao(c))
+        && (!clienteId || c.cliente_id === clienteId));
     const decisoes = clienteId ? decisoesTodas.filter(d => d.cliente_id === clienteId && d.ativa !== false) : [];
 
     const chave = clienteId || '*';
-    let { quem = 'todos', doCliente = '' } = FILTRO.get(chave) || {};
-    const lembrar = () => FILTRO.set(chave, { quem, doCliente });
+    let { quem = 'todos', doCliente = '', tipo = 'tudo' } = FILTRO.get(chave) || {};
+    const lembrar = () => FILTRO.set(chave, { quem, doCliente, tipo });
 
     const abertos = pedidos.filter(aberto);
     const atrasados = abertos.filter(atrasado);
+    const sugestoes = demandas.filter(c => !(c.responsaveis || []).length);
+    const demandasAbertas = demandas.filter(c => (c.responsaveis || []).length && colunaDaDemanda(c) !== 'confirmado');
 
     const { content } = renderShell(container, {
         path: '/pedidos',
         crumbs: cliente ? [{ href: '/pedidos', label: 'Pedidos' }] : null,
         title: cliente ? esc(cliente.nome) : 'Pedidos',
-        subtitle: `${abertos.length} em aberto`
+        subtitle: `${abertos.length} pedido${abertos.length === 1 ? '' : 's'} em aberto`
             + (atrasados.length ? ` · ${atrasados.length} atrasado${atrasados.length > 1 ? 's' : ''}` : '')
+            + (demandasAbertas.length ? ` · ${demandasAbertas.length} demanda${demandasAbertas.length > 1 ? 's' : ''} em andamento` : '')
+            + (sugestoes.length ? ` · ${sugestoes.length} sugest${sugestoes.length > 1 ? 'ões' : 'ão'} para distribuir` : '')
             + (cliente ? '' : ' · tudo o que os clientes pediram, de quem é e em que pé está'),
         actions: `
             ${cliente ? `
@@ -103,6 +121,8 @@ export const renderPedidos = async (container, clienteId = null) => {
 
     container.insertAdjacentHTML('beforeend', ESTILOS);
     injectEstilosPedidos();
+    injectEstilosTarefas();
+    injectEstilosEtiqueta();
 
     const recarregar = () => renderPedidos(container, clienteId);
 
@@ -113,7 +133,14 @@ export const renderPedidos = async (container, clienteId = null) => {
 
     let soltarArraste = null;
 
-    const filtrados = () => pedidos.filter(p => {
+    const filtradasDemandas = () => tipo === 'pedidos' ? [] : demandas.filter(c => {
+        if (!clienteId && doCliente && c.cliente_id !== doCliente) return false;
+        if (quem === 'todos') return true;
+        if (quem === 'ninguem') return !(c.responsaveis || []).length;
+        return (c.responsaveis || []).includes(quem);
+    });
+
+    const filtrados = () => tipo === 'demandas' ? [] : pedidos.filter(p => {
         if (!clienteId && doCliente && p.cliente_id !== doCliente) return false;
         if (quem === 'todos') return true;
         if (quem === 'ninguem') return !responsaveisDe(p).length;
@@ -152,6 +179,8 @@ export const renderPedidos = async (container, clienteId = null) => {
                 ${avataresHTML(resp)}
                 ${prazo ? `<span class="pd-prazo pd-prazo--${prazo.tom}"><i data-lucide="calendar-clock"></i>${esc(prazo.texto)}</span>` : ''}
                 ${demanda ? `<a class="pd-demanda" href="${esc(caminhoDoConteudo(demanda))}" title="${esc(demanda.titulo)}"><i data-lucide="file-text"></i></a>` : ''}
+                ${nComentarios.get(p.id) ? `<span class="pd-coments" title="${nComentarios.get(p.id)} comentário${nComentarios.get(p.id) > 1 ? 's' : ''}"><i data-lucide="message-circle"></i>${nComentarios.get(p.id)}</span>` : ''}
+                ${Array.isArray(p.checklist) && p.checklist.length ? `<span class="pd-coments" title="Tópicos"><i data-lucide="list-checks"></i>${p.checklist.filter(t => t.feito).length}/${p.checklist.length}</span>` : ''}
                 <span class="pd-cartao__espaco"></span>
                 ${proxima ? `
                     <button type="button" class="ds-icon-btn ds-icon-btn--sm pd-avancar" data-avancar="${esc(p.id)}"
@@ -163,6 +192,89 @@ export const renderPedidos = async (container, clienteId = null) => {
                 </button>
             </div>
         </article>`;
+    };
+
+    /* O cartão da demanda: a mesma moldura do pedido, com a marca "demanda",
+       o formato, a etapa e quando ela vai ao ar. O título abre a demanda. */
+    const quandoDemanda = (c) => c.banco_em ? 'no banco de temas'
+        : aguardaData(c) ? 'sem data' : `vai ao ar ${diaCurto(c.data)}`;
+
+    const cartaoDemanda = (c) => {
+        const resp = (c.responsaveis || []).map(id => pessoaPorId.get(id)).filter(Boolean);
+        const etapa = etapaAtual(c.etiquetas);
+        return `
+        <article class="pd-cartao pd-cartao--demanda ${ehSugestao(c) ? 'pd-cartao--sugestao' : ''} ${c.prioridade === 'urgente' ? 'pd-cartao--urgente' : ''}">
+            <div class="pd-cartao__topo">
+                ${clienteId ? '' : `<span class="pd-cartao__cliente">${esc(nomeCliente.get(c.cliente_id) || 'Cliente removido')}</span>`}
+                ${ehSugestao(c)
+                    ? `<span class="pd-tipo pd-tipo--sugestao"><i data-lucide="lightbulb"></i>sugestão${c.formato ? ` · ${esc(String(c.formato).toLowerCase())}` : ''}</span>`
+                    : `<span class="pd-tipo"><i data-lucide="file-text"></i>demanda${c.formato ? ` · ${esc(String(c.formato).toLowerCase())}` : ''}</span>`}
+                <span class="pd-cartao__idade">${esc(quandoDemanda(c))}</span>
+            </div>
+            <a class="pd-cartao__texto" href="${esc(caminhoDoConteudo(c))}">${esc(c.titulo)}</a>
+            <div class="pd-cartao__estado">
+                ${etapa ? chipEtiqueta(etapa.nome) : '<span class="vz-etiqueta vz-etiqueta--neutro"><i data-lucide="pencil"></i>rascunho</span>'}
+                ${c.status === 'ajuste' ? '<span class="vz-etiqueta vz-etiqueta--risco"><i data-lucide="message-circle-warning"></i>ajuste pedido</span>' : ''}
+                ${chipPrioridade(c)}
+                ${progressoHTML(c)}
+            </div>
+            <div class="pd-cartao__pe">
+                ${avataresHTML(resp)}
+                <span class="pd-cartao__espaco"></span>
+                <button type="button" class="ds-icon-btn ds-icon-btn--sm" data-menu-demanda="${esc(c.id)}" aria-label="Mais ações" aria-haspopup="menu">
+                    <i data-lucide="ellipsis"></i>
+                </button>
+            </div>
+        </article>`;
+    };
+
+    const demandasDaColuna = (col, lista) => {
+        const limite = new Date(Date.now() - JANELA_CONFIRMADOS * 86_400_000).toISOString().slice(0, 10);
+        return lista.filter(c => colunaDaDemanda(c) === col
+                && (col !== 'confirmado' || !c.data || c.data >= limite))
+            // Mais urgente primeiro, depois a que vai ao ar antes.
+            .sort((a, b) => (pesoPrioridade(b) - pesoPrioridade(a))
+                || String(a.banco_em ? '9999' : a.data || '9999').localeCompare(String(b.banco_em ? '9999' : b.data || '9999')));
+    };
+
+    const menuDemanda = (botao, c) => {
+        const lista = c.responsaveis || [];
+        const estou = !!eu && lista.includes(eu.id);
+        abrirMenu(botao, [
+            { id: 'abrir', label: 'Abrir a demanda', icon: 'file-text', href: caminhoDoConteudo(c) },
+            { id: 'etapa', label: 'Mudar a etapa…', icon: 'git-commit-horizontal',
+              onClick: () => setTimeout(() => abrirMenu(botao, itensDeEtapa(c, async (nome) => {
+                  const { novoStatus, reabriu, desfazer } = await moverParaEtapa(c, nome);
+                  toast(mensagemDeMovimento(nome, novoStatus, reabriu), {
+                      label: 'Desfazer', onClick: async () => { await desfazer(); recarregar(); },
+                  });
+                  recarregar();
+              })), 0) },
+            ...(eu ? [{
+                id: 'eu', label: estou ? 'Sair desta demanda' : 'Entrar nesta demanda',
+                icon: estou ? 'user-round-minus' : 'user-round-plus', separadorAntes: true,
+                onClick: async () => {
+                    await store.conteudos.salvar({ ...c, responsaveis: estou ? lista.filter(id => id !== eu.id) : [...lista, eu.id] });
+                    toast(estou ? 'Você saiu da demanda.' : 'Você entrou na demanda.');
+                    recarregar();
+                },
+            }] : []),
+            ...(campoQuemCuida(equipe) ? [{
+                id: 'quem', label: 'Mudar quem cuida…', icon: 'users-round', separadorAntes: !eu,
+                onClick: () => abrirFormulario({
+                    titulo: 'Quem cuida', subtitulo: esc(c.titulo),
+                    campos: [campoQuemCuida(equipe)],
+                    valores: { responsaveis: lista },
+                    aoSalvar: async ({ responsaveis }) => {
+                        const linha = await store.conteudos.salvar({ ...c, responsaveis,
+                            etiquetas: responsaveis.length ? semSugestao(c.etiquetas) : c.etiquetas });
+                        avisarMarcados(linha, lista, equipe);
+                        recarregar();
+                    },
+                }),
+            }] : []),
+            { id: 'quadro', label: 'Quadro do cliente', icon: 'layout-grid', href: `/quadro/${c.cliente_id}` },
+        ]);
     };
 
     const mover = async (id, status) => {
@@ -181,11 +293,19 @@ export const renderPedidos = async (container, clienteId = null) => {
         recarregar();
     };
 
-    const editar = (p) => abrirPedido({ pedido: p, clientes, conteudos, equipe, aoSalvar: recarregar });
+    /* Abrir o pedido é a janela inteira (components/tarefa.js), com a
+       conversa da equipe. O formulário lateral ficou só para anotar um novo. */
+    const editar = (p) => abrirTarefa({ pedido: p, clientes, conteudos, equipe, aoMudar: recarregar });
+
+    const nComentarios = new Map();
+    for (const c of comentarios) {
+        if (c.alvo === 'pedido' && c.tipo !== 'atividade') nComentarios.set(c.alvo_id, (nComentarios.get(c.alvo_id) || 0) + 1);
+    }
 
     const desenhar = () => {
         soltarArraste?.();
         const lista = filtrados();
+        const listaDemandas = filtradasDemandas();
         const limite = new Date(Date.now() - JANELA_CONFIRMADOS * 86_400_000).toISOString();
 
         const chipQuem = (id, rotulo, extra = '') => `
@@ -220,6 +340,10 @@ export const renderPedidos = async (container, clienteId = null) => {
                 </section>` : ''}
 
             <div class="pd-barra">
+                <div class="pd-filtros pd-tipos" role="group" aria-label="O que mostrar">
+                    ${[['tudo', 'Tudo'], ['pedidos', 'Pedidos'], ['demandas', 'Demandas']].map(([id, rotulo]) => `
+                        <button type="button" class="pd-filtro ${tipo === id ? 'is-active' : ''}" data-tipo="${id}">${rotulo}</button>`).join('')}
+                </div>
                 ${pessoas.length ? `
                     <div class="pd-filtros" role="group" aria-label="Filtrar por pessoa">
                         ${chipQuem('todos', 'Todos')}
@@ -247,6 +371,7 @@ export const renderPedidos = async (container, clienteId = null) => {
             <div class="pd-quadro" id="pd-quadro">
                 ${COLUNAS.map(col => {
                     let itens = daColuna(col.id, lista);
+                    const dela = demandasDaColuna(col.id, listaDemandas);
                     let antigos = 0;
                     if (col.id === 'confirmado') {
                         const recentes = itens.filter(p => !p.concluido_em || p.concluido_em >= limite);
@@ -258,18 +383,18 @@ export const renderPedidos = async (container, clienteId = null) => {
                         <header class="pd-coluna__cabeca">
                             <i data-lucide="${col.icone}"></i>
                             <span class="pd-coluna__nome">${esc(col.nome)}</span>
-                            <span class="pd-coluna__conta">${itens.length}</span>
+                            <span class="pd-coluna__conta">${itens.length + dela.length}</span>
                         </header>
                         <p class="pd-coluna__dica">${esc(col.dica)}</p>
                         <div class="pd-coluna__itens">
-                            ${itens.length ? itens.map(cartao).join('') : '<p class="pd-vazio">—</p>'}
+                            ${itens.length || dela.length ? itens.map(cartao).join('') + dela.map(cartaoDemanda).join('') : '<p class="pd-vazio">—</p>'}
                             ${antigos ? `<p class="pd-antigos">+ ${antigos} confirmado${antigos > 1 ? 's' : ''} há mais de ${JANELA_CONFIRMADOS} dias</p>` : ''}
                         </div>
                     </section>`;
                 }).join('')}
             </div>
 
-            ${!pedidos.length ? `
+            ${!pedidos.length && !demandas.length ? `
                 <p class="pd-primeiro">
                     <i data-lucide="lightbulb"></i>
                     Todo pedido que chegar no grupo — inclusive em áudio — vira um cartão aqui. Cole o trecho
@@ -284,6 +409,13 @@ export const renderPedidos = async (container, clienteId = null) => {
             const b = e.target.closest('[data-quem]');
             if (!b) return;
             quem = b.dataset.quem;
+            lembrar();
+            desenhar();
+        });
+        content.querySelector('.pd-tipos')?.addEventListener('click', (e) => {
+            const b = e.target.closest('[data-tipo]');
+            if (!b) return;
+            tipo = b.dataset.tipo;
             lembrar();
             desenhar();
         });
@@ -316,6 +448,13 @@ export const renderPedidos = async (container, clienteId = null) => {
 
         const quadro = content.querySelector('#pd-quadro');
         quadro.addEventListener('click', (e) => {
+            const md = e.target.closest('[data-menu-demanda]');
+            if (md) {
+                e.stopPropagation();
+                const c = demandas.find(x => x.id === md.dataset.menuDemanda);
+                if (c) menuDemanda(md, c);
+                return;
+            }
             const ed = e.target.closest('[data-editar]');
             if (ed) { const p = pedidos.find(x => x.id === ed.dataset.editar); if (p) editar(p); return; }
 
@@ -334,7 +473,7 @@ export const renderPedidos = async (container, clienteId = null) => {
                 if (!p) return;
                 const demanda = conteudoPorId.get(p.conteudo_id);
                 abrirMenu(mn, [
-                    { id: 'editar', label: 'Editar', icon: 'pencil', onClick: () => editar(p) },
+                    { id: 'editar', label: 'Abrir', icon: 'maximize-2', onClick: () => editar(p) },
                     ...COLUNAS.filter(c => c.id !== (p.status || 'novo')).map((c, i) => ({
                         id: `mover-${c.id}`, label: `Mover para ${c.nome}`, icon: c.icone,
                         separadorAntes: i === 0, onClick: () => mover(p.id, c.id),
@@ -377,6 +516,12 @@ export const renderPedidos = async (container, clienteId = null) => {
     };
 
     desenhar();
+
+    /* ?abrir=<id>: o link do email e o "copiar link" caem direto na janela
+       do pedido, por cima do quadro. */
+    const abrir = new URLSearchParams(location.search).get('abrir');
+    const alvo = abrir && pedidosTodos.find(p => p.id === abrir);
+    if (alvo) editar(alvo);
 };
 
 const ESTILOS = `
@@ -457,6 +602,17 @@ const ESTILOS = `
     background: var(--surface-1); cursor: grab;
 }
 .pd-cartao--atrasado { border-left: 3px solid var(--danger); }
+/* A demanda: mesma moldura, com a marca "demanda" e uma borda de outra cor
+   para não se confundir com o pedido do cliente. */
+.pd-cartao--demanda { border-left: 3px solid var(--info); }
+.pd-cartao--demanda.pd-cartao--urgente { border-left-color: #EF4444; }
+.pd-cartao--demanda .pd-cartao__texto { text-decoration: none; color: var(--text-primary); }
+.pd-tipo { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; color: var(--info); }
+.pd-tipo svg { width: 11px; height: 11px; }
+.pd-cartao--sugestao { border-left-color: var(--warning); background: color-mix(in oklch, var(--warning) 5%, var(--surface-2)); }
+.pd-tipo--sugestao { color: var(--warning); }
+.pd-cartao__estado { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pd-tipos { padding-right: var(--space-2); border-right: 1px solid var(--border-subtle); }
 .pd-coluna--confirmado .pd-cartao { opacity: 0.7; }
 .pd-cartao__topo { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
 .pd-cartao__cliente { font-size: 11px; font-weight: 700; color: var(--accent); }
@@ -476,6 +632,8 @@ const ESTILOS = `
 .pd-prazo svg { width: 12px; height: 12px; }
 .pd-prazo--atencao { color: var(--warning); }
 .pd-prazo--risco { color: var(--danger); }
+.pd-coments { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; color: var(--text-tertiary); }
+.pd-coments svg { width: 12px; height: 12px; }
 .pd-demanda { display: inline-grid; place-items: center; color: var(--text-tertiary); }
 .pd-demanda:hover { color: var(--accent); }
 .pd-demanda svg { width: 14px; height: 14px; }
