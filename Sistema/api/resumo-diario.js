@@ -29,7 +29,7 @@ const montarResumos = ({ equipe, pedidos, clientes, hoje }) => {
     const resumos = [];
     for (const pessoa of equipe) {
         if (pessoa.ativo === false || !pessoa.email) continue;
-        const meus = pedidos.filter(p => p.responsavel_id === pessoa.id
+        const meus = pedidos.filter(p => (p.responsaveis?.length ? p.responsaveis : [p.responsavel_id]).includes(pessoa.id)
             && (p.status === 'novo' || p.status === 'fazendo'));
         const atrasados = meus.filter(p => p.prazo && p.prazo < hoje);
         const deHoje    = meus.filter(p => p.prazo === hoje);
@@ -79,7 +79,7 @@ module.exports = async (req, res) => {
     try {
         const [equipe, pedidos, clientes] = await Promise.all([
             ler('vz_equipe?select=id,nome,email,ativo', chave),
-            ler('vz_pedidos?status=in.(novo,fazendo)&responsavel_id=not.is.null&select=id,cliente_id,texto,prazo,status,responsavel_id', chave),
+            ler('vz_pedidos?status=in.(novo,fazendo)&select=id,cliente_id,texto,prazo,status,responsavel_id,responsaveis', chave),
             ler('vz_clientes?select=id,nome', chave),
         ]);
         const hoje = hojeBR();

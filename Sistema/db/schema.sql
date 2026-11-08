@@ -474,6 +474,9 @@ create table if not exists vz_pedidos (
     -- O responsável é o id da equipe, e não o nome como em vz_conteudos: o
     -- aviso por email precisa chegar a uma pessoa, e nome não tem endereço.
     responsavel_id text references vz_equipe(id) on delete set null,
+    -- Quem cuida (ids de vz_equipe). Ver db/migracao-pedidos-varios.sql;
+    -- responsavel_id acima ficou sem uso.
+    responsaveis  text[] not null default '{}',
     prazo         date,
     status        text not null default 'novo',        -- novo | fazendo | entregue | confirmado
     -- A demanda que atende o pedido, quando ele virou peça.
@@ -485,6 +488,7 @@ create table if not exists vz_pedidos (
 
 create index if not exists vz_pedidos_cliente on vz_pedidos (cliente_id);
 create index if not exists vz_pedidos_responsavel on vz_pedidos (responsavel_id) where status <> 'confirmado';
+create index if not exists vz_pedidos_responsaveis on vz_pedidos using gin (responsaveis);
 
 create table if not exists vz_decisoes (
     id          text primary key default gen_random_uuid()::text,

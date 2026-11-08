@@ -8,7 +8,7 @@ import { vazioHTML } from '../lib/pecas.js';
 import { ativarArraste } from '../lib/arrastar.js';
 import {
     COLUNAS, colunaDe, aberto, atrasado, ativos, euSou, lembrarEu,
-    avatarHTML, prazoTexto, idadeTexto, comStatus,
+    avatarHTML, avataresHTML, responsaveisDe, prazoTexto, idadeTexto, comStatus,
 } from '../lib/pedidos.js';
 import { abrirPedido, abrirDecisao, abrirEquipe, injectEstilosPedidos } from '../components/pedidos.js';
 
@@ -116,8 +116,8 @@ export const renderPedidos = async (container, clienteId = null) => {
     const filtrados = () => pedidos.filter(p => {
         if (!clienteId && doCliente && p.cliente_id !== doCliente) return false;
         if (quem === 'todos') return true;
-        if (quem === 'ninguem') return !p.responsavel_id;
-        return p.responsavel_id === quem;
+        if (quem === 'ninguem') return !responsaveisDe(p).length;
+        return responsaveisDe(p).includes(quem);
     });
 
     const daColuna = (col, lista) => {
@@ -135,7 +135,7 @@ export const renderPedidos = async (container, clienteId = null) => {
     };
 
     const cartao = (p) => {
-        const resp = pessoaPorId.get(p.responsavel_id);
+        const resp = responsaveisDe(p).map(id => pessoaPorId.get(id)).filter(Boolean);
         const prazo = prazoTexto(p);
         const demanda = conteudoPorId.get(p.conteudo_id);
         const idx = COLUNAS.findIndex(c => c.id === (p.status || 'novo'));
@@ -149,7 +149,7 @@ export const renderPedidos = async (container, clienteId = null) => {
             <button type="button" class="pd-cartao__texto" data-editar="${esc(p.id)}">${esc(p.texto)}</button>
             ${p.detalhe ? `<span class="pd-cartao__marca" title="${esc(p.detalhe.slice(0, 300))}"><i data-lucide="quote"></i> mensagem original</span>` : ''}
             <div class="pd-cartao__pe">
-                ${avatarHTML(resp)}
+                ${avataresHTML(resp)}
                 ${prazo ? `<span class="pd-prazo pd-prazo--${prazo.tom}"><i data-lucide="calendar-clock"></i>${esc(prazo.texto)}</span>` : ''}
                 ${demanda ? `<a class="pd-demanda" href="${esc(caminhoDoConteudo(demanda))}" title="${esc(demanda.titulo)}"><i data-lucide="file-text"></i></a>` : ''}
                 <span class="pd-cartao__espaco"></span>
@@ -339,17 +339,28 @@ export const renderPedidos = async (container, clienteId = null) => {
                         id: `mover-${c.id}`, label: `Mover para ${c.nome}`, icon: c.icone,
                         separadorAntes: i === 0, onClick: () => mover(p.id, c.id),
                     })),
-                    ...(pessoas.length ? [{
-                        id: 'pegar', label: eu && p.responsavel_id !== eu.id ? 'Pegar para mim' : 'Trocar responsável…',
-                        icon: 'user-round-check', separadorAntes: true,
-                        onClick: async () => {
-                            if (eu && p.responsavel_id !== eu.id) {
-                                await store.pedidos.salvar({ ...p, responsavel_id: eu.id });
-                                toast('Agora é seu.');
+                    ...(pessoas.length ? [eu ? (() => {
+                        /* Entrar e sair do pedido, sem tirar os outros: com
+                           várias pessoas, "pegar para mim" substituiria quem já
+                           estava cuidando. */
+                        const lista = responsaveisDe(p);
+                        const estou = lista.includes(eu.id);
+                        return {
+                            id: 'eu', label: estou ? 'Sair deste pedido' : 'Entrar neste pedido',
+                            icon: estou ? 'user-round-minus' : 'user-round-plus', separadorAntes: true,
+                            onClick: async () => {
+                                await store.pedidos.salvar({
+                                    ...p, responsavel_id: null,
+                                    responsaveis: estou ? lista.filter(id => id !== eu.id) : [...lista, eu.id],
+                                });
+                                toast(estou ? 'Você saiu do pedido.' : 'Você entrou no pedido.');
                                 recarregar();
-                            } else editar(p);
-                        },
-                    }] : []),
+                            },
+                        };
+                    })() : null, {
+                        id: 'quem', label: 'Mudar quem cuida…', icon: 'users-round',
+                        separadorAntes: !eu, onClick: () => editar(p),
+                    }].filter(Boolean) : []),
                     ...(demanda ? [{ id: 'demanda', label: 'Abrir a demanda', icon: 'file-text', href: caminhoDoConteudo(demanda) }] : []),
                     ...(clienteId ? [] : [{ id: 'cliente', label: 'Pedidos deste cliente', icon: 'filter', href: `/pedidos/${p.cliente_id}` }]),
                 ]);

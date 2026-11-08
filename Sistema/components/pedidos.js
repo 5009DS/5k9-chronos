@@ -3,7 +3,7 @@ import { abrirFormulario } from './campos.js';
 import { openDrawer, closeDrawer } from './drawer.js';
 import { toast } from './toast.js';
 import { esc, hoje, dataBR } from '../lib/formato.js';
-import { COLUNAS, colunaDe, ativos, euSou, avisarResponsavel } from '../lib/pedidos.js';
+import { COLUNAS, colunaDe, ativos, euSou, avisarResponsaveis, responsaveisDe, avatarHTML } from '../lib/pedidos.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    PEDIDOS — os painéis que mais de uma tela abre.
@@ -48,14 +48,15 @@ export const abrirPedido = ({ pedido = null, clienteId = null, clientes, conteud
         }]),
         { nome: 'texto', rotulo: 'O que foi pedido', tipo: 'textarea', obrigatorio: true,
           placeholder: 'Ex.: reel da bioimpedância da paciente, com a reportagem ao fundo' },
-        { nome: 'responsavel_id', rotulo: 'Responsável', tipo: 'select', largura: 'metade',
-          opcoes: [{ valor: '', rotulo: '— ninguém ainda —' },
-                   ...pessoas.map(p => ({ valor: p.id, rotulo: p.nome }))],
-          ...(pessoas.length ? {} : { dica: 'Cadastre a equipe no botão "Equipe" da tela de Pedidos.' }) },
+        { nome: 'responsaveis', rotulo: 'Quem cuida', tipo: 'multipla',
+          opcoes: pessoas.map(p => ({ valor: p.id, rotulo: p.nome.split(' ')[0], prefixo: avatarHTML(p, { tamanho: 22 }) })),
+          dica: pessoas.length
+              ? 'Marque quantas pessoas precisar. Cada uma recebe um aviso por email.'
+              : 'Cadastre a equipe no botão "Equipe" da tela de Pedidos.' },
         { nome: 'prazo', rotulo: 'Prazo', tipo: 'data', largura: 'metade' },
-        { nome: 'quem_pediu', rotulo: 'Quem pediu', largura: 'metade',
-          placeholder: cliente?.nome || 'Nome de quem pediu' },
         { nome: 'pedido_em', rotulo: 'Pedido em', tipo: 'data', largura: 'metade' },
+        { nome: 'quem_pediu', rotulo: 'Quem pediu',
+          placeholder: cliente?.nome || 'Nome de quem pediu' },
         ...(pedido ? [{
             nome: 'status', rotulo: 'Em que pé está', tipo: 'select',
             opcoes: COLUNAS.map(c => ({ valor: c.id, rotulo: `${c.nome} — ${c.dica}` })),
@@ -75,29 +76,30 @@ export const abrirPedido = ({ pedido = null, clienteId = null, clientes, conteud
         titulo: pedido ? 'Editar pedido' : 'Novo pedido',
         subtitulo: cliente?.nome || '',
         campos,
-        valores: pedido || {
+        valores: pedido ? { ...pedido, responsaveis: responsaveisDe(pedido) } : {
             cliente_id: fixo, pedido_em: hoje(), status: 'novo',
-            responsavel_id: eu?.id || null,
+            responsaveis: eu ? [eu.id] : [],
         },
         rotuloSalvar: pedido ? 'Salvar' : 'Anotar pedido',
         aoSalvar: async (dados) => {
             const linha = await store.pedidos.salvar({
                 ...dados,
+                responsaveis: dados.responsaveis || [],
+                responsavel_id: null,
                 cliente_id: dados.cliente_id || fixo,
                 pedido_em: dados.pedido_em || hoje(),
                 status: dados.status || 'novo',
                 criado_por: pedido?.criado_por || eu?.nome || store.usuario()?.nome || null,
             });
-            /* Email só para quem PASSOU a ser responsável agora, e nunca para si
-               mesmo: anotar um pedido próprio não precisa de aviso, e editar o
-               prazo não deve reavisar ninguém. */
-            const marcado = linha.responsavel_id
-                && linha.responsavel_id !== pedido?.responsavel_id
-                && linha.responsavel_id !== eu?.id;
-            const pessoa = marcado && pessoas.find(p => p.id === linha.responsavel_id);
+            /* Email só para quem ENTROU agora, e nunca para si mesmo: anotar um
+               pedido próprio não precisa de aviso, e editar o prazo não deve
+               reavisar ninguém. */
+            const antes = new Set(pedido ? responsaveisDe(pedido) : []);
+            const novos = pessoas.filter(p => linha.responsaveis?.includes(p.id)
+                && !antes.has(p.id) && p.id !== eu?.id);
             toast(pedido ? 'Pedido atualizado.' : 'Pedido anotado.');
             aoSalvar?.(linha);
-            if (pessoa) avisarResponsavel(linha, pessoa, eu);
+            if (novos.length) avisarResponsaveis(linha, novos, eu);
         },
         aoExcluir: pedido ? async () => {
             await store.pedidos.excluir(pedido.id);
@@ -286,6 +288,9 @@ export function injectEstilosPedidos() {
             background: var(--cor); color: #fff;
             font-size: calc(var(--tam, 22px) * 0.42); font-weight: 700; letter-spacing: 0.02em;
         }
+        .pd-avatares { display: inline-flex; }
+        .pd-avatares .pd-avatar + .pd-avatar { margin-left: -6px; }
+        .pd-avatares .pd-avatar { box-shadow: 0 0 0 2px var(--surface-1); }
         .pd-avatar--vazio {
             background: transparent; color: var(--text-disabled);
             border: 1px dashed var(--border-default);

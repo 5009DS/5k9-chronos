@@ -69,7 +69,9 @@ export const local = {
             gravar('pedidos', ler('pedidos').map(p => p.conteudo_id === id ? { ...p, conteudo_id: null } : p));
         }
         if (colecao === 'equipe') {
-            gravar('pedidos', ler('pedidos').map(p => p.responsavel_id === id ? { ...p, responsavel_id: null } : p));
+            gravar('pedidos', ler('pedidos').map(p => ({ ...p,
+                responsavel_id: p.responsavel_id === id ? null : p.responsavel_id,
+                responsaveis: (p.responsaveis || []).filter(r => r !== id) })));
         }
 
         /* O primeiro degrau da mesma cascata, que faltava: vz_conteudos aponta

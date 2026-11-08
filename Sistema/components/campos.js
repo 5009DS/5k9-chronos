@@ -108,6 +108,24 @@ const campoHTML = (c, valores) => {
                 </div>`;
             break;
         }
+        /* ── Várias escolhas ──────────────────────────────────────────────
+           Botões que acendem e apagam, cada um com uma caixa de seleção
+           escondida por dentro — é ela que `colher` lê. Para listas curtas
+           (a equipe, três pessoas): abrir uma lista suspensa para marcar
+           duas delas seria trabalho a mais. `c.opcoes[].prefixo` é HTML
+           (o círculo da pessoa, por exemplo). */
+        case 'multipla': {
+            const marcados = new Set(Array.isArray(v) ? v : (v ? [v] : []));
+            controle = `
+                <div class="cp-multipla" role="group" aria-label="${esc(c.rotulo)}">
+                    ${(c.opcoes || []).map(o => `
+                        <label class="cp-multipla__op">
+                            <input type="checkbox" name="${c.nome}" value="${esc(o.valor)}" ${marcados.has(o.valor) ? 'checked' : ''}>
+                            ${o.prefixo || ''}<span>${esc(o.rotulo)}</span>
+                        </label>`).join('')}
+                </div>`;
+            break;
+        }
         /* type="email" pelo teclado: no celular ele traz o @ e o ponto na
            primeira camada. A validação do navegador não entra aqui porque o
            formulário não é submetido — quem valida é a tela que usa o valor. */
@@ -179,6 +197,9 @@ const colher = (painel, campos) => {
         const el = painel.querySelector(`[name="${c.nome}"]`);
         if (!el) return;
         if (c.tipo === 'checkbox') dados[c.nome] = el.checked;
+        else if (c.tipo === 'multipla') {
+            dados[c.nome] = [...painel.querySelectorAll(`[name="${c.nome}"]:checked`)].map(x => x.value);
+        }
         /* Vira lista, sem vazio e sem repetido. Array vazio e não null: a
            coluna é text[] e `[]` é "sem etiqueta nenhuma", que é o que
            apagar o campo quer dizer. */
@@ -324,6 +345,16 @@ function injectStyles() {
 .cp-etiquetas { display: flex; flex-direction: column; gap: var(--space-2); }
 .cp-etiquetas__chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .cp-etiquetas__chips button { padding: 0; border: none; background: none; line-height: 0; }
+.cp-multipla { display: flex; flex-wrap: wrap; gap: 6px; }
+.cp-multipla__op {
+    position: relative; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+    min-height: 34px; padding: 0 12px 0 6px; border-radius: var(--radius-pill);
+    border: 1px solid var(--border-subtle); background: var(--surface-1);
+    font-size: var(--text-sm); font-weight: 600; color: var(--text-secondary);
+}
+.cp-multipla__op input { position: absolute; opacity: 0; pointer-events: none; }
+.cp-multipla__op:has(input:checked) { background: var(--accent-muted); border-color: var(--accent); color: var(--accent); }
+.cp-multipla__op:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 .cp-check-bloco { grid-column: span 2; display: flex; flex-direction: column; gap: var(--space-2); }
         .cp-check-bloco[hidden] { display: none; }
         .cp-check {

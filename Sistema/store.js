@@ -150,7 +150,9 @@ const cascatearNoCache = (nome, id) => {
         mexerNoCache("pedidos",  (l) => l.map(p => p.conteudo_id === id ? { ...p, conteudo_id: null } : p));
     }
     if (nome === "equipe") {
-        mexerNoCache("pedidos", (l) => l.map(p => p.responsavel_id === id ? { ...p, responsavel_id: null } : p));
+        mexerNoCache("pedidos", (l) => l.map(p => ({ ...p,
+            responsavel_id: p.responsavel_id === id ? null : p.responsavel_id,
+            responsaveis: (p.responsaveis || []).filter(r => r !== id) })));
     }
     if (nome === "blocos") {
         // on delete set null: o retorno fica, sem a fala que ele comentava.

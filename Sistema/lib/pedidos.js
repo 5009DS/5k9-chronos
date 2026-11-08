@@ -38,6 +38,13 @@ export const lerPedidos  = () => store.pedidos.listar().catch(() => []);
 export const lerDecisoes = () => store.decisoes.listar().catch(() => []);
 export const lerEquipe   = () => store.equipe.listar().catch(() => []);
 
+/* Quem cuida do pedido. A lista é `responsaveis`; `responsavel_id` é de quando
+   cabia uma pessoa só, e continua sendo lido para os pedidos anotados antes
+   da troca (dados locais, ou o banco antes de db/migracao-pedidos-varios.sql). */
+export const responsaveisDe = (p) => p.responsaveis?.length
+    ? p.responsaveis
+    : (p.responsavel_id ? [p.responsavel_id] : []);
+
 /** Equipe ativa, em ordem alfabética. */
 export const ativos = (equipe) => equipe.filter(p => p.ativo !== false)
     .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
@@ -77,6 +84,11 @@ export const corDe = (nome = '') => {
 export const iniciais = (nome = '') =>
     nome.trim().split(/\s+/).map(s => s[0]).slice(0, 2).join('').toUpperCase() || '?';
 
+/** Os círculos de várias pessoas, sobrepostos. */
+export const avataresHTML = (pessoas, opcoes) => pessoas.length
+    ? `<span class="pd-avatares">${pessoas.map(p => avatarHTML(p, opcoes)).join('')}</span>`
+    : avatarHTML(null, opcoes);
+
 export const avatarHTML = (pessoa, { tamanho = 22 } = {}) => pessoa
     ? `<span class="pd-avatar" style="--cor:${corDe(pessoa.nome)};--tam:${tamanho}px" title="${esc(pessoa.nome)}">${esc(iniciais(pessoa.nome))}</span>`
     : `<span class="pd-avatar pd-avatar--vazio" style="--tam:${tamanho}px" title="Sem responsável"><i data-lucide="user-round"></i></span>`;
@@ -112,22 +124,25 @@ export const comStatus = (p, status) => ({
    Quem envia é o servidor (api/avisar.js), que recebe só o id do pedido e
    lê o resto do banco. Corre depois do salvar e não segura a tela: o pedido
    já está gravado, e um email que falha não pode desfazer isso — só avisa. */
-export const avisarResponsavel = async (pedido, pessoa, eu) => {
-    if (!pessoa?.email) {
-        toast(`${pessoa?.nome || 'O responsável'} está sem email na equipe — o aviso não foi enviado.`);
-        return;
+export const avisarResponsaveis = async (pedido, pessoas, eu) => {
+    const semEmail = pessoas.filter(p => !p.email);
+    const comEmail = pessoas.filter(p => p.email);
+    if (semEmail.length) {
+        toast(`${semEmail.map(p => p.nome.split(' ')[0]).join(' e ')} sem email na equipe — não ${semEmail.length > 1 ? 'foram avisados' : 'foi avisado'}.`);
     }
+    if (!comEmail.length) return;
     const token = await store.token().catch(() => null);
     if (!token) return;   // modo local: não há servidor de email
     try {
         const r = await fetch('/api/avisar', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ pedido_id: pedido.id, de: eu?.nome || '' }),
+            body: JSON.stringify({ pedido_id: pedido.id, para: comEmail.map(p => p.id), de: eu?.nome || '' }),
         });
         const corpo = await r.json().catch(() => ({}));
-        if (r.ok && corpo.enviado) toast(`${pessoa.nome.split(' ')[0]} foi avisado por email.`);
-        else if (!r.ok) throw new Error(corpo.erro || r.status);
+        if (!r.ok) throw new Error(corpo.erro || r.status);
+        const foram = comEmail.filter(p => corpo.enviados?.includes(p.id)).map(p => p.nome.split(' ')[0]);
+        if (foram.length) toast(`${foram.join(' e ')} ${foram.length > 1 ? 'foram avisados' : 'foi avisado'} por email.`);
     } catch (e) {
         console.error('[pedidos] aviso por email:', e);
         toast('O pedido foi salvo, mas o email de aviso não saiu.');
