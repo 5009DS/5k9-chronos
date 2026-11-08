@@ -51,5 +51,14 @@
 export const SUPABASE_URL  = 'https://dppgtlclpgdvxhnnulgf.supabase.co';
 export const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRwcGd0bGNscGdkdnhobm51bGdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYyMzcyNjUsImV4cCI6MjEwMTgxMzI2NX0.31Z-UOk4RUYBz4WtqNYmktiocgBIryTe6bChj9DHZiA';
 
+/* ── A CONTA MASTER DO ESTÚDIO ────────────────────────────────────────────
+   Entra pelo Google como admin sem estar na Equipe: não aparece para ser
+   marcada em pedido nem recebe os avisos da equipe — é a chave do estúdio,
+   não uma pessoa. A mesma lista existe em api/_avisos.js (o servidor confere
+   do lado dele) e no gancho do banco (db/migracao-master.sql), que deixa a
+   conta nascer. Trocar aqui exige trocar nos dois. */
+export const CONTAS_MASTER = ['5009business@gmail.com'];
+export const ehMaster = (email) => CONTAS_MASTER.includes(String(email || '').toLowerCase());
+
 /** Há banco configurado? Se não, o store cai no adaptador local. */
 export const CONFIGURADO = !!(SUPABASE_URL && SUPABASE_ANON);

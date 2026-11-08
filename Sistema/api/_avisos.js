@@ -24,6 +24,11 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 
 const REMETENTE_PADRAO = 'Chronos 5K9 <avisos@avisos.5k9.studio>';
 
+/* A conta master do estúdio: admin pelo Google sem estar na Equipe. A mesma
+   lista de lib/supabase-config.js (CONTAS_MASTER). */
+const CONTAS_MASTER = ['5009business@gmail.com'];
+const ehMaster = (email) => CONTAS_MASTER.includes(String(email || '').toLowerCase());
+
 const esc = (t) => String(t ?? '').replace(/[&<>"']/g,
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -205,5 +210,5 @@ const emailsDeTemas = ({ temas, equipe, clientes, host }) => {
     return emails;
 };
 
-module.exports = { SUPABASE_URL, SUPABASE_ANON, esc, diaMes, hojeBR, ler, atualizar, quemE, nomeDe, enviar,
+module.exports = { SUPABASE_URL, SUPABASE_ANON, ehMaster, esc, diaMes, hojeBR, ler, atualizar, quemE, nomeDe, enviar,
                    moldura, linhaPedido, formatoTexto, emailsDeTemas };

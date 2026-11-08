@@ -72,14 +72,15 @@ export const lembrarEu = (id) => {
 
 /* ── QUEM MANDA ───────────────────────────────────────────────────────────
    Admin organiza o mês e manda o aviso de "mês organizado". O login master
-   (email e senha do estúdio) é admin sem precisar estar na lista; em modo
+   (email e senha do estúdio, ou a conta master pelo Google — CONTAS_MASTER
+   em lib/supabase-config.js) é admin sem precisar estar na lista; em modo
    local, sem login nenhum, todo mundo é. O servidor confere de novo do lado
    dele (api/mes-organizado.js): isto aqui só decide o que a tela mostra. */
 export const souAdmin = (equipe) => {
     if (!store.exigeLogin) return true;
     const u = store.usuario();
     if (!u) return false;
-    if (u.provedor === 'email') return true;
+    if (u.provedor === 'email' || u.master) return true;
     const email = (u.email || '').toLowerCase();
     return equipe.some(p => p.ativo !== false && p.papel === 'admin' && (p.email || '').toLowerCase() === email);
 };

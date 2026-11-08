@@ -16,7 +16,7 @@
      diretorio             o conhecimento estratégico enviado por Configurações
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { CONFIGURADO } from './lib/supabase-config.js';
+import { CONFIGURADO, ehMaster } from './lib/supabase-config.js';
 import { local } from './db/local.js';
 import { remoto } from './db/remoto.js';
 import { usarDiretorio, restaurarDiretorio } from './lib/diretorio.js';
@@ -250,6 +250,7 @@ let erroDeLogin = null;
 
 const conferir = async (u) => {
     if (!u || u.provedor === 'email') return u;
+    if (ehMaster(u.email)) return { ...u, master: true };
     let equipe = [];
     try { equipe = await db.listar('equipe'); } catch { /* sem a tabela: ninguém passa */ }
     const email = (u.email || '').toLowerCase();

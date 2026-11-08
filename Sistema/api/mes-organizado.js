@@ -6,12 +6,13 @@
    equipe recebe a lista dia a dia: é a hora de começar a escrever e a gravar.
 
    ── QUEM PODE DISPARAR ────────────────────────────────────────────────────
-   Admin, conferido AQUI e não só na tela: o login master (email e senha) ou
+   Admin, conferido AQUI e não só na tela: o login master (email e senha, ou
+   a conta master pelo Google — CONTAS_MASTER em _avisos.js) ou
    alguém da equipe com papel "admin". O que vai no email sai do banco; da
    chamada só vêm o cliente, o mês e um recado opcional, que é escapado.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-const { esc, diaMes, ler, quemE, nomeDe, enviar, moldura, formatoTexto } = require('./_avisos.js');
+const { esc, diaMes, ler, quemE, nomeDe, enviar, moldura, formatoTexto, ehMaster } = require('./_avisos.js');
 
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho',
                'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
@@ -68,7 +69,7 @@ module.exports = async (req, res) => {
     try {
         const eu = await quemE(token);
         const equipe = await ler('vz_equipe?select=id,nome,email,ativo,papel', token);
-        const admin = eu.provedor === 'email'
+        const admin = eu.provedor === 'email' || ehMaster(eu.email)
             || equipe.some(p => p.ativo !== false && p.papel === 'admin' && String(p.email || '').toLowerCase() === eu.email);
         if (!admin) return res.status(403).json({ erro: 'Só quem organiza o mês (admin) pode mandar este aviso.' });
 
