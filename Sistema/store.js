@@ -270,6 +270,8 @@ export const store = {
         return usuario;
     },
     aoMudarSessao: (fn) => ouvintes.push(fn),
+    /** Token da sessão para chamar as funções do servidor. null em modo local. */
+    token: () => db.token ? db.token() : Promise.resolve(null),
     usuario: () => usuario,
 
     entrar: async (email, senha) => {

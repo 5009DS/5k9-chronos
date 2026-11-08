@@ -3,7 +3,7 @@ import { abrirFormulario } from './campos.js';
 import { openDrawer, closeDrawer } from './drawer.js';
 import { toast } from './toast.js';
 import { esc, hoje, dataBR } from '../lib/formato.js';
-import { COLUNAS, colunaDe, ativos, euSou } from '../lib/pedidos.js';
+import { COLUNAS, colunaDe, ativos, euSou, avisarResponsavel } from '../lib/pedidos.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    PEDIDOS — os painéis que mais de uma tela abre.
@@ -88,8 +88,16 @@ export const abrirPedido = ({ pedido = null, clienteId = null, clientes, conteud
                 status: dados.status || 'novo',
                 criado_por: pedido?.criado_por || eu?.nome || store.usuario()?.nome || null,
             });
+            /* Email só para quem PASSOU a ser responsável agora, e nunca para si
+               mesmo: anotar um pedido próprio não precisa de aviso, e editar o
+               prazo não deve reavisar ninguém. */
+            const marcado = linha.responsavel_id
+                && linha.responsavel_id !== pedido?.responsavel_id
+                && linha.responsavel_id !== eu?.id;
+            const pessoa = marcado && pessoas.find(p => p.id === linha.responsavel_id);
             toast(pedido ? 'Pedido atualizado.' : 'Pedido anotado.');
             aoSalvar?.(linha);
+            if (pessoa) avisarResponsavel(linha, pessoa, eu);
         },
         aoExcluir: pedido ? async () => {
             await store.pedidos.excluir(pedido.id);

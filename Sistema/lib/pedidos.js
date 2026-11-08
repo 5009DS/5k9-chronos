@@ -1,4 +1,5 @@
 import { store } from '../store.js';
+import { toast } from '../components/toast.js';
 import { hoje, diasAte, dataBR, esc } from './formato.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -106,3 +107,29 @@ export const comStatus = (p, status) => ({
     ...p, status,
     concluido_em: status === 'confirmado' ? (p.concluido_em || new Date().toISOString()) : null,
 });
+
+/* ── O AVISO POR EMAIL ────────────────────────────────────────────────────
+   Quem envia é o servidor (api/avisar.js), que recebe só o id do pedido e
+   lê o resto do banco. Corre depois do salvar e não segura a tela: o pedido
+   já está gravado, e um email que falha não pode desfazer isso — só avisa. */
+export const avisarResponsavel = async (pedido, pessoa, eu) => {
+    if (!pessoa?.email) {
+        toast(`${pessoa?.nome || 'O responsável'} está sem email na equipe — o aviso não foi enviado.`);
+        return;
+    }
+    const token = await store.token().catch(() => null);
+    if (!token) return;   // modo local: não há servidor de email
+    try {
+        const r = await fetch('/api/avisar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ pedido_id: pedido.id, de: eu?.nome || '' }),
+        });
+        const corpo = await r.json().catch(() => ({}));
+        if (r.ok && corpo.enviado) toast(`${pessoa.nome.split(' ')[0]} foi avisado por email.`);
+        else if (!r.ok) throw new Error(corpo.erro || r.status);
+    } catch (e) {
+        console.error('[pedidos] aviso por email:', e);
+        toast('O pedido foi salvo, mas o email de aviso não saiu.');
+    }
+};

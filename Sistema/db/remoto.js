@@ -180,6 +180,14 @@ export const remoto = {
             : null;
     },
 
+    /* O token da sessão, para as funções do servidor (api/avisar.js)
+       confirmarem que quem pede o envio é alguém da equipe com login. */
+    token: async () => {
+        const s = await cliente();
+        const { data: { session } } = await s.auth.getSession();
+        return session?.access_token || null;
+    },
+
     entrar: async (email, senha) => {
         const s = await cliente();
         return s.auth.signInWithPassword({ email, password: senha });
