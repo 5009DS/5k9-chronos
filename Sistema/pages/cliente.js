@@ -127,6 +127,8 @@ const desenharCronograma = (container, token, visao) => {
 
                 <main class="cl-corpo">
 
+                    ${semanaEmDestaque(conteudos, token, comRoteiro)}
+
                     ${painelDoCliente(conteudos, token, visao.retornos)}
 
                     <div class="cl-mes">
@@ -401,6 +403,67 @@ const painelDoCliente = (conteudos, token, retornos) => {
                     <p class="cl-bloco__dica">Está com a equipe. A gente avisa quando precisar de algo.</p>
                     ${andando.map(c => linha(c, true)).join('')}
                 </div>` : ''}
+        </section>`;
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CONTEÚDOS DA SEMANA — a primeira coisa da tela.
+
+   O que vai ao ar de segunda a domingo desta semana, em cartões grandes que
+   se tocam com o polegar. Cada um diz o dia, o formato e se o roteiro já
+   está lá dentro; tocar abre o conteúdo com o roteiro.
+
+   Semana vazia (começo de projeto, recesso) não vira um quadro dizendo
+   "nada": a seção mostra a PRÓXIMA semana que tem conteúdo, com o nome dela.
+   E some de vez quando não há nada pela frente.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const semanaEmDestaque = (conteudos, token, comRoteiro) => {
+    const comDia = conteudos.filter(c => !aguardaData(c));
+    const daSemana = (segunda) => {
+        const fim = somarDias(segunda, 6);
+        return porData(comDia.filter(c => c.data >= segunda && c.data <= fim));
+    };
+
+    let segunda = semanaAtual();
+    let itens = daSemana(segunda);
+    let titulo = 'Conteúdos da semana';
+    if (!itens.length) {
+        const prox = porData(comDia.filter(c => c.data > somarDias(segunda, 6)))[0];
+        if (!prox) return '';
+        const indice = (new Date(`${prox.data}T12:00:00`).getDay() + 6) % 7;   // segunda = 0
+        segunda = somarDias(prox.data, -indice);
+        itens = daSemana(segunda);
+        titulo = segunda === somarDias(semanaAtual(), 7) ? 'Próxima semana' : 'Os próximos conteúdos';
+    }
+
+    const cartao = (c) => {
+        const ehHoje = c.data === hoje();
+        const icone = esteiraDe(c.formato) === 'carrossel' ? 'gallery-horizontal-end' : 'video';
+        const temRoteiro = comRoteiro?.has(c.id);
+        return `
+            <a class="cl-sem__cartao vz-fase--${esc(c.fase || '')} ${ehHoje ? 'is-hoje' : ''}"
+               href="/c/${esc(token)}/${esc(apelidoDeConteudo(c))}">
+                <span class="cl-sem__dia">
+                    <b>${esc(nomeDiaCurto(c.data))}</b>${esc(diaCurto(c.data))}
+                    ${ehHoje ? '<em>hoje</em>' : ''}
+                </span>
+                <span class="cl-sem__titulo">${esc(c.titulo)}</span>
+                <span class="cl-sem__pe">
+                    ${c.formato ? `<span class="cl-sem__formato"><i data-lucide="${icone}"></i>${esc(c.formato)}</span>` : ''}
+                    ${temRoteiro ? `<span class="cl-sem__tem"><i data-lucide="file-text"></i>${esc(palavraTexto(c.formato))}</span>` : ''}
+                    ${temRoteiro ? estadoCurto(c) : ''}
+                </span>
+                <i class="cl-sem__seta" data-lucide="chevron-right"></i>
+            </a>`;
+    };
+
+    return `
+        <section class="cl-sem" aria-label="${esc(titulo)}">
+            <header class="cl-sem__cabeca">
+                <h2>${esc(titulo)}</h2>
+                <span>${esc(semanaCurta(segunda))}</span>
+            </header>
+            <div class="cl-sem__lista">${itens.map(cartao).join('')}</div>
         </section>`;
 };
 
@@ -1265,6 +1328,31 @@ function injectStyles() {
     /* MIN-WIDTH, ao contrário do resto do estúdio: ver o cabeçalho do arquivo.
        O desenho base é o de celular; as regras que crescem estão no fim. */
     style.textContent = `
+        /* ── Conteúdos da semana ── */
+        .cl-sem { display: flex; flex-direction: column; gap: var(--space-3); margin-bottom: var(--space-6); }
+        .cl-sem__cabeca { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); }
+        .cl-sem__cabeca h2 { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.01em; }
+        .cl-sem__cabeca span { font-size: 13px; color: var(--text-secondary); }
+        .cl-sem__lista { display: grid; grid-template-columns: 1fr; gap: var(--space-3); }
+        .cl-sem__cartao {
+            position: relative; display: flex; flex-direction: column; gap: 8px;
+            padding: 16px 44px 16px 18px; border-radius: 16px; text-decoration: none; color: var(--text-primary);
+            background: var(--surface-1); border: 1px solid var(--border-subtle);
+            box-shadow: inset 4px 0 0 var(--vz-cor, var(--accent));
+            transition: transform .15s, border-color .15s;
+        }
+        .cl-sem__cartao:active { transform: scale(0.99); }
+        .cl-sem__cartao:hover { border-color: var(--border-default); }
+        .cl-sem__cartao.is-hoje { border-color: var(--accent-border); background: color-mix(in oklch, var(--accent) 7%, var(--surface-1)); }
+        .cl-sem__dia { display: flex; align-items: baseline; gap: 6px; font-size: 13px; color: var(--text-secondary); }
+        .cl-sem__dia b { font-size: 13px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-primary); }
+        .cl-sem__dia em { margin-left: 4px; padding: 1px 8px; border-radius: 999px; background: var(--accent); color: #fff; font-style: normal; font-size: 11px; font-weight: 700; text-transform: none; }
+        .cl-sem__titulo { font-size: 17px; font-weight: 700; line-height: 1.3; }
+        .cl-sem__pe { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; color: var(--text-secondary); }
+        .cl-sem__formato, .cl-sem__tem { display: inline-flex; align-items: center; gap: 4px; }
+        .cl-sem__formato svg, .cl-sem__tem svg { width: 14px; height: 14px; }
+        .cl-sem__seta { position: absolute; right: 14px; top: 50%; width: 20px; height: 20px; transform: translateY(-50%); color: var(--text-tertiary); }
+        @media (min-width: 720px) { .cl-sem__lista { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
         .cl {
             flex: 1; min-width: 0;
             display: flex; flex-direction: column;
