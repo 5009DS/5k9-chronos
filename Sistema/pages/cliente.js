@@ -441,7 +441,7 @@ const semanaEmDestaque = (conteudos, token, comRoteiro) => {
         const icone = esteiraDe(c.formato) === 'carrossel' ? 'gallery-horizontal-end' : 'video';
         const temRoteiro = comRoteiro?.has(c.id);
         return `
-            <a class="cl-sem__cartao vz-fase--${esc(c.fase || '')} ${ehHoje ? 'is-hoje' : ''}"
+            <a class="cl-sem__cartao ${tipoDoConteudo(c)} ${ehHoje ? 'is-hoje' : ''}"
                href="/c/${esc(token)}/${esc(apelidoDeConteudo(c))}">
                 <span class="cl-sem__dia">
                     <b>${esc(nomeDiaCurto(c.data))}</b>${esc(diaCurto(c.data))}
@@ -449,7 +449,7 @@ const semanaEmDestaque = (conteudos, token, comRoteiro) => {
                 </span>
                 <span class="cl-sem__titulo">${esc(c.titulo)}</span>
                 <span class="cl-sem__pe">
-                    ${c.formato ? `<span class="cl-sem__formato"><i data-lucide="${icone}"></i>${esc(c.formato)}</span>` : ''}
+                    ${c.formato ? `<span class="cl-sem__formato cl-tipo__rotulo"><i data-lucide="${icone}"></i>${esc(c.formato)}</span>` : ''}
                     ${temRoteiro ? `<span class="cl-sem__tem"><i data-lucide="file-text"></i>${esc(palavraTexto(c.formato))}</span>` : ''}
                     ${temRoteiro ? estadoCurto(c) : ''}
                 </span>
@@ -602,12 +602,19 @@ const semanaHTML = ({ segunda, conteudos }, token, comRoteiro) => {
         </section>`;
 };
 
+/* ── A COR É DO FORMATO ─────────────────────────────────────────────────────
+   O contorno inteiro do cartão diz o que a peça É: violeta para reels (e
+   qualquer vídeo), laranja para carrossel — as duas cores da marca. Antes
+   era uma faixa fina à esquerda com a cor da FASE; a fase continua no chip
+   de dentro, e o formato, que é a primeira pergunta de quem abre, passou a
+   ser lido de longe. O nome do formato ganha a mesma cor: é a legenda. */
+const tipoDoConteudo = (c) => `cl-tipo cl-tipo--${esteiraDe(c.formato)}`;
+
 const cartaoConteudo = (c, token, comRoteiro) => {
     const o = objetivo(c.objetivo);
     return `
-        <a class="vz-conteudo ${ajusteTravado(c.etiquetas) ? 'cl-gravado' : ''}"
+        <a class="vz-conteudo ${tipoDoConteudo(c)} ${ajusteTravado(c.etiquetas) ? 'cl-gravado' : ''}"
            href="/c/${esc(token)}/${esc(apelidoDeConteudo(c))}">
-            <span class="vz-fita vz-fita--${esc(c.fase || '')}"></span>
             <div class="vz-conteudo__corpo">
                 <div class="vz-conteudo__topo">
                     <span class="vz-conteudo__dia">${aguardaData(c) ? 'data a definir' : `${esc(nomeDiaCurto(c.data))} ${esc(diaCurto(c.data))}`}</span>
@@ -617,7 +624,7 @@ const cartaoConteudo = (c, token, comRoteiro) => {
                 ${c.tema ? `<p class="vz-conteudo__previa">${esc(c.tema)}</p>` : ''}
                 <div class="vz-conteudo__pe">
                     ${o ? `<span>${esc(o.nome)}</span>` : ''}
-                    ${c.formato ? `<span>${esc(c.formato)}</span>` : ''}
+                    ${c.formato ? `<span class="cl-tipo__rotulo">${esc(c.formato)}</span>` : ''}
                     ${comRoteiro?.has(c.id) ? estadoCurto(c) : ''}
                 </div>
                 ${/* Em que pé está a produção. Sai do banco já recortado: só as
@@ -1338,12 +1345,18 @@ function injectStyles() {
             position: relative; display: flex; flex-direction: column; gap: 8px;
             padding: 16px 44px 16px 18px; border-radius: 16px; text-decoration: none; color: var(--text-primary);
             background: var(--surface-1); border: 1px solid var(--border-subtle);
-            box-shadow: inset 4px 0 0 var(--vz-cor, var(--accent));
             transition: transform .15s, border-color .15s;
         }
         .cl-sem__cartao:active { transform: scale(0.99); }
-        .cl-sem__cartao:hover { border-color: var(--border-default); }
-        .cl-sem__cartao.is-hoje { border-color: var(--accent-border); background: color-mix(in oklch, var(--accent) 7%, var(--surface-1)); }
+        .cl-sem__cartao.is-hoje { background: color-mix(in oklch, var(--tipo-cor, var(--accent)) 8%, var(--surface-1)); }
+
+        /* O contorno na cor do formato (tipoDoConteudo). */
+        .cl-tipo--video     { --tipo-cor: var(--accent, #A855FF); }
+        .cl-tipo--carrossel { --tipo-cor: var(--accent-warm, #FF7A45); }
+        .cl-tipo { border: 1.5px solid color-mix(in oklch, var(--tipo-cor) 65%, transparent) !important; }
+        .cl-tipo:hover { border-color: var(--tipo-cor) !important; }
+        .cl-tipo__rotulo { color: var(--tipo-cor); font-weight: 700; }
+        .cl-tipo__rotulo svg { color: var(--tipo-cor); }
         .cl-sem__dia { display: flex; align-items: baseline; gap: 6px; font-size: 13px; color: var(--text-secondary); }
         .cl-sem__dia b { font-size: 13px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-primary); }
         .cl-sem__dia em { margin-left: 4px; padding: 1px 8px; border-radius: 999px; background: var(--accent); color: #fff; font-style: normal; font-size: 11px; font-weight: 700; text-transform: none; }
@@ -1663,7 +1676,6 @@ function injectStyles() {
         .cl-gravado .vz-conteudo__titulo,
         .cl-gravado .vz-conteudo__previa,
         .cl-gravado .vz-conteudo__pe,
-        .cl-gravado .vz-fita,
         .cl-gravado .cl-seta { opacity: 0.42; }
 
         .cl--gravado .cl-titulo,
