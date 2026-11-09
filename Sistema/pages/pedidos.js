@@ -14,7 +14,7 @@ import { abrirPedido, abrirDecisao, abrirEquipe, injectEstilosPedidos } from '..
 import { abrirFormulario } from '../components/campos.js';
 import { abrirTarefa } from '../components/tarefa.js';
 import { colunaDaDemanda, chipPrioridade, pesoPrioridade, progressoHTML, campoQuemCuida, avisarMarcados, semSugestao, ehSugestao, injectEstilosTarefas, classeDestaque } from '../lib/tarefas.js';
-import { etapaAtual, chipEtiqueta, injectEstilosEtiqueta } from '../lib/etiquetas.js';
+import { etapaAtual, chipEtiqueta, injectEstilosEtiqueta, esteiraDe, etapaNaEsteira } from '../lib/etiquetas.js';
 import { itensDeEtapa, moverParaEtapa, mensagemDeMovimento } from '../lib/etapas.js';
 import { aguardaData } from '../lib/cronograma.js';
 
@@ -208,7 +208,7 @@ export const renderPedidos = async (container, clienteId = null) => {
         const resp = (c.responsaveis || []).map(id => pessoaPorId.get(id)).filter(Boolean);
         const etapa = etapaAtual(c.etiquetas);
         return `
-        <article class="pd-cartao pd-cartao--demanda ${classeDestaque(c)}">
+        <article class="pd-cartao pd-cartao--demanda ${classeDestaque(c)}" data-arrastavel="d:${esc(c.id)}">
             <div class="pd-cartao__topo">
                 ${clienteId ? '' : `<span class="pd-cartao__cliente">${esc(nomeCliente.get(c.cliente_id) || 'Cliente removido')}</span>`}
                 ${ehSugestao(c)
@@ -280,6 +280,51 @@ export const renderPedidos = async (container, clienteId = null) => {
             }] : []),
             { id: 'quadro', label: 'Quadro do cliente', icon: 'layout-grid', href: `/quadro/${c.cliente_id}` },
         ]);
+    };
+
+    /* ── ARRASTAR UMA DEMANDA É MUDAR A ETAPA ──────────────────────────
+       A coluna da demanda sai da etapa (lib/tarefas.js — colunaDaDemanda),
+       então soltá-la noutra coluna escolhe a etapa que a põe lá:
+         Novo        → rascunho
+         Fazendo     → roteiro em desenvolvimento
+         Entregue    → a aprovação do momento: do roteiro, se ele ainda não
+                       foi aprovado; senão a da gravação (vídeo) ou da arte
+         Confirmado  → pronto para publicar
+       A sugestão arrastada deixa de ser sugestão quando ganha dono. */
+    const etapaDaColuna = (c, coluna) => {
+        if (coluna === 'novo') return null;
+        if (coluna === 'fazendo') return 'roteiro em desenvolvimento';
+        if (coluna === 'confirmado') return 'pronto para publicar';
+        const atual = etapaAtual(c.etiquetas);
+        if (!atual || atual.etapa < 2) return 'roteiro em aprovação';
+        return etapaNaEsteira(esteiraDe(c.formato) === 'carrossel' ? 'arte aguardando aprovação' : 'gravação aguardando aprovação',
+            esteiraDe(c.formato)) || 'roteiro em aprovação';
+    };
+
+    const moverDemanda = async (id, coluna) => {
+        const c = demandas.find(x => x.id === id);
+        if (!c || colunaDaDemanda(c) === coluna) return;
+        const original = { ...c };
+        const nome = etapaDaColuna(c, coluna);
+        /* Sem ninguém cuidando, quem arrasta fica com ela: mover é pegar a
+           tarefa. Sem pessoa (login master), a demanda continua marcada como
+           sugestão — senão ela sumiria desta tela, que só mostra demanda com
+           dono ou sugestão. */
+        let responsaveis = c.responsaveis || [];
+        let assumiu = false;
+        if (!responsaveis.length && eu && coluna !== 'novo') { responsaveis = [eu.id]; assumiu = true; }
+        const etiquetas = responsaveis.length ? semSugestao(c.etiquetas) : c.etiquetas;
+        try {
+            const { novoStatus, reabriu } = await moverParaEtapa({ ...c, responsaveis, etiquetas }, nome);
+            toast(mensagemDeMovimento(nome, novoStatus, reabriu) + (assumiu ? ' Você ficou com ela.' : ''), {
+                label: 'Desfazer',
+                onClick: async () => { await store.conteudos.salvar(original); recarregar(); },
+            });
+        } catch (e) {
+            console.error('[pedidos] mover demanda:', e);
+            toast('Não foi possível mudar a etapa. Tente de novo.');
+        }
+        recarregar();
     };
 
     const mover = async (id, status) => {
@@ -514,7 +559,7 @@ export const renderPedidos = async (container, clienteId = null) => {
         soltarArraste = ativarArraste(quadro, {
             item: '[data-arrastavel]',
             alvo: '[data-solta]',
-            aoSoltar: (id, coluna) => mover(id, coluna),
+            aoSoltar: (id, coluna) => id.startsWith('d:') ? moverDemanda(id.slice(2), coluna) : mover(id, coluna),
         });
 
         if (window.lucide) lucide.createIcons();
