@@ -34,6 +34,23 @@ export const chipPrioridade = (c, { sempreComNome = false } = {}) => {
         <i data-lucide="flag"></i>${comNome ? esc(p.nome) : ''}</span>`;
 };
 
+/* ── O CARTÃO COLORIDO ────────────────────────────────────────────────────
+   O destaque era uma borda de 3px à esquerda — some no meio de trinta
+   cartões. Agora o cartão INTEIRO ganha a cor da marca: a prioridade se lê
+   do outro lado da sala.
+
+   Só o que pede atenção pinta: urgente, alta e normal. Baixa e "sem
+   prioridade" ficam no cartão escuro — se tudo for colorido, nada é. A
+   sugestão ainda sem prioridade ganha o ciano: é pauta esperando decisão.
+
+   Quem usa: pages/pedidos.js e pages/quadro.js (cartões e banco de temas). */
+export const classeDestaque = (item) => {
+    const p = item?.prioridade;
+    if (p === 'urgente' || p === 'alta' || p === 'normal') return `tf-cheio tf-cheio--${p}`;
+    if (!p && ehSugestao(item)) return 'tf-cheio tf-cheio--sugestao';
+    return '';
+};
+
 /** Os itens de menu para escolher a prioridade (quadro, seleção em lote). */
 export const itensDePrioridade = (atual, aoEscolher) => [
     ...PRIORIDADES.map(p => ({
@@ -154,6 +171,51 @@ export function injectEstilosTarefas() {
         }
         .tf-check i, .tf-check svg { width: 13px; height: 13px; }
         .tf-check--ok { color: var(--success, #10B981); }
+
+        /* ── Cartão colorido (classeDestaque) ──
+           As cores da marca (tokens.css), não pastel: o vermelho-laranja do
+           urgente, o dourado (--accent-gold), o violeta (--accent) e o ciano
+           (--accent-cyan). Escritas aqui, e não pelos tokens de gradiente: a
+           camada ds-tokens redefine --gradient-gold como laranja. Cada uma traz a tinta que lê bem sobre
+           ela — branca no vermelho e no violeta, escura no dourado e no ciano.
+           Os chips viram véus translúcidos da mesma tinta; os círculos das
+           pessoas mantêm a cor própria. */
+        .tf-cheio {
+            background: var(--cheio) !important;
+            border-color: transparent !important;
+            color: var(--cheio-tinta) !important;
+            box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 10px 24px -14px var(--cheio-sombra);
+        }
+        .tf-cheio:hover { filter: brightness(1.06); }
+        .tf-cheio--urgente {
+            --cheio: linear-gradient(135deg in oklab, #E8335A 0%, #FF5C7A 45%, #FF7A45 100%);
+            --cheio-sombra: #FF5C7A; --cheio-tinta: #FFFFFF; --cheio-veu: rgba(255,255,255,0.18);
+        }
+        .tf-cheio--alta {
+            --cheio: linear-gradient(135deg in oklab, #FFD27F 0%, #FFC96B 50%, #FFB055 100%);
+            --cheio-sombra: #FFB055; --cheio-tinta: #1A1206; --cheio-veu: rgba(26,18,6,0.10);
+        }
+        .tf-cheio--normal {
+            --cheio: linear-gradient(135deg in oklab, #7A10D8 0%, #8E28F0 50%, #A855FF 100%);
+            --cheio-sombra: #8E28F0; --cheio-tinta: #FFFFFF; --cheio-veu: rgba(255,255,255,0.16);
+        }
+        .tf-cheio--sugestao {
+            --cheio: linear-gradient(135deg in oklab, #4FD1FF 0%, #7FE0FF 100%);
+            --cheio-sombra: #4FD1FF; --cheio-tinta: #06202B; --cheio-veu: rgba(6,32,43,0.10);
+        }
+        .tf-cheio *:not(.pd-avatar):not(.pd-avatar *) { color: var(--cheio-tinta) !important; }
+        .tf-cheio a:hover, .tf-cheio button:hover { opacity: 0.8; }
+        .tf-cheio :is(.vz-etiqueta, .vz-status, .vz-fase, .qd-formato, .qd-marca, .qd-drive) {
+            background: var(--cheio-veu) !important;
+            border-color: var(--cheio-veu) !important;
+        }
+        .tf-cheio .tf-prio { --cor: var(--cheio-tinta); }
+        .tf-cheio .tf-prio svg { fill: var(--cheio-tinta); }
+        .tf-cheio .vz-ponto { box-shadow: 0 0 0 1.5px var(--cheio-tinta); }
+        .tf-cheio .ds-icon-btn { background: transparent; }
+        .tf-cheio .ds-icon-btn:hover { background: var(--cheio-veu); }
+        .tf-cheio .pd-avatares .pd-avatar { box-shadow: 0 0 0 2px var(--cheio-sombra); }
+        .tf-cheio .pd-autor { opacity: 0.85; }
     `;
     document.head.appendChild(style);
 }

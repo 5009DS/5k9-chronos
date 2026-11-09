@@ -13,7 +13,7 @@ import {
 import { abrirPedido, abrirDecisao, abrirEquipe, injectEstilosPedidos } from '../components/pedidos.js';
 import { abrirFormulario } from '../components/campos.js';
 import { abrirTarefa } from '../components/tarefa.js';
-import { colunaDaDemanda, chipPrioridade, pesoPrioridade, progressoHTML, campoQuemCuida, avisarMarcados, semSugestao, ehSugestao, injectEstilosTarefas } from '../lib/tarefas.js';
+import { colunaDaDemanda, chipPrioridade, pesoPrioridade, progressoHTML, campoQuemCuida, avisarMarcados, semSugestao, ehSugestao, injectEstilosTarefas, classeDestaque } from '../lib/tarefas.js';
 import { etapaAtual, chipEtiqueta, injectEstilosEtiqueta } from '../lib/etiquetas.js';
 import { itensDeEtapa, moverParaEtapa, mensagemDeMovimento } from '../lib/etapas.js';
 import { aguardaData } from '../lib/cronograma.js';
@@ -169,17 +169,20 @@ export const renderPedidos = async (container, clienteId = null) => {
         const idx = COLUNAS.findIndex(c => c.id === (p.status || 'novo'));
         const proxima = COLUNAS[idx + 1];
         return `
-        <article class="pd-cartao ${atrasado(p) ? 'pd-cartao--atrasado' : ''} ${p.prioridade === 'urgente' || p.prioridade === 'alta' ? `pd-cartao--prio-${p.prioridade}` : ''}" data-arrastavel="${esc(p.id)}">
+        <article class="pd-cartao ${atrasado(p) ? 'pd-cartao--atrasado' : ''} ${classeDestaque(p)}" data-arrastavel="${esc(p.id)}">
             <div class="pd-cartao__topo">
                 ${clienteId ? '' : `<span class="pd-cartao__cliente">${esc(nomeCliente.get(p.cliente_id) || 'Cliente removido')}</span>`}
                 <span class="pd-cartao__idade">${esc(idadeTexto(p))}${p.quem_pediu ? ` · ${esc(p.quem_pediu)}` : ''}</span>
             </div>
             <button type="button" class="pd-cartao__texto" data-editar="${esc(p.id)}">${esc(p.texto)}</button>
             ${p.detalhe ? `<span class="pd-cartao__marca" title="${esc(p.detalhe.slice(0, 300))}"><i data-lucide="quote"></i> mensagem original</span>` : ''}
+            ${p.prioridade || prazo ? `
+                <div class="pd-cartao__estado">
+                    ${chipPrioridade(p, { sempreComNome: true })}
+                    ${prazo ? `<span class="pd-prazo pd-prazo--${prazo.tom}"><i data-lucide="calendar-clock"></i>${esc(prazo.texto)}</span>` : ''}
+                </div>` : ''}
             <div class="pd-cartao__pe">
                 ${avataresHTML(resp)}
-                ${chipPrioridade(p)}
-                ${prazo ? `<span class="pd-prazo pd-prazo--${prazo.tom}"><i data-lucide="calendar-clock"></i>${esc(prazo.texto)}</span>` : ''}
                 ${demanda ? `<a class="pd-demanda" href="${esc(caminhoDoConteudo(demanda))}" title="${esc(demanda.titulo)}"><i data-lucide="file-text"></i></a>` : ''}
                 ${nComentarios.get(p.id) ? `<span class="pd-coments" title="${nComentarios.get(p.id)} comentário${nComentarios.get(p.id) > 1 ? 's' : ''}"><i data-lucide="message-circle"></i>${nComentarios.get(p.id)}</span>` : ''}
                 ${Array.isArray(p.checklist) && p.checklist.length ? `<span class="pd-coments" title="Tópicos"><i data-lucide="list-checks"></i>${p.checklist.filter(t => t.feito).length}/${p.checklist.length}</span>` : ''}
@@ -205,7 +208,7 @@ export const renderPedidos = async (container, clienteId = null) => {
         const resp = (c.responsaveis || []).map(id => pessoaPorId.get(id)).filter(Boolean);
         const etapa = etapaAtual(c.etiquetas);
         return `
-        <article class="pd-cartao pd-cartao--demanda ${ehSugestao(c) ? 'pd-cartao--sugestao' : ''} ${c.prioridade === 'urgente' ? 'pd-cartao--urgente' : ''}">
+        <article class="pd-cartao pd-cartao--demanda ${classeDestaque(c)}">
             <div class="pd-cartao__topo">
                 ${clienteId ? '' : `<span class="pd-cartao__cliente">${esc(nomeCliente.get(c.cliente_id) || 'Cliente removido')}</span>`}
                 ${ehSugestao(c)
@@ -604,18 +607,15 @@ const ESTILOS = `
     background: var(--surface-1); cursor: grab;
 }
 .pd-cartao--atrasado { border-left: 3px solid var(--danger); }
-/* Prioridade na borda, como no quadro do mês. Atrasado continua vencendo:
-   vermelho de atraso é mais urgente que qualquer bandeira. */
-.pd-cartao--prio-urgente:not(.pd-cartao--atrasado) { border-left: 3px solid #EF4444; }
-.pd-cartao--prio-alta:not(.pd-cartao--atrasado) { border-left: 3px solid #F59E0B; }
+/* A prioridade pinta o cartão inteiro (lib/tarefas.js — classeDestaque).
+   O atraso continua dizendo por cima: um anel vermelho por dentro. */
+.pd-cartao--atrasado.tf-cheio { box-shadow: inset 0 0 0 2px #C0261A !important; }
 /* A demanda: mesma moldura, com a marca "demanda" e uma borda de outra cor
    para não se confundir com o pedido do cliente. */
 .pd-cartao--demanda { border-left: 3px solid var(--info); }
-.pd-cartao--demanda.pd-cartao--urgente { border-left-color: #EF4444; }
 .pd-cartao--demanda .pd-cartao__texto { text-decoration: none; color: var(--text-primary); }
 .pd-tipo { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; color: var(--info); }
 .pd-tipo svg { width: 11px; height: 11px; }
-.pd-cartao--sugestao { border-left-color: var(--warning); background: color-mix(in oklch, var(--warning) 5%, var(--surface-2)); }
 .pd-tipo--sugestao { color: var(--warning); }
 .pd-cartao__estado { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .pd-tipos { padding-right: var(--space-2); border-right: 1px solid var(--border-subtle); }
@@ -632,7 +632,7 @@ const ESTILOS = `
 .pd-coluna--confirmado .pd-cartao__texto { text-decoration: line-through; text-decoration-color: var(--text-disabled); }
 .pd-cartao__marca { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-tertiary); }
 .pd-cartao__marca svg { width: 11px; height: 11px; }
-.pd-cartao__pe { display: flex; align-items: center; gap: 6px; }
+.pd-cartao__pe { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .pd-cartao__espaco { flex: 1; }
 .pd-prazo { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: var(--text-tertiary); }
 .pd-prazo svg { width: 12px; height: 12px; }

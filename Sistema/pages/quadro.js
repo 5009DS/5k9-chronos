@@ -6,7 +6,7 @@ import { ativarArraste } from '../lib/arrastar.js';
 import { nomeFase, noDiaCerto } from '../lib/diretorio.js';
 import { palavraTexto } from '../lib/roteiro.js';
 import { lerPedidos, lerEquipe, aberto, autorHTML, souAdmin, injectEstilosAvatar, euSou, ativos } from '../lib/pedidos.js';
-import { chipPrioridade, itensDePrioridade, prioridadeDe, pesoPrioridade, quemCuidaHTML, progressoHTML, campoQuemCuida, avisarMarcados, injectEstilosTarefas, PRIORIDADES, ehSugestao, semSugestao } from '../lib/tarefas.js';
+import { chipPrioridade, itensDePrioridade, prioridadeDe, pesoPrioridade, quemCuidaHTML, progressoHTML, campoQuemCuida, avisarMarcados, injectEstilosTarefas, PRIORIDADES, ehSugestao, semSugestao, classeDestaque } from '../lib/tarefas.js';
 import { abrirFormulario } from '../components/campos.js';
 import { abrirMesOrganizado } from '../lib/avisos.js';
 import { injectEstilosEtiqueta, chipsEstado, etapaAtual, etiquetaMeta, chipEtiqueta, ETAPAS, etapaNaEsteira, esteiraDe } from '../lib/etiquetas.js';
@@ -513,7 +513,7 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
         </aside>`;
 
     const itemBanco = (c) => `
-                    <article class="qd-cartao qd-banco__item ${ehSugestao(c) ? 'qd-banco__item--sugestao' : ''}" data-arrastavel="${esc(c.id)}">
+                    <article class="qd-cartao qd-banco__item ${classeDestaque(c)}" data-arrastavel="${esc(c.id)}">
                         <div class="qd-cartao__corpo">
                             <div class="qd-cartao__topo">
                                 ${chipFase(c.fase, { curto: true })}
@@ -643,7 +643,7 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
 
         const marcado = marcados.has(c.id);
         return `
-            <article class="qd-cartao ${escolhido ? 'is-escolhido' : ''} ${marcado ? 'is-marcado' : ''} ${foraDeFase ? 'qd-cartao--fora' : ''} ${apagado} ${prioridadeDe(c) ? `qd-cartao--prio-${c.prioridade}` : ''}"
+            <article class="qd-cartao ${escolhido ? 'is-escolhido' : ''} ${marcado ? 'is-marcado' : ''} ${foraDeFase ? 'qd-cartao--fora' : ''} ${apagado} ${classeDestaque(c)}"
                      data-arrastavel="${esc(c.id)}" data-cartao="${esc(c.id)}" data-solta="${semData ? 'semdata' : `dia:${esc(c.data)}`}"
                      ${marcado && marcados.size > 1 ? `data-lote="${marcados.size}"` : ''}>
                 <div class="qd-cartao__corpo">
@@ -1272,16 +1272,13 @@ html[data-theme="light"] .qd-lote__dia input { color-scheme: light; }
 }
 .qd-banco__grupo i, .qd-banco__grupo svg { width: 14px; height: 14px; }
 .qd-banco__grupo span { padding: 0 6px; border-radius: 999px; background: var(--surface-3); font-size: 11px; }
-.qd-banco__grupo--sugestao { color: var(--warning); margin-top: 0; }
-.qd-banco__grupo--sugestao span { background: var(--warning-muted); color: var(--warning); }
+/* O ciano das sugestões (lib/tarefas.js — tf-cheio--sugestao) também no título do grupo. */
+.qd-banco__grupo--sugestao { color: var(--accent-cyan, #4FD1FF); margin-top: 0; }
+.qd-banco__grupo--sugestao span { background: var(--info-muted); color: var(--accent-cyan, #4FD1FF); }
 .qd-banco__grupo-dica { margin: -2px 0 2px; font-size: 11px; color: var(--text-tertiary, var(--text-secondary)); }
-.qd-banco__item--sugestao { border-color: color-mix(in oklch, var(--warning) 45%, transparent); background: color-mix(in oklch, var(--warning) 6%, var(--surface-2)); }
 .qd-cartao__pessoas { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
 .qd-cartao__pessoas:empty { display: none; }
 .qd-cartao__pessoas .pd-autor { margin-left: 0; }
-/* Urgente marca a borda esquerda: a primeira coisa que o olho acha na grade. */
-.qd-cartao--prio-urgente { box-shadow: inset 3px 0 0 #EF4444; }
-.qd-cartao--prio-alta { box-shadow: inset 3px 0 0 #F59E0B; }
 .qd-filtros-tarefa .vz-filtro { display: inline-flex; align-items: center; gap: 5px; }
 .qd-filtros-tarefa .vz-filtro > i, .qd-filtros-tarefa .vz-filtro > svg { width: 14px; height: 14px; }
 .qd-filtro__seta { opacity: 0.6; }
