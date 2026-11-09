@@ -395,7 +395,7 @@ export const renderPedidos = async (container, clienteId = null) => {
                         <button type="button" class="pd-filtro ${tipo === id ? 'is-active' : ''}" data-tipo="${id}">${rotulo}</button>`).join('')}
                 </div>
                 ${pessoas.length ? `
-                    <div class="pd-filtros" role="group" aria-label="Filtrar por pessoa">
+                    <div class="pd-filtros pd-pessoas" role="group" aria-label="Filtrar por pessoa">
                         ${chipQuem('todos', 'Todos')}
                         ${eu ? chipQuem(eu.id, 'Comigo', avatarHTML(eu, { tamanho: 18 })) : ''}
                         ${pessoas.filter(p => p.id !== eu?.id).map(p => chipQuem(p.id, p.nome.split(' ')[0], avatarHTML(p, { tamanho: 18 }))).join('')}
@@ -455,7 +455,10 @@ export const renderPedidos = async (container, clienteId = null) => {
         content.querySelector('#pd-equipe-2')?.addEventListener('click', () =>
             abrirEquipe({ equipe, aoSalvar: recarregar }));
 
-        content.querySelector('.pd-filtros')?.addEventListener('click', (e) => {
+        /* `.pd-pessoas`, e não `.pd-filtros`: o grupo Tudo/Pedidos/Demandas
+           também é um .pd-filtros e vem antes — escutar o primeiro deixava os
+           nomes sem resposta. */
+        content.querySelector('.pd-pessoas')?.addEventListener('click', (e) => {
             const b = e.target.closest('[data-quem]');
             if (!b) return;
             quem = b.dataset.quem;
