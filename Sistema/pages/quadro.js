@@ -199,6 +199,17 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
               onClick: () => abrirLinkDoCliente(cliente, recarregar) },
             { id: 'ver', label: 'Ver como o cliente vê', icon: 'external-link',
               onClick: () => window.open(linkCliente, '_blank', 'noopener') },
+            /* O link da véspera da gravação: só o que está em "roteiro em
+               aprovação" (pages/cliente.js — desenharGravar). */
+            { id: 'gravar', label: 'Copiar link dos roteiros a gravar', icon: 'clapperboard',
+              onClick: async () => {
+                  const n = conteudos.filter(c => etapaAtual(c.etiquetas)?.nome === 'roteiro em aprovação' && c.status !== 'rascunho').length;
+                  try {
+                      await navigator.clipboard.writeText(`${location.origin}${linkCliente}/gravar`);
+                      toast(n ? `Link copiado: ${n} roteiro${n > 1 ? 's' : ''} em aprovação.`
+                              : 'Link copiado. Ainda não há roteiro em "roteiro em aprovação" — a lista do cliente vai abrir vazia.');
+                  } catch { toast('Não foi possível copiar.'); }
+              } },
             { id: 'apagar', label: 'Apagar cronograma…', icon: 'trash-2', separadorAntes: true,
               onClick: () => abrirApagarCronograma(cliente, conteudos, mes, recarregar) },
         ]);

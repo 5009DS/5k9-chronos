@@ -182,7 +182,7 @@ const COLECOES = ['clientes', 'conteudos', 'blocos', 'retornos'];
    precisam delas, e somá-las ali seria uma consulta a mais em toda tela. Mas
    entram na cópia de segurança — perder os pedidos é perder a memória que
    elas existem para guardar. */
-const COLECOES_PEDIDOS = ['equipe', 'pedidos', 'decisoes', 'comentarios'];
+const COLECOES_PEDIDOS = ['equipe', 'pedidos', 'decisoes', 'comentarios', 'metricas'];
 
 const colecao = (nome) => ({
     listar: () => comCache(nome, () => db.listar(nome)),
@@ -350,6 +350,7 @@ export const store = {
     pedidos:   colecao('pedidos'),
     decisoes:  colecao('decisoes'),
     comentarios: colecao('comentarios'),
+    metricas:  colecao('metricas'),
 
     /** Tudo de uma vez, em paralelo — é o que o painel consome. */
     tudo: async () => {

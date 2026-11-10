@@ -70,7 +70,12 @@ export const renderCliente = async (container, token, conteudoId) => {
     // O diretório vigente vem junto com o cronograma, numa ida só ao banco.
     if (visao.diretorio) usarDiretorio(visao.diretorio);
 
+    /* /c/<cliente>/gravar: só os roteiros em aprovação — o link que vai para o
+       cliente na véspera da gravação. Não é outra porta no banco: é a mesma
+       visão, filtrada aqui. */
+    if (conteudoId === 'gravar') return desenharGravar(container, token, visao);
     if (conteudoId) return desenharConteudo(container, token, visao, conteudoId);
+    lembrarOrigem(token, null);
     return desenharCronograma(container, token, visao);
 };
 
@@ -436,7 +441,20 @@ const semanaEmDestaque = (conteudos, token, comRoteiro) => {
         titulo = segunda === somarDias(semanaAtual(), 7) ? 'Próxima semana' : 'Os próximos conteúdos';
     }
 
-    const cartao = (c) => {
+    const cartao = (c) => cartaoGrande(c, token, comRoteiro);
+
+    return `
+        <section class="cl-sem" aria-label="${esc(titulo)}">
+            <header class="cl-sem__cabeca">
+                <h2>${esc(titulo)}</h2>
+                <span>${esc(semanaCurta(segunda))}</span>
+            </header>
+            <div class="cl-sem__lista">${itens.map(cartao).join('')}</div>
+        </section>`;
+};
+
+/* O cartão grande da semana — usado também na lista de roteiros para gravar. */
+const cartaoGrande = (c, token, comRoteiro) => {
         const ehHoje = c.data === hoje();
         const icone = esteiraDe(c.formato) === 'carrossel' ? 'gallery-horizontal-end' : 'video';
         const temRoteiro = comRoteiro?.has(c.id);
@@ -455,17 +473,54 @@ const semanaEmDestaque = (conteudos, token, comRoteiro) => {
                 </span>
                 <i class="cl-sem__seta" data-lucide="chevron-right"></i>
             </a>`;
-    };
-
-    return `
-        <section class="cl-sem" aria-label="${esc(titulo)}">
-            <header class="cl-sem__cabeca">
-                <h2>${esc(titulo)}</h2>
-                <span>${esc(semanaCurta(segunda))}</span>
-            </header>
-            <div class="cl-sem__lista">${itens.map(cartao).join('')}</div>
-        </section>`;
 };
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ROTEIROS PARA GRAVAR — /c/<cliente>/gravar
+
+   O que a equipe deixou em "roteiro em aprovação", e só isso. É o link da
+   véspera da gravação: o cliente lê, aprova ou pede ajuste, e no dia abre o
+   teleprompter do mesmo lugar. Sem cronograma, sem painel, sem legenda —
+   quem abre este link tem uma tarefa só.
+
+   Tocar abre o roteiro, e o "voltar" de lá traz de volta para esta lista
+   (lembrarOrigem), não para o cronograma.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const desenharGravar = (container, token, visao) => {
+    const { cliente, conteudos } = visao;
+    lembrarOrigem(token, 'gravar');
+    const comRoteiro = new Set((visao.blocos || []).map(b => b.conteudo_id));
+    const itens = porData(conteudos.filter(c => etapaAtual(c.etiquetas)?.nome === 'roteiro em aprovação'));
+
+    container.innerHTML = `
+        <div class="cl">
+            ${cabecalho(cliente)}
+            <main class="cl-corpo">
+                <section class="cl-sem">
+                    <header class="cl-sem__cabeca">
+                        <h2>Roteiros para gravar</h2>
+                        ${itens.length ? `<span>${itens.length} roteiro${itens.length > 1 ? 's' : ''}</span>` : ''}
+                    </header>
+                    ${itens.length ? `
+                        <p class="cl-gravar__dica">Leia cada um e aprove ou peça ajuste. Na hora de gravar, abra o roteiro e toque em <b>Teleprompter</b>.</p>
+                        <div class="cl-sem__lista">${itens.map(c => cartaoGrande(c, token, comRoteiro)).join('')}</div>`
+                    : vazioHTML('clapperboard', 'Nenhum roteiro esperando você agora',
+                        'Quando a equipe preparar os próximos, eles aparecem aqui neste mesmo link.')}
+                </section>
+                <a class="cl-gravar__todos" href="/c/${esc(token)}"><i data-lucide="calendar-days"></i> Ver o cronograma completo</a>
+            </main>
+        </div>`;
+    if (window.lucide) lucide.createIcons();
+    ligarTema(container);
+};
+
+/* De onde a pessoa veio, para o "voltar" do roteiro. Na aba, e não no
+   aparelho: é estado de navegação. */
+const lembrarOrigem = (token, origem) => {
+    try { origem ? sessionStorage.setItem(`5k9_cl_origem_${token}`, origem) : sessionStorage.removeItem(`5k9_cl_origem_${token}`); }
+    catch { /* sem armazenamento: o voltar vai para o cronograma */ }
+};
+const origemDe = (token) => { try { return sessionStorage.getItem(`5k9_cl_origem_${token}`); } catch { return null; } };
 
 /* ═══════════════════════════════════════════════════════════════════════════
    O CALENDÁRIO
@@ -699,9 +754,13 @@ const desenharConteudo = (container, token, visao, conteudoId) => {
     container.innerHTML = `
         <div class="cl cl--roteiro ${gravado ? 'cl--gravado' : ''}">
             <header class="cl-topo-roteiro">
-                <a class="cl-voltar" href="/c/${esc(token)}">
-                    <i data-lucide="arrow-left"></i> Cronograma
-                </a>
+                ${origemDe(token) === 'gravar' ? `
+                    <a class="cl-voltar" href="/c/${esc(token)}/gravar">
+                        <i data-lucide="arrow-left"></i> Roteiros
+                    </a>` : `
+                    <a class="cl-voltar" href="/c/${esc(token)}">
+                        <i data-lucide="arrow-left"></i> Cronograma
+                    </a>`}
                 <span class="cl-topo-cliente">${esc(cliente.nome)}</span>
             </header>
 
@@ -1349,6 +1408,11 @@ function injectStyles() {
         }
         .cl-sem__cartao:active { transform: scale(0.99); }
         .cl-sem__cartao.is-hoje { background: color-mix(in oklch, var(--tipo-cor, var(--accent)) 8%, var(--surface-1)); }
+
+        .cl-gravar__dica { margin: 0; font-size: 14px; line-height: 1.5; color: var(--text-secondary); }
+        .cl-gravar__todos { display: inline-flex; align-items: center; gap: 8px; margin: var(--space-4) 0; font-size: 14px; color: var(--text-secondary); text-decoration: none; }
+        .cl-gravar__todos svg { width: 16px; height: 16px; }
+        .cl-gravar__todos:hover { color: var(--text-primary); }
 
         /* O contorno na cor do formato (tipoDoConteudo). */
         .cl-tipo--video     { --tipo-cor: var(--accent, #A855FF); }

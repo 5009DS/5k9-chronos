@@ -137,7 +137,15 @@ module.exports = async (req, res) => {
     const host = `https://${req.headers.host || 'chronos.5k9.studio'}`;
 
     let card, url;
-    if (cliente) {
+    if (cliente && ref === 'gravar') {
+        // /c/cliente/gravar: a lista dos roteiros em aprovação (pages/cliente.js).
+        const previa = await rpc('vz_previa_cliente', { p_token: cliente, p_ref: null });
+        card = previa && {
+            titulo: `Roteiros para gravar · ${previa.cliente}`,
+            descricao: 'Leia, aprove ou peça ajuste. Na hora de gravar, é só abrir o teleprompter. 5K9 Studio.',
+        };
+        url = `${host}/c/${encodeURI(cliente)}/gravar`;
+    } else if (cliente) {
         card = cardDoCliente(await rpc('vz_previa_cliente', { p_token: cliente, p_ref: ref || null }));
         url = `${host}/c/${encodeURI(cliente)}${ref ? `/${encodeURI(ref)}` : ''}`;
     } else {
