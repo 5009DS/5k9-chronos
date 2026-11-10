@@ -705,6 +705,11 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
                            title="Abrir no Drive" aria-label="Abrir no Drive">
                             <i data-lucide="folder-open"></i>
                         </a>` : ''}
+                    ${c.referencia_url ? `
+                        <a class="qd-drive" href="${esc(c.referencia_url)}" target="_blank" rel="noopener"
+                           title="Ver referência" aria-label="Ver referência">
+                            <i data-lucide="clapperboard"></i>
+                        </a>` : ''}
                 </div>
             </article>`;
     };

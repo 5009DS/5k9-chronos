@@ -1305,6 +1305,8 @@ export async function formularioConteudo(c, cliente, mesSugerido, aoTerminar, et
                da tela do cliente (db/migracao-drive.sql). */
             { nome: 'drive_url', rotulo: 'Link do Drive', placeholder: 'https://drive.google.com/…',
               dica: 'Pasta com o material bruto. Só a equipe vê — quem for editar abre direto daqui.' },
+            { nome: 'referencia_url', rotulo: 'Link de referência', placeholder: 'https://www.instagram.com/reel/…',
+              dica: 'O vídeo ou post que serve de modelo. Aparece no topo do roteiro, ao lado do Drive.' },
 
             { nome: 'nota', rotulo: 'Anotação interna', tipo: 'textarea',
               dica: 'Só a equipe vê.' },
@@ -1461,6 +1463,9 @@ export async function formularioConteudo(c, cliente, mesSugerido, aoTerminar, et
             const link = normalizarLink(dados.drive_url);
             if (dados.drive_url && !link) throw new Error('O link do Drive não parece um endereço. Cole o link inteiro, começando por https://');
             if (link || c?.drive_url) registro.drive_url = link; else delete registro.drive_url;
+            const ref = normalizarLink(dados.referencia_url);
+            if (dados.referencia_url && !ref) throw new Error('O link de referência não parece um endereço. Cole o link inteiro, começando por https://');
+            if (ref || c?.referencia_url) registro.referencia_url = ref; else delete registro.referencia_url;
             const antigas = (c?.etiquetas || []).filter(e =>
                 etiquetaMeta(e).etapa || !PENDENCIAS.some(p => p.nome === etiquetaMeta(e).nome));
             registro.etiquetas = [...antigas, ...PENDENCIAS.filter(p => dados[`_pend:${p.nome}`]).map(p => p.nome)];
