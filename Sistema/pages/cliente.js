@@ -1,7 +1,7 @@
 import { store } from '../store.js';
 import { theme } from '../theme.js';
 import { navegar, acharPorEndereco } from '../lib/rotas.js';
-import { apelidoDeConteudo } from '../lib/formato.js';
+import { apelidoDeConteudo, linkCurto } from '../lib/formato.js';
 import { usarDiretorio, objetivo, nomeFase, fase } from '../lib/diretorio.js';
 import { mesEmSemanas, cobertura, porData, proximo, retornosDe, aguardaData } from '../lib/cronograma.js';
 import { chipFase, cartaoLeitura, explicacaoObjetivo, roteiroHTML, vazioHTML } from '../lib/pecas.js';
@@ -663,7 +663,11 @@ const semanaHTML = ({ segunda, conteudos }, token, comRoteiro) => {
    era uma faixa fina à esquerda com a cor da FASE; a fase continua no chip
    de dentro, e o formato, que é a primeira pergunta de quem abre, passou a
    ser lido de longe. O nome do formato ganha a mesma cor: é a legenda. */
-const tipoDoConteudo = (c) => `cl-tipo cl-tipo--${esteiraDe(c.formato)}`;
+const tipoDoConteudo = (c) => `cl-tipo cl-tipo--${esteiraDe(c.formato)}${jaPublicado(c) ? ' cl-publicado' : ''}`;
+
+/* Publicado é passado: continua na lista (o cliente gosta de ver a semana
+   inteira), mas recua para o que ainda pede atenção aparecer primeiro. */
+const jaPublicado = (c) => c.status === 'publicado' || etapaAtual(c.etiquetas)?.nome === 'publicado';
 
 const cartaoConteudo = (c, token, comRoteiro) => {
     const o = objetivo(c.objetivo);
@@ -783,6 +787,16 @@ const desenharConteudo = (container, token, visao, conteudoId) => {
                             ${etiquetasPublicas(c.etiquetas).map(chipEtiqueta).join('')}
                         </div>` : ''}
                     ${c.tema ? `<p class="cl-tema">${esc(c.tema)}</p>` : ''}
+                    ${/* A referência é o vídeo ou post que serve de modelo —
+                          quem grava precisa ver o jeito antes de ler o texto.
+                          (O Drive, não: é material da equipe, e o banco nem
+                          manda para esta tela.) */''}
+                    ${c.referencia_url ? `
+                        <a class="cl-ref" href="${esc(c.referencia_url)}" target="_blank" rel="noopener">
+                            <i data-lucide="clapperboard"></i>
+                            <span><b>Ver referência</b><small>${esc(linkCurto(c.referencia_url))}</small></span>
+                            <i data-lucide="external-link" class="cl-ref__seta"></i>
+                        </a>` : ''}
                 </section>
 
                 <!-- ══ O que o sistema explica sozinho ══════════════════ -->
@@ -1407,6 +1421,8 @@ function injectStyles() {
             transition: transform .15s, border-color .15s;
         }
         .cl-sem__cartao:active { transform: scale(0.99); }
+        .cl-publicado { opacity: .45; transition: opacity .15s; }
+        .cl-publicado:hover, .cl-publicado:focus-visible { opacity: 1; }
         .cl-sem__cartao.is-hoje { background: color-mix(in oklch, var(--tipo-cor, var(--accent)) 8%, var(--surface-1)); }
 
         .cl-gravar__dica { margin: 0; font-size: 14px; line-height: 1.5; color: var(--text-secondary); }
@@ -1607,6 +1623,19 @@ function injectStyles() {
         @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
             .cl-topo-roteiro { background: var(--surface-1); }
         }
+        .cl-ref {
+            display: flex; align-items: center; gap: var(--space-3);
+            margin-top: var(--space-3); padding: var(--space-3) var(--space-4);
+            border: 1px solid var(--border-subtle, var(--border)); border-radius: var(--radius-md, 12px);
+            background: color-mix(in oklch, var(--accent) 10%, transparent);
+            color: var(--text-primary); text-decoration: none; max-width: 460px;
+        }
+        .cl-ref:hover { border-color: var(--accent); }
+        .cl-ref > svg { width: 20px; height: 20px; color: var(--accent); flex-shrink: 0; }
+        .cl-ref span { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+        .cl-ref b { font-size: var(--text-sm); }
+        .cl-ref small { font-size: var(--text-xs); color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cl-ref .cl-ref__seta { width: 15px; height: 15px; margin-left: auto; color: var(--text-tertiary); }
         .cl-voltar {
             display: inline-flex; align-items: center; gap: var(--space-2);
             font-size: var(--text-sm); font-weight: 600; color: var(--text-secondary); text-decoration: none;
