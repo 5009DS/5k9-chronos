@@ -200,7 +200,7 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
             { id: 'ver', label: 'Ver como o cliente vê', icon: 'external-link',
               onClick: () => window.open(linkCliente, '_blank', 'noopener') },
             /* O link da véspera da gravação: só o que está em "roteiro em
-               aprovação" (pages/cliente.js — desenharGravar). */
+               aprovação" (pages/cliente.js — desenharLista). */
             { id: 'gravar', label: 'Copiar link dos roteiros a gravar', icon: 'clapperboard',
               onClick: async () => {
                   const n = conteudos.filter(c => etapaAtual(c.etiquetas)?.nome === 'roteiro em aprovação' && c.status !== 'rascunho').length;
@@ -208,6 +208,15 @@ export const renderQuadro = async (container, clienteId, mesInicial = null) => {
                       await navigator.clipboard.writeText(`${location.origin}${linkCliente}/gravar`);
                       toast(n ? `Link copiado: ${n} roteiro${n > 1 ? 's' : ''} em aprovação.`
                               : 'Link copiado. Ainda não há roteiro em "roteiro em aprovação" — a lista do cliente vai abrir vazia.');
+                  } catch { toast('Não foi possível copiar.'); }
+              } },
+            /* A lista "Esperando você" do painel do cliente, sozinha
+               (pages/cliente.js — desenharLista). */
+            { id: 'aprovar', label: 'Copiar link do "esperando você"', icon: 'hourglass',
+              onClick: async () => {
+                  try {
+                      await navigator.clipboard.writeText(`${location.origin}${linkCliente}/aprovar`);
+                      toast('Link copiado: abre só o que está esperando o cliente.');
                   } catch { toast('Não foi possível copiar.'); }
               } },
             { id: 'apagar', label: 'Apagar cronograma…', icon: 'trash-2', separadorAntes: true,

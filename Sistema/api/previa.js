@@ -145,6 +145,14 @@ module.exports = async (req, res) => {
             descricao: 'Leia, aprove ou peça ajuste. Na hora de gravar, é só abrir o teleprompter. 5K9 Studio.',
         };
         url = `${host}/c/${encodeURI(cliente)}/gravar`;
+    } else if (cliente && ref === 'aprovar') {
+        // /c/cliente/aprovar: a lista "Esperando você" do painel (pages/cliente.js).
+        const previa = await rpc('vz_previa_cliente', { p_token: cliente, p_ref: null });
+        card = previa && {
+            titulo: `Esperando você · ${previa.cliente}`,
+            descricao: 'O que precisa da sua leitura ou aprovação para seguir. 5K9 Studio.',
+        };
+        url = `${host}/c/${encodeURI(cliente)}/aprovar`;
     } else if (cliente) {
         card = cardDoCliente(await rpc('vz_previa_cliente', { p_token: cliente, p_ref: ref || null }));
         url = `${host}/c/${encodeURI(cliente)}${ref ? `/${encodeURI(ref)}` : ''}`;

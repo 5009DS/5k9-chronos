@@ -73,7 +73,7 @@ export const renderCliente = async (container, token, conteudoId) => {
     /* /c/<cliente>/gravar: só os roteiros em aprovação — o link que vai para o
        cliente na véspera da gravação. Não é outra porta no banco: é a mesma
        visão, filtrada aqui. */
-    if (conteudoId === 'gravar') return desenharGravar(container, token, visao);
+    if (conteudoId === 'gravar' || conteudoId === 'aprovar') return desenharLista(container, token, visao, conteudoId);
     if (conteudoId) return desenharConteudo(container, token, visao, conteudoId);
     lembrarOrigem(token, null);
     return desenharCronograma(container, token, visao);
@@ -486,11 +486,30 @@ const cartaoGrande = (c, token, comRoteiro) => {
    Tocar abre o roteiro, e o "voltar" de lá traz de volta para esta lista
    (lembrarOrigem), não para o cronograma.
    ═══════════════════════════════════════════════════════════════════════════ */
-const desenharGravar = (container, token, visao) => {
+/* /c/<cliente>/aprovar é o irmão deste: a lista "Esperando você" do painel,
+   sozinha — roteiro para ler, vídeo ou arte para ver. A MESMA regra do painel
+   (precisaDoCliente), para as duas listas nunca discordarem. */
+const LISTAS = {
+    gravar: {
+        filtro: (c) => etapaAtual(c.etiquetas)?.nome === 'roteiro em aprovação',
+        titulo: 'Roteiros para gravar', voltar: 'Roteiros', unidade: ['roteiro', 'roteiros'],
+        dica: 'Leia cada um e aprove ou peça ajuste. Na hora de gravar, abra o roteiro e toque em <b>Teleprompter</b>.',
+        vazio: ['clapperboard', 'Nenhum roteiro esperando você agora'],
+    },
+    aprovar: {
+        filtro: (c, retornos) => precisaDoCliente(c, retornos),
+        titulo: 'Esperando você', voltar: 'Esperando você', unidade: ['item', 'itens'],
+        dica: 'Abra cada um, leia ou assista, e diga se pode seguir — aprovando ou pedindo ajuste.',
+        vazio: ['circle-check', 'Nada esperando você agora'],
+    },
+};
+
+const desenharLista = (container, token, visao, qual) => {
     const { cliente, conteudos } = visao;
-    lembrarOrigem(token, 'gravar');
+    const L = LISTAS[qual];
+    lembrarOrigem(token, qual);
     const comRoteiro = new Set((visao.blocos || []).map(b => b.conteudo_id));
-    const itens = porData(conteudos.filter(c => etapaAtual(c.etiquetas)?.nome === 'roteiro em aprovação'));
+    const itens = porData(conteudos.filter(c => L.filtro(c, visao.retornos || [])));
 
     container.innerHTML = `
         <div class="cl">
@@ -498,13 +517,13 @@ const desenharGravar = (container, token, visao) => {
             <main class="cl-corpo">
                 <section class="cl-sem">
                     <header class="cl-sem__cabeca">
-                        <h2>Roteiros para gravar</h2>
-                        ${itens.length ? `<span>${itens.length} roteiro${itens.length > 1 ? 's' : ''}</span>` : ''}
+                        <h2>${L.titulo}</h2>
+                        ${itens.length ? `<span>${itens.length} ${L.unidade[itens.length > 1 ? 1 : 0]}</span>` : ''}
                     </header>
                     ${itens.length ? `
-                        <p class="cl-gravar__dica">Leia cada um e aprove ou peça ajuste. Na hora de gravar, abra o roteiro e toque em <b>Teleprompter</b>.</p>
+                        <p class="cl-gravar__dica">${L.dica}</p>
                         <div class="cl-sem__lista">${itens.map(c => cartaoGrande(c, token, comRoteiro)).join('')}</div>`
-                    : vazioHTML('clapperboard', 'Nenhum roteiro esperando você agora',
+                    : vazioHTML(L.vazio[0], L.vazio[1],
                         'Quando a equipe preparar os próximos, eles aparecem aqui neste mesmo link.')}
                 </section>
                 <a class="cl-gravar__todos" href="/c/${esc(token)}"><i data-lucide="calendar-days"></i> Ver o cronograma completo</a>
@@ -758,9 +777,9 @@ const desenharConteudo = (container, token, visao, conteudoId) => {
     container.innerHTML = `
         <div class="cl cl--roteiro ${gravado ? 'cl--gravado' : ''}">
             <header class="cl-topo-roteiro">
-                ${origemDe(token) === 'gravar' ? `
-                    <a class="cl-voltar" href="/c/${esc(token)}/gravar">
-                        <i data-lucide="arrow-left"></i> Roteiros
+                ${LISTAS[origemDe(token)] ? `
+                    <a class="cl-voltar" href="/c/${esc(token)}/${esc(origemDe(token))}">
+                        <i data-lucide="arrow-left"></i> ${LISTAS[origemDe(token)].voltar}
                     </a>` : `
                     <a class="cl-voltar" href="/c/${esc(token)}">
                         <i data-lucide="arrow-left"></i> Cronograma
