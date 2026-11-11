@@ -22,7 +22,8 @@ import { vazioHTML } from '../lib/pecas.js';
        por_tipo: { stories, posts, reels, ao_vivo }
      }
      publico: {
-       seguidores, variacao_pct, mulheres_pct, homens_pct,
+       seguidores, novos, variacao_pct, mulheres_pct, homens_pct,
+       idades: [{ faixa, pct }],
        paises: [{ nome, pct }],
        horarios_pico: [{ dia, faixa }]
      }
@@ -145,6 +146,7 @@ export const renderMetricas = async (container, clienteId = null) => {
                 ${kpi('Contas alcançadas', V.visualizadores, atual, anterior, l => l.dados?.visao?.visualizadores, 'Quem viu ao menos um conteúdo', { unico: true })}
                 ${kpi('Interações', V.interacoes, atual, anterior, l => l.dados?.visao?.interacoes)}
                 ${kpi('Seguidores', P.seguidores, atual, anterior, l => l.dados?.publico?.seguidores, null, { bruto: true, emNumero: true })}
+                ${kpi('Seguidores novos', P.novos, atual, anterior, l => l.dados?.publico?.novos, 'Quem começou a seguir no período', { sinal: true, bruto: true })}
                 ${kpi('Seguidores líquidos', V.seguidores_liquidos, atual, anterior, l => l.dados?.visao?.seguidores_liquidos, 'Ganhos menos perdidos no período', { sinal: true, bruto: true })}
                 ${kpi('Visualizações de não seguidores', V.pct_nao_seguidores, atual, anterior, l => l.dados?.visao?.pct_nao_seguidores, 'Quanto chega em gente nova', { pct: true, bruto: true })}
             </section>
@@ -169,6 +171,7 @@ export const renderMetricas = async (container, clienteId = null) => {
                             <h3 class="mt-sub">Quando os seguidores estão mais ativos</h3>
                             <div class="mt-chips">${P.horarios_pico.map(h => `<span class="mt-chip">${esc(h.dia)} · ${esc(h.faixa)}</span>`).join('')}</div>` : ''}
                     </article>` : ''}
+                ${P.idades?.length ? idadesHTML(P.idades, anterior?.dados?.publico?.idades) : ''}
             </div>
 
             ${atual.dados?.conteudos?.length ? conteudosHTML(atual.dados.conteudos) : ''}
@@ -268,6 +271,32 @@ const porTipoHTML = (atual, anterior, porDia) => {
                                 ${b != null ? `<span class="mt-barra__b" style="width:${(b / maximo) * 100}%"></span>` : ''}
                             </span>
                             <span class="mt-barra__valor">${esc(curto(Math.round(a)))}</span>
+                        </div>`;
+                }).join('')}
+            </div>
+        </article>`;
+};
+
+/* Faixa etária dos seguidores: percentual, então compara direto com a
+   leitura anterior (cinza), sem média por dia. */
+const idadesHTML = (idades, anteriores) => {
+    const ant = new Map((anteriores || []).map(i => [i.faixa, i.pct]));
+    const maximo = Math.max(1, ...idades.map(i => +i.pct || 0), ...[...ant.values()].map(v => +v || 0));
+    return `
+        <article class="ds-card mt-bloco">
+            <h2 class="mt-titulo">Faixa etária dos seguidores</h2>
+            ${ant.size ? `<div class="mt-legenda"><span><i class="mt-ponto mt-ponto--a"></i>Esta leitura</span><span><i class="mt-ponto mt-ponto--cinza"></i>Anterior</span></div>` : ''}
+            <div class="mt-barras">
+                ${idades.map(i => {
+                    const b = ant.get(i.faixa);
+                    return `
+                        <div class="mt-barra" title="${esc(i.faixa)}: ${esc(num(i.pct))}%${b != null ? ` · anterior ${esc(num(b))}%` : ''}">
+                            <span class="mt-barra__nome">${esc(i.faixa)}</span>
+                            <span class="mt-barra__trilho">
+                                <span class="mt-barra__a" style="width:${((+i.pct || 0) / maximo) * 100}%"></span>
+                                ${b != null ? `<span class="mt-barra__b" style="width:${((+b || 0) / maximo) * 100}%"></span>` : ''}
+                            </span>
+                            <span class="mt-barra__valor">${esc(num(i.pct))}%</span>
                         </div>`;
                 }).join('')}
             </div>
