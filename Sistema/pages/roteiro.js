@@ -158,7 +158,6 @@ export const renderRoteiro = async (container, conteudoId) => {
     /* Anotações abertas e ainda vazias. Com texto, a anotação aparece sozinha;
        vazia, só enquanto alguém acabou de pedir para escrever. */
     let anotando = new Set();
-    let anotandoConteudo = false;
 
     /* LINKS no topo da ficha, à vista: quem abre a demanda procura o material
        antes de qualquer outra coisa. Com link, é um botão; sem link (ou
@@ -193,18 +192,6 @@ export const renderRoteiro = async (container, conteudoId) => {
             <button class="ds-btn ds-btn--ghost ds-btn--sm" data-link-salvar="${tipo}">Salvar</button>
         </div>`;
     };
-
-    /* ANOTAÇÃO DO CONTEÚDO: recado da equipe sobre a peça inteira. Usa
-       vz_conteudos.nota, que a função do cliente sempre recortou. */
-    const anotacaoConteudo = () => (c.nota || anotandoConteudo) ? `
-        <div class="rt-anot rt-anot--conteudo">
-            <span class="rt-anot__rotulo"><i data-lucide="sticky-note"></i>Anotação da equipe<small>· o cliente não vê</small></span>
-            <textarea class="rt-anot__texto" data-nota-conteudo rows="1"
-                      placeholder="Recado sobre este conteúdo…">${esc(c.nota || '')}</textarea>
-        </div>` : `
-        <button class="rt-anot-add" data-anotar-conteudo>
-            <i data-lucide="sticky-note"></i> Adicionar anotação da equipe
-        </button>`;
 
     /* O botão de voltar leva para a tela de onde a pessoa veio — quadro,
        esteira ou cronograma deste cliente —, e a rolagem daquela tela é
@@ -294,7 +281,7 @@ export const renderRoteiro = async (container, conteudoId) => {
                               pelo botão de etapa no topo. */''}
                         ${chipsEstado(c)}
                     </div>
-                    <div class="rt-links">${blocoLink(c, 'drive')}${blocoLink(c, 'ref')}${anotacaoConteudo()}</div>
+                    <div class="rt-links">${blocoLink(c, 'drive')}${blocoLink(c, 'ref')}</div>
                 </div>
 
                 ${c.tema ? `<p class="vz-nota">${esc(c.tema)}</p>` : ''}
@@ -315,6 +302,7 @@ export const renderRoteiro = async (container, conteudoId) => {
                     </p>` : ''}
                 ${sugestaoDeFase(c, blocos)}
                 ${explicacaoObjetivo(c.fase, c.objetivo)}
+                ${c.nota ? `<p class="rt-interna"><i data-lucide="lock"></i> ${esc(c.nota)}</p>` : ''}
             </article>
 
             ${tarefaHTML()}
@@ -813,26 +801,6 @@ export const renderRoteiro = async (container, conteudoId) => {
                 campo.closest('.rt-anot')?.remove();
             });
         });
-        content.querySelector('[data-anotar-conteudo]')?.addEventListener('click', () => {
-            anotandoConteudo = true;
-            desenhar();
-            content.querySelector('[data-nota-conteudo]')?.focus();
-        });
-        const notaConteudo = content.querySelector('[data-nota-conteudo]');
-        if (notaConteudo) {
-            autoAltura(notaConteudo);
-            notaConteudo.addEventListener('input', () => autoAltura(notaConteudo));
-            notaConteudo.addEventListener('change', async () => {
-                const nota = notaConteudo.value.trim() || null;
-                if (nota === (c.nota ?? null)) return;
-                Object.assign(c, await store.conteudos.salvar({ ...c, nota }));
-            });
-            notaConteudo.addEventListener('blur', () => {
-                if (notaConteudo.value.trim()) return;
-                anotandoConteudo = false;
-                setTimeout(desenhar, 150);
-            });
-        }
 
         // A medida vive enquanto se digita, mas sem gravar: é leitura, não
         // estado. Gravar por tecla seria uma requisição por caractere.
@@ -919,6 +887,8 @@ export const renderRoteiro = async (container, conteudoId) => {
             },
         };
         ligarGaveta(acoesDoBloco);
+        content.querySelectorAll('[data-anotar]').forEach(botao =>
+            botao.addEventListener('click', () => acoesDoBloco.anotar(botao.dataset.anotar)));
 
         content.querySelectorAll('[data-acoes-bloco]').forEach(botao =>
             botao.addEventListener('click', (e) => {
@@ -2001,6 +1971,12 @@ const blocoEditavel = (b, i, total, conversa = null, selecionando = false, marca
                     <i data-lucide="${esc(estadoMeta(estado).icone)}"></i>${esc(estadoMeta(estado).curto)}
                 </span>` : ''}
                 <span class="rt-bloco__espaco"></span>
+                ${/* À vista em toda linha: anotar uma ideia é o gesto de quem
+                      está lendo o roteiro, não pode morar só no menu. */''}
+                <button class="ds-icon-btn ds-icon-btn--sm rt-anotar ${b.nota ? 'tem-nota' : ''}" data-anotar="${esc(b.id)}"
+                        title="${b.nota ? 'Editar anotação' : 'Anotar uma ideia nesta linha'}" aria-label="Anotar nesta linha">
+                    <i data-lucide="sticky-note"></i>
+                </button>
                 <button class="ds-icon-btn ds-icon-btn--sm" data-mover="cima" ${i === 0 ? 'disabled' : ''} aria-label="Mover para cima">
                     <i data-lucide="chevron-up"></i>
                 </button>
@@ -2029,7 +2005,7 @@ const blocoEditavel = (b, i, total, conversa = null, selecionando = false, marca
                 <div class="rt-anot">
                     <span class="rt-anot__rotulo"><i data-lucide="sticky-note"></i>Anotação<small>· só a equipe vê</small></span>
                     <textarea class="rt-anot__texto" data-campo-bloco="nota" rows="1"
-                              placeholder="Recado da equipe sobre esta fala…">${esc(b.nota || '')}</textarea>
+                              placeholder="Pensamento, ideia, lembrete sobre esta linha…">${esc(b.nota || '')}</textarea>
                 </div>` : ''}
 
             ${conversa ? fioHTML(b, conversa) : ''}
@@ -2685,6 +2661,7 @@ const ESTILOS = `
 .rt-anot__texto {
     width: 100%; resize: none; border: 0; outline: 0; padding: 0; background: transparent;
     font: inherit; font-size: var(--text-sm); line-height: var(--leading-body); color: var(--text-primary);
+    field-sizing: content; overflow: hidden;
 }
 .rt-anot-add {
     display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
@@ -2694,6 +2671,7 @@ const ESTILOS = `
 .rt-anot-add:hover { color: #E0A42E; }
 .rt-anot-add svg { width: 14px; height: 14px; }
 .rt-gaveta__btn--anot { color: #E0A42E; }
+.rt-anotar.tem-nota { color: #E0A42E; }
 
 .rt-bloco {
     display: flex; flex-direction: column; gap: var(--space-2);
