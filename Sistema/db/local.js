@@ -25,7 +25,20 @@ const ler = (colecao) => {
 const gravar = (colecao, linhas) =>
     localStorage.setItem(CHAVE(colecao), JSON.stringify(linhas));
 
+/* Ao vivo, em modo local: as abas do mesmo navegador conversam por
+   BroadcastChannel — é o que permite testar a tela do cliente se
+   atualizando sozinha sem banco. */
+const canalLocal = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('vz-ao-vivo') : null;
+
 export const local = {
+    avisarCliente: (clienteId) => canalLocal?.postMessage({ clienteId }),
+    ouvirCliente: async (clienteId, aoMudar) => {
+        if (!canalLocal) return () => {};
+        const ouvir = (e) => { if (e.data?.clienteId === clienteId) aoMudar(); };
+        canalLocal.addEventListener('message', ouvir);
+        return () => canalLocal.removeEventListener('message', ouvir);
+    },
+
     modo: 'local',
 
     // Sem banco não há sessão. O app trata `null` como "modo aberto" e pula
@@ -166,7 +179,7 @@ export const local = {
         return {
             cliente,
             conteudos,
-            blocos:   ler('blocos').filter(b => ids.has(b.conteudo_id)),
+            blocos:   ler('blocos').filter(b => ids.has(b.conteudo_id) && !b.escondido && b.tipo !== 'anotacao'),
             retornos: ler('retornos').filter(r => ids.has(r.conteudo_id)),
             // O diretório vigente viaja junto, como no remoto: a tela do
             // cliente é feita de explicação estratégica e precisa mostrar a

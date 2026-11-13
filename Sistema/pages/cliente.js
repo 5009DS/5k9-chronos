@@ -5,7 +5,7 @@ import { apelidoDeConteudo, linkCurto } from '../lib/formato.js';
 import { usarDiretorio, objetivo, nomeFase, fase } from '../lib/diretorio.js';
 import { mesEmSemanas, cobertura, porData, proximo, retornosDe, aguardaData } from '../lib/cronograma.js';
 import { chipFase, cartaoLeitura, explicacaoObjetivo, roteiroHTML, vazioHTML } from '../lib/pecas.js';
-import { ordenar, duracaoTotal, temFala, palavraTexto } from '../lib/roteiro.js';
+import { ordenar, duracaoTotal, temFala, palavraTexto, visivelAoCliente } from '../lib/roteiro.js';
 import { esteiraDe } from '../lib/etiquetas.js';
 import {
     esc, mesExtenso, somarMeses, chaveMes, semanaCurta, semanaAtual,
@@ -67,6 +67,16 @@ export const renderCliente = async (container, token, conteudoId) => {
             'Ele pode ter sido substituído por um novo. Peça o link atualizado para a equipe da 5K9.');
     }
 
+    desenharRota(container, token, prepararVisao(visao), conteudoId);
+    aoVivo(container, token, conteudoId, visao);
+};
+
+/* Cinto de segurança: o banco já não manda a linha escondida nem a anotação
+   interna (db/migracao-roteiro-interno.sql). Se um dia uma versão antiga da
+   função voltar ao ar, elas continuam fora da tela. */
+const prepararVisao = (visao) => ({ ...visao, blocos: (visao.blocos || []).filter(visivelAoCliente) });
+
+const desenharRota = (container, token, visao, conteudoId) => {
     // O diretório vigente vem junto com o cronograma, numa ida só ao banco.
     if (visao.diretorio) usarDiretorio(visao.diretorio);
 
@@ -77,6 +87,66 @@ export const renderCliente = async (container, token, conteudoId) => {
     if (conteudoId) return desenharConteudo(container, token, visao, conteudoId);
     lembrarOrigem(token, null);
     return desenharCronograma(container, token, visao);
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   AO VIVO — a tela se atualiza sozinha quando a equipe mexe
+
+   A equipe edita o roteiro com o cliente do outro lado, no celular. Antes ele
+   precisava recarregar a página para ver a versão nova. Agora:
+
+   1. Toda gravação da equipe manda um "mudou" no canal deste cliente
+      (store.js → Supabase Realtime). A tela relê e, se algo mudou de fato,
+      se redesenha no mesmo ponto da rolagem — sem piscar, sem aviso.
+   2. Se o canal falhar (rede, bloqueio), a tela relê sozinha a cada 30s e
+      sempre que o cliente volta para ela.
+
+   NÃO redesenha enquanto o cliente está escrevendo um comentário ou com o
+   teleprompter aberto: a troca espera ele terminar. Redesenhar no meio
+   apagaria o que ele digitou.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const vivo = { clienteId: null, parar: null, rota: null, ultimo: '', espera: null, relogio: null };
+
+const ocupado = (container) => {
+    const foco = document.activeElement;
+    if (foco && container.contains(foco) && foco.matches('textarea, input') && foco.value.trim()) return true;
+    return !!document.querySelector('.tp');   // teleprompter aberto
+};
+
+const releitura = async () => {
+    const r = vivo.rota;
+    if (!r || !location.pathname.startsWith('/c/') || document.hidden) return;
+    if (ocupado(r.container)) { clearTimeout(vivo.espera); vivo.espera = setTimeout(releitura, 3000); return; }
+    let nova;
+    try { nova = await store.visualizacao(r.token); } catch { return; }
+    if (!nova?.cliente || vivo.rota !== r) return;
+    const assinatura = JSON.stringify([nova.conteudos, nova.blocos, nova.retornos]);
+    if (assinatura === vivo.ultimo) return;
+    if (ocupado(r.container)) { clearTimeout(vivo.espera); vivo.espera = setTimeout(releitura, 3000); return; }
+    vivo.ultimo = assinatura;
+    const y = window.scrollY;
+    desenharRota(r.container, r.token, prepararVisao(nova), r.conteudoId);
+    window.scrollTo(0, y);
+};
+
+const aoVivo = async (container, token, conteudoId, visao) => {
+    vivo.rota = { container, token, conteudoId };
+    vivo.ultimo = JSON.stringify([visao.conteudos, visao.blocos, visao.retornos]);
+
+    if (!vivo.relogio) {
+        vivo.relogio = setInterval(releitura, 30000);
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) releitura(); });
+    }
+    const id = visao.cliente.id;
+    if (vivo.clienteId === id) return;
+    vivo.parar?.();
+    vivo.clienteId = id;
+    const parar = await store.ouvirCliente(id, () => {
+        // Várias gravações seguidas viram uma releitura só.
+        clearTimeout(vivo.espera);
+        vivo.espera = setTimeout(releitura, 800);
+    });
+    if (vivo.clienteId === id) vivo.parar = parar; else parar?.();
 };
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -24,7 +24,7 @@ import {
 } from '../lib/conversa.js';
 import {
     TIPOS, tipo as tipoBloco, ordenar, mover, renumerar, blocoNovo, proximaOrdem,
-    duracaoTotal, contarPalavras, avisosDeEstrutura, paraTexto, temFala, palavraTexto,
+    duracaoTotal, contarPalavras, avisosDeEstrutura, paraTexto, temFala, palavraTexto, paraCliente,
 } from '../lib/roteiro.js';
 import {
     chipFase, chipStatus, cartaoLeitura, explicacaoObjetivo, avisosHTML,
@@ -524,6 +524,49 @@ export const renderRoteiro = async (container, conteudoId) => {
         });
     }
 
+    /* ── A GAVETA DO CELULAR ──────────────────────────────────────────────
+       Arrastar uma linha para a esquerda abre os ícones; para a direita, ou
+       tocar fora, fecha. Só toque: no computador o mouse não arrasta nada.
+       O gesto só "vale" quando é claramente horizontal — senão é a rolagem
+       da página, e ela tem prioridade. */
+    function ligarGaveta(acoes) {
+        const fechar = (exceto = null) => content.querySelectorAll('.rt-linha.is-aberta')
+            .forEach(l => { if (l !== exceto) l.classList.remove('is-aberta'); });
+        content.querySelectorAll('.rt-linha').forEach(linha => {
+            let x0 = null, y0 = 0, rumo = null;
+            linha.addEventListener('touchstart', (e) => {
+                if (selecionando || e.touches.length > 1) return;
+                x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; rumo = null;
+            }, { passive: true });
+            linha.addEventListener('touchmove', (e) => {
+                if (x0 == null || rumo) return;
+                const dx = e.touches[0].clientX - x0, dy = e.touches[0].clientY - y0;
+                if (Math.abs(dx) > 12 || Math.abs(dy) > 12) rumo = Math.abs(dx) > Math.abs(dy) * 1.4 ? 'lado' : 'rolagem';
+            }, { passive: true });
+            linha.addEventListener('touchend', (e) => {
+                if (rumo === 'lado') {
+                    const dx = e.changedTouches[0].clientX - x0;
+                    if (dx < -40) { fechar(linha); linha.classList.add('is-aberta'); }
+                    else if (dx > 40) linha.classList.remove('is-aberta');
+                }
+                x0 = null; rumo = null;
+            });
+        });
+        content.querySelectorAll('[data-gaveta]').forEach(botao => botao.addEventListener('click', (e) => {
+            e.stopPropagation();
+            botao.closest('.rt-linha')?.classList.remove('is-aberta');
+            acoes[botao.dataset.gaveta]?.(botao.dataset.id);
+        }));
+        // Uma vez por tela: `content` sobrevive aos redesenhos.
+        if (!content.dataset.gaveta) {
+            content.dataset.gaveta = '1';
+            content.addEventListener('touchstart', (e) => {
+                const aberta = content.querySelector('.rt-linha.is-aberta');
+                if (aberta && !aberta.contains(e.target)) aberta.classList.remove('is-aberta');
+            }, { passive: true });
+        }
+    }
+
     function ligarEventos() {
         ligarTarefa();
         content.querySelector('#rt-colar').addEventListener('click', abrirColar);
@@ -591,7 +634,7 @@ export const renderRoteiro = async (container, conteudoId) => {
         });
 
         content.querySelector('#rt-prompter')?.addEventListener('click', () => {
-            const { erro } = abrirTeleprompter(c, blocos);
+            const { erro } = abrirTeleprompter(c, paraCliente(blocos));
             if (erro) toast(erro);
         });
 
@@ -770,6 +813,59 @@ export const renderRoteiro = async (container, conteudoId) => {
                 desenhar();
             }));
 
+        /* As três ações que o menu "…" e a gaveta do celular compartilham. */
+        const acoesDoBloco = {
+            duplicar: async (id) => {
+                /* A cópia entra LOGO ABAIXO do original, não no fim.
+                   Duplicar serve para escrever uma variação da fala que está
+                   ali; mandar a cópia para o fim do roteiro obrigaria a
+                   subi-la de volta clique a clique. */
+                const i = blocos.findIndex(x => x.id === id);
+                if (i < 0) return;
+                const copia = { ...blocos[i], id: crypto.randomUUID(), criado_em: new Date().toISOString() };
+                blocos = renumerar([...blocos.slice(0, i + 1), copia, ...blocos.slice(i + 1)]);
+                for (const x of blocos) await store.blocos.salvar(x);
+                toast('Bloco duplicado.');
+                desenhar();
+            },
+            /* Esconder é só do CLIENTE: a linha continua aqui, apagada e com o
+               selo "escondida". O banco não a manda para a tela dele
+               (db/migracao-roteiro-interno.sql). */
+            esconder: async (id) => {
+                const b = blocos.find(x => x.id === id);
+                if (!b) return;
+                b.escondido = !b.escondido;
+                await store.blocos.salvar(b);
+                toast(b.escondido ? 'Linha escondida do cliente.' : 'Linha visível para o cliente de novo.', {
+                    label: 'Desfazer',
+                    onClick: async () => { b.escondido = !b.escondido; await store.blocos.salvar(b); desenhar(); },
+                });
+                desenhar();
+            },
+            /* ── EXCLUIR NÃO RENUMERA ─────────────────────────────────────
+               Tirar o bloco de ordem 30 deixa 10, 20, 40, 50… que continua
+               estritamente crescente: ordenar() só compara, e proximaOrdem()
+               usa o maior. Renumerar e gravar todos custava uma ida ao banco
+               por bloco restante. Desfazer também fica de uma escrita só: o
+               bloco volta com a ordem que tinha, e ela cabe no buraco. */
+            excluir: async (id) => {
+                const apagado = blocos.find(x => x.id === id);
+                if (!apagado) return;
+                await store.blocos.excluir(id);
+                blocos = blocos.filter(x => x.id !== id);
+                toast('Bloco excluído.', {
+                    label: 'Desfazer',
+                    onClick: async () => {
+                        await store.blocos.salvar(apagado);
+                        blocos = ordenar([...blocos, apagado]);
+                        desenhar();
+                    },
+                });
+                desenhar();
+            },
+        };
+        ligarGaveta(acoesDoBloco);
+
         content.querySelectorAll('[data-acoes-bloco]').forEach(botao =>
             botao.addEventListener('click', (e) => {
                 e.stopPropagation();   // ver a explicação no menu de status
@@ -795,58 +891,20 @@ export const renderRoteiro = async (container, conteudoId) => {
                             desenhar();
                         },
                     })),
+                    ...(tipoBloco(b.tipo).interno ? [] : [{
+                        id: 'esconder', separadorAntes: true,
+                        label: b.escondido ? 'Mostrar ao cliente' : 'Esconder do cliente',
+                        icon: b.escondido ? 'eye' : 'eye-off',
+                        onClick: () => acoesDoBloco.esconder(id),
+                    }]),
                     {
-                        id: 'duplicar', label: 'Duplicar bloco', icon: 'copy', separadorAntes: true,
-                        onClick: async () => {
-                            /* A cópia entra LOGO ABAIXO do original, não no fim.
-                               Duplicar serve para escrever uma variação da fala
-                               que está ali; mandar a cópia para o fim do roteiro
-                               obrigaria a subi-la de volta clique a clique. */
-                            const copia = {
-                                ...b, id: crypto.randomUUID(),
-                                criado_em: new Date().toISOString(),
-                            };
-                            blocos = renumerar([...blocos.slice(0, i + 1), copia, ...blocos.slice(i + 1)]);
-                            for (const x of blocos) await store.blocos.salvar(x);
-                            toast('Bloco duplicado.');
-                            desenhar();
-                        },
+                        id: 'duplicar', label: 'Duplicar bloco', icon: 'copy', separadorAntes: tipoBloco(b.tipo).interno,
+                        onClick: () => acoesDoBloco.duplicar(id),
                     },
                     {
                         id: 'excluir', label: 'Excluir bloco', icon: 'trash-2',
                         variante: 'danger', separadorAntes: true,
-                        /* ── EXCLUIR NÃO RENUMERA ─────────────────────────
-                           Aqui havia um renumerar() seguido de gravar TODOS os
-                           blocos restantes, um a um. Num roteiro de catorze
-                           falas, apagar uma custava catorze idas ao banco — e
-                           no banco de verdade cada ida é uma volta de rede.
-                           Era esse o atraso.
-
-                           E era trabalho para nada: tirar o bloco de ordem 30
-                           deixa 10, 20, 40, 50… que continua estritamente
-                           crescente. O buraco não aparece em lugar nenhum —
-                           ordenar() só compara, e proximaOrdem() usa o maior.
-                           Renumerar existe para MOVER, onde a ordem realmente
-                           muda de dono.
-
-                           Desfazer também ficou de uma escrita só: o bloco
-                           volta com a ordem que tinha, e ela ainda cabe no
-                           buraco que ele deixou. */
-                        onClick: async () => {
-                            const apagado = { ...b };
-                            await store.blocos.excluir(id);
-                            blocos = blocos.filter(x => x.id !== id);
-
-                            toast('Bloco excluído.', {
-                                label: 'Desfazer',
-                                onClick: async () => {
-                                    await store.blocos.salvar(apagado);
-                                    blocos = ordenar([...blocos, apagado]);
-                                    desenhar();
-                                },
-                            });
-                            desenhar();
-                        },
+                        onClick: () => acoesDoBloco.excluir(id),
                     },
                 ]);
             }));
@@ -1841,7 +1899,7 @@ const rotuloAvancar = (c) => {
 const medida = (blocos, formato) => {
     if (!blocos.length) return 'Nenhum bloco ainda';
     return `${blocos.length} bloco${blocos.length > 1 ? 's' : ''} · ${contarPalavras(blocos)} palavras`
-         + (temFala(formato) ? ` · ~${duracaoTotal(blocos)} de fala (estimado)` : '');
+         + (temFala(formato) ? ` · ~${duracaoTotal(paraCliente(blocos))} de fala (estimado)` : '');
 };
 
 const blocoEditavel = (b, i, total, conversa = null, selecionando = false, marcada = false) => {
@@ -1850,9 +1908,19 @@ const blocoEditavel = (b, i, total, conversa = null, selecionando = false, marca
     const soTitulo = b.tipo === 'secao';
     const estado = conversa?.estado || null;
 
+    /* A GAVETA do celular: arrastar a linha para a esquerda revela três
+       ícones — duplicar, esconder do cliente, apagar. Fica atrás do bloco e
+       só aparece com o arraste (ligarGaveta); no computador, o menu "…" faz
+       o mesmo. */
     return `
+      <div class="rt-linha" data-linha="${esc(b.id)}">
+        <div class="rt-gaveta" aria-hidden="true">
+            <button class="rt-gaveta__btn" data-gaveta="duplicar" data-id="${esc(b.id)}" aria-label="Duplicar" tabindex="-1"><i data-lucide="copy"></i></button>
+            <button class="rt-gaveta__btn" data-gaveta="esconder" data-id="${esc(b.id)}" aria-label="${b.escondido ? 'Mostrar ao cliente' : 'Esconder do cliente'}" tabindex="-1"><i data-lucide="${b.escondido ? 'eye' : 'eye-off'}"></i></button>
+            <button class="rt-gaveta__btn rt-gaveta__btn--perigo" data-gaveta="excluir" data-id="${esc(b.id)}" aria-label="Apagar" tabindex="-1"><i data-lucide="trash-2"></i></button>
+        </div>
         <div class="rt-bloco rt-bloco--${esc(b.tipo)} ${estado ? `rt-bloco--fio rt-bloco--${esc(estado)}` : ''}
-                    ${marcada ? 'rt-bloco--marcada' : ''}"
+                    ${marcada ? 'rt-bloco--marcada' : ''} ${b.escondido ? 'rt-bloco--escondido' : ''}"
              data-bloco="${esc(b.id)}">
             <div class="rt-bloco__cabeca">
                 ${selecionando ? `
@@ -1866,6 +1934,8 @@ const blocoEditavel = (b, i, total, conversa = null, selecionando = false, marca
                       conversa. São perguntas diferentes: "esta fala foi
                       reescrita?" e "ainda devo resposta a alguém?" — e um
                       bloco pode ter sido reescrito e continuar pendente. */''}
+                ${b.escondido ? `<span class="rt-selo rt-selo--escondido" title="O cliente não vê esta linha"><i data-lucide="eye-off"></i>escondida</span>` : ''}
+                ${t.interno ? `<span class="rt-selo rt-selo--escondido" title="Anotação: só a equipe vê"><i data-lucide="lock"></i>só a equipe</span>` : ''}
                 ${conversa?.editado ? `<span class="rt-selo rt-selo--edit"><i data-lucide="pencil-line"></i>editado</span>` : ''}
                 ${estado ? `<span class="rt-selo rt-selo--${esc(estadoMeta(estado).tom)}">
                     <i data-lucide="${esc(estadoMeta(estado).icone)}"></i>${esc(estadoMeta(estado).curto)}
@@ -1893,7 +1963,8 @@ const blocoEditavel = (b, i, total, conversa = null, selecionando = false, marca
                           placeholder="${esc(t.placeholder)}">${esc(b.texto || '')}</textarea>`}
 
             ${conversa ? fioHTML(b, conversa) : ''}
-        </div>`;
+        </div>
+      </div>`;
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -2503,6 +2574,38 @@ const ESTILOS = `
 /* ── Blocos ──────────────────────────────────────────────────────────── */
 .rt-blocos { display: flex; flex-direction: column; gap: var(--space-3); }
 
+/* A linha: o bloco por cima, a gaveta do celular por baixo. */
+.rt-linha { position: relative; overflow: hidden; border-radius: var(--radius-md); }
+.rt-linha > .rt-bloco { position: relative; z-index: 1; transition: transform .22s ease, border-color var(--dur-fast), opacity .15s; }
+.rt-linha.is-aberta > .rt-bloco { transform: translateX(-168px); }
+.rt-gaveta {
+    position: absolute; inset: 0 0 0 auto; width: 168px;
+    display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding-right: 4px;
+    visibility: hidden;
+}
+.rt-linha.is-aberta .rt-gaveta { visibility: visible; }
+.rt-gaveta__btn {
+    width: 48px; height: 48px; border-radius: 14px; border: 1px solid var(--border-subtle);
+    display: grid; place-items: center; background: var(--surface-3); color: var(--text-primary); cursor: pointer;
+}
+.rt-gaveta__btn svg { width: 20px; height: 20px; }
+.rt-gaveta__btn--perigo { background: color-mix(in oklch, var(--danger, #F04438) 18%, var(--surface-2)); color: var(--danger, #F04438); }
+@media (prefers-reduced-motion: reduce) { .rt-linha > .rt-bloco { transition: none; } }
+
+/* Escondida do cliente: continua legível para a equipe, mas recua. Ganha
+   corpo de volta enquanto alguém escreve nela. */
+.rt-bloco--escondido { opacity: .5; border-style: dashed; }
+.rt-bloco--escondido:focus-within, .rt-linha.is-aberta > .rt-bloco--escondido { opacity: .9; }
+.rt-selo--escondido { background: var(--surface-3); color: var(--text-secondary); }
+
+/* Anotação: papel de recado, para ninguém confundir com fala. */
+.rt-bloco--anotacao {
+    border-style: dashed; border-color: color-mix(in oklch, #F5B83D 45%, transparent);
+    background: color-mix(in oklch, #F5B83D 9%, var(--surface-2));
+}
+.rt-bloco--anotacao .rt-bloco__tipo { color: #E0A42E; }
+.rt-bloco--anotacao .rt-bloco__texto { font-size: var(--text-sm); line-height: var(--leading-body); }
+
 .rt-bloco {
     display: flex; flex-direction: column; gap: var(--space-2);
     padding: var(--space-3) var(--space-4) var(--space-4);
@@ -2512,7 +2615,7 @@ const ESTILOS = `
 }
 .rt-bloco:focus-within { border-color: var(--accent); }
 
-.rt-bloco__cabeca { display: flex; align-items: center; gap: var(--space-2); }
+.rt-bloco__cabeca { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; row-gap: 4px; }
 .rt-bloco__tipo {
     display: inline-flex; align-items: center; gap: 6px;
     font-size: var(--text-xs); font-weight: 700; color: var(--text-tertiary);

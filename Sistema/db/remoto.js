@@ -55,6 +55,8 @@ const tabela = (colecao) => TABELAS[colecao] || colecao;
 export const SUPABASE_JS = 'https://esm.sh/@supabase/supabase-js@2.117.1/es2022/supabase-js.bundle.mjs';
 
 let sb = null;
+let publico = null;                 // o cliente sem sessão da tela pública (ouvirCliente)
+const canaisEquipe = new Map();     // um canal por cliente, aberto na primeira mudança
 
 /* Uma instância só, para sempre. Dois createClient() no mesmo navegador geram
    dois GoTrueClient disputando a mesma sessão salva — o segundo derruba o
@@ -286,6 +288,50 @@ export const remoto = {
         await executar(`substituir(${colecao})`,
             () => s.from(tabela(colecao)).upsert(linhas));
         return linhas;
+    },
+
+    // ── Ao vivo ─────────────────────────────────────────────────────────
+    /* Broadcast do Supabase Realtime: um "mudou" no canal do cliente. Não
+       passa pelo banco nem pela RLS — o aviso não carrega dado, só diz
+       "releia". Falhar aqui não pode quebrar a gravação: a tela do cliente
+       também relê sozinha de tempos em tempos. */
+    avisarCliente: async (clienteId) => {
+        try {
+            const s = await cliente();
+            let canal = canaisEquipe.get(clienteId);
+            if (!canal) {
+                canal = s.channel(`vz-cliente-${clienteId}`);
+                canal.pronto = new Promise(ok => {
+                    canal.subscribe(st => { if (st === 'SUBSCRIBED') ok(true); });
+                    setTimeout(() => ok(false), 6000);
+                });
+                canaisEquipe.set(clienteId, canal);
+            }
+            if (!(await canal.pronto)) { canaisEquipe.delete(clienteId); s.removeChannel(canal); return; }
+            await canal.send({ type: 'broadcast', event: 'mudou', payload: { em: Date.now() } });
+        } catch (e) { console.warn('[ao vivo] aviso não enviado:', e); }
+    },
+
+    /* A tela do cliente baixa a biblioteca DEPOIS de desenhar (ver o porquê
+       em chamarRPC): o primeiro texto não espera por ela. Cliente próprio,
+       sem sessão — não disputa a sessão de quem da equipe abrir o link no
+       mesmo navegador. */
+    ouvirCliente: async (clienteId, aoMudar) => {
+        try {
+            if (!publico) {
+                const { createClient } = await import(SUPABASE_JS);
+                publico = createClient(SUPABASE_URL, SUPABASE_ANON, {
+                    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'vz-publico' },
+                });
+            }
+            const canal = publico.channel(`vz-cliente-${clienteId}`)
+                .on('broadcast', { event: 'mudou' }, () => aoMudar())
+                .subscribe();
+            return () => publico.removeChannel(canal);
+        } catch (e) {
+            console.warn('[ao vivo] sem canal, fica a releitura periódica:', e);
+            return () => {};
+        }
     },
 
     // ── Tela pública ────────────────────────────────────────────────────

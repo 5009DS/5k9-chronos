@@ -184,6 +184,29 @@ const COLECOES = ['clientes', 'conteudos', 'blocos', 'retornos'];
    elas existem para guardar. */
 const COLECOES_PEDIDOS = ['equipe', 'pedidos', 'decisoes', 'comentarios', 'metricas'];
 
+/* ── AO VIVO ────────────────────────────────────────────────────────────
+   Toda escrita que muda o que o cliente vê (conteúdo, bloco, retorno) manda
+   um "mudou" para o canal daquele cliente; a tela dele, se estiver aberta,
+   relê e se redesenha sozinha (pages/cliente.js — aoVivo). O aviso não leva
+   dado nenhum: quem recebe relê pela porta de sempre, que já recorta o que é
+   interno. Agrupado por cliente: digitar uma fala gera um aviso, não vinte. */
+const AVISAM_CLIENTE = ['conteudos', 'blocos', 'retornos'];
+const clienteDoConteudo = (id) => {
+    const lista = cache.get('conteudos')?.dados;
+    return Array.isArray(lista) ? lista.find(c => c.id === id)?.cliente_id || null : null;
+};
+const clienteDe = (nome, registro) => !registro ? null
+    : nome === 'conteudos' ? registro.cliente_id : clienteDoConteudo(registro.conteudo_id);
+const avisosPendentes = new Map();
+const avisarCliente = (clienteId) => {
+    if (!clienteId || !db.avisarCliente) return;
+    clearTimeout(avisosPendentes.get(clienteId));
+    avisosPendentes.set(clienteId, setTimeout(() => {
+        avisosPendentes.delete(clienteId);
+        db.avisarCliente(clienteId);
+    }, 700));
+};
+
 const colecao = (nome) => ({
     listar: () => comCache(nome, () => db.listar(nome)),
 
@@ -194,6 +217,7 @@ const colecao = (nome) => ({
         const novo = nome === 'conteudos' && !registro.id;
         if (novo && !registro.criado_por && usuario?.email) registro = { ...registro, criado_por: usuario.email };
         const linha = await db.salvar(nome, registro);
+        if (AVISAM_CLIENTE.includes(nome)) avisarCliente(clienteDe(nome, linha) || clienteDe(nome, registro));
         if (novo) aoCriarConteudo.forEach(fn => { try { fn(linha); } catch (e) { console.warn(e); } });
         /* A linha vem do BANCO, não do que foi enviado: ela traz id gerado,
            carimbo de criação e o que mais o servidor tenha decidido. */
@@ -208,7 +232,11 @@ const colecao = (nome) => ({
     },
 
     excluir: async (id) => {
+        // Lido ANTES de apagar: depois, o cache não sabe mais de quem era.
+        const antes = AVISAM_CLIENTE.includes(nome)
+            ? cache.get(nome)?.dados?.find?.(x => x.id === id) : null;
         await db.excluir(nome, id);
+        if (antes) avisarCliente(clienteDe(nome, antes));
         mexerNoCache(nome, (lista) => lista.filter(x => x.id !== id));
         cascatearNoCache(nome, id);
     },
@@ -329,6 +357,8 @@ export const store = {
     /** Por que a última tentativa de entrar não deu certo, para o login dizer. */
     erroDeLogin: () => erroDeLogin,
     aoCriarConteudo: (fn) => aoCriarConteudo.push(fn),
+    /** A tela do cliente escuta o canal dele. Devolve a função de parar. */
+    ouvirCliente: (clienteId, fn) => db.ouvirCliente ? db.ouvirCliente(clienteId, fn) : Promise.resolve(() => {}),
 
     entrar: async (email, senha) => {
         const r = await db.entrar(email, senha);
