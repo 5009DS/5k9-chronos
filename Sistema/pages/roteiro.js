@@ -155,6 +155,10 @@ export const renderRoteiro = async (container, conteudoId) => {
     let selecionando = false;
     let selecionadas = new Set();
     let editando = { drive: false, ref: false };
+    /* Anotações abertas e ainda vazias. Com texto, a anotação aparece sozinha;
+       vazia, só enquanto alguém acabou de pedir para escrever. */
+    let anotando = new Set();
+    let anotandoConteudo = false;
 
     /* LINKS no topo da ficha, à vista: quem abre a demanda procura o material
        antes de qualquer outra coisa. Com link, é um botão; sem link (ou
@@ -189,6 +193,18 @@ export const renderRoteiro = async (container, conteudoId) => {
             <button class="ds-btn ds-btn--ghost ds-btn--sm" data-link-salvar="${tipo}">Salvar</button>
         </div>`;
     };
+
+    /* ANOTAÇÃO DO CONTEÚDO: recado da equipe sobre a peça inteira. Usa
+       vz_conteudos.nota, que a função do cliente sempre recortou. */
+    const anotacaoConteudo = () => (c.nota || anotandoConteudo) ? `
+        <div class="rt-anot rt-anot--conteudo">
+            <span class="rt-anot__rotulo"><i data-lucide="sticky-note"></i>Anotação da equipe<small>· o cliente não vê</small></span>
+            <textarea class="rt-anot__texto" data-nota-conteudo rows="1"
+                      placeholder="Recado sobre este conteúdo…">${esc(c.nota || '')}</textarea>
+        </div>` : `
+        <button class="rt-anot-add" data-anotar-conteudo>
+            <i data-lucide="sticky-note"></i> Adicionar anotação da equipe
+        </button>`;
 
     /* O botão de voltar leva para a tela de onde a pessoa veio — quadro,
        esteira ou cronograma deste cliente —, e a rolagem daquela tela é
@@ -278,7 +294,7 @@ export const renderRoteiro = async (container, conteudoId) => {
                               pelo botão de etapa no topo. */''}
                         ${chipsEstado(c)}
                     </div>
-                    <div class="rt-links">${blocoLink(c, 'drive')}${blocoLink(c, 'ref')}</div>
+                    <div class="rt-links">${blocoLink(c, 'drive')}${blocoLink(c, 'ref')}${anotacaoConteudo()}</div>
                 </div>
 
                 ${c.tema ? `<p class="vz-nota">${esc(c.tema)}</p>` : ''}
@@ -299,7 +315,6 @@ export const renderRoteiro = async (container, conteudoId) => {
                     </p>` : ''}
                 ${sugestaoDeFase(c, blocos)}
                 ${explicacaoObjetivo(c.fase, c.objetivo)}
-                ${c.nota ? `<p class="rt-interna"><i data-lucide="lock"></i> ${esc(c.nota)}</p>` : ''}
             </article>
 
             ${tarefaHTML()}
@@ -395,7 +410,7 @@ export const renderRoteiro = async (container, conteudoId) => {
                 <div class="rt-blocos ${selecionando ? 'rt-blocos--selecionando' : ''}" id="rt-blocos">
                     ${blocos.length
                         ? blocos.map((b, i) => blocoEditavel(b, i, blocos.length, fio.porBloco.get(b.id),
-                                                            selecionando, selecionadas.has(b.id))).join('')
+                                                            selecionando, selecionadas.has(b.id), anotando.has(b.id))).join('')
                         : vazioHTML('clipboard-paste', `${palavraTexto(c.formato, { maiuscula: true })} em branco`,
                             `Cole o ${palavraTexto(c.formato)} inteiro de uma vez — o sistema separa em blocos e marca o gancho, `
                           + 'as falas e a chamada para ação. Ou monte à mão, bloco a bloco, abaixo.',
@@ -787,6 +802,38 @@ export const renderRoteiro = async (container, conteudoId) => {
                 await store.blocos.salvar(b);
             }));
 
+        /* Anotação vazia some ao sair dela: abrir e desistir não deixa caixa
+           amarela sobrando. Tira do DOM em vez de redesenhar, para não engolir
+           o clique que tirou o foco. */
+        content.querySelectorAll('textarea[data-campo-bloco="nota"]').forEach(campo => {
+            campo.addEventListener('input', () => autoAltura(campo));
+            campo.addEventListener('blur', () => {
+                if (campo.value.trim()) return;
+                anotando.delete(campo.closest('[data-bloco]').dataset.bloco);
+                campo.closest('.rt-anot')?.remove();
+            });
+        });
+        content.querySelector('[data-anotar-conteudo]')?.addEventListener('click', () => {
+            anotandoConteudo = true;
+            desenhar();
+            content.querySelector('[data-nota-conteudo]')?.focus();
+        });
+        const notaConteudo = content.querySelector('[data-nota-conteudo]');
+        if (notaConteudo) {
+            autoAltura(notaConteudo);
+            notaConteudo.addEventListener('input', () => autoAltura(notaConteudo));
+            notaConteudo.addEventListener('change', async () => {
+                const nota = notaConteudo.value.trim() || null;
+                if (nota === (c.nota ?? null)) return;
+                Object.assign(c, await store.conteudos.salvar({ ...c, nota }));
+            });
+            notaConteudo.addEventListener('blur', () => {
+                if (notaConteudo.value.trim()) return;
+                anotandoConteudo = false;
+                setTimeout(desenhar, 150);
+            });
+        }
+
         // A medida vive enquanto se digita, mas sem gravar: é leitura, não
         // estado. Gravar por tecla seria uma requisição por caractere.
         content.querySelectorAll('textarea[data-campo-bloco="texto"]').forEach(campo =>
@@ -815,6 +862,13 @@ export const renderRoteiro = async (container, conteudoId) => {
 
         /* As três ações que o menu "…" e a gaveta do celular compartilham. */
         const acoesDoBloco = {
+            anotar: (id) => {
+                anotando.add(id);
+                desenhar();
+                const campo = content.querySelector(`[data-bloco="${id}"] [data-campo-bloco="nota"]`);
+                campo?.focus();
+                campo?.setSelectionRange(campo.value.length, campo.value.length);
+            },
             duplicar: async (id) => {
                 /* A cópia entra LOGO ABAIXO do original, não no fim.
                    Duplicar serve para escrever uma variação da fala que está
@@ -891,14 +945,20 @@ export const renderRoteiro = async (container, conteudoId) => {
                             desenhar();
                         },
                     })),
-                    ...(tipoBloco(b.tipo).interno ? [] : [{
-                        id: 'esconder', separadorAntes: true,
+                    {
+                        id: 'anotar', separadorAntes: true,
+                        label: b.nota ? 'Editar anotação' : 'Anotar (só a equipe)',
+                        icon: 'sticky-note',
+                        onClick: () => acoesDoBloco.anotar(id),
+                    },
+                    {
+                        id: 'esconder',
                         label: b.escondido ? 'Mostrar ao cliente' : 'Esconder do cliente',
                         icon: b.escondido ? 'eye' : 'eye-off',
                         onClick: () => acoesDoBloco.esconder(id),
-                    }]),
+                    },
                     {
-                        id: 'duplicar', label: 'Duplicar bloco', icon: 'copy', separadorAntes: tipoBloco(b.tipo).interno,
+                        id: 'duplicar', label: 'Duplicar bloco', icon: 'copy',
                         onClick: () => acoesDoBloco.duplicar(id),
                     },
                     {
@@ -1902,7 +1962,7 @@ const medida = (blocos, formato) => {
          + (temFala(formato) ? ` · ~${duracaoTotal(paraCliente(blocos))} de fala (estimado)` : '');
 };
 
-const blocoEditavel = (b, i, total, conversa = null, selecionando = false, marcada = false) => {
+const blocoEditavel = (b, i, total, conversa = null, selecionando = false, marcada = false, anotar = false) => {
     const t = tipoBloco(b.tipo);
     const usaTitulo = ['secao', 'bloco'].includes(b.tipo);
     const soTitulo = b.tipo === 'secao';
@@ -1915,6 +1975,7 @@ const blocoEditavel = (b, i, total, conversa = null, selecionando = false, marca
     return `
       <div class="rt-linha" data-linha="${esc(b.id)}">
         <div class="rt-gaveta" aria-hidden="true">
+            <button class="rt-gaveta__btn rt-gaveta__btn--anot" data-gaveta="anotar" data-id="${esc(b.id)}" aria-label="Anotar" tabindex="-1"><i data-lucide="sticky-note"></i></button>
             <button class="rt-gaveta__btn" data-gaveta="duplicar" data-id="${esc(b.id)}" aria-label="Duplicar" tabindex="-1"><i data-lucide="copy"></i></button>
             <button class="rt-gaveta__btn" data-gaveta="esconder" data-id="${esc(b.id)}" aria-label="${b.escondido ? 'Mostrar ao cliente' : 'Esconder do cliente'}" tabindex="-1"><i data-lucide="${b.escondido ? 'eye' : 'eye-off'}"></i></button>
             <button class="rt-gaveta__btn rt-gaveta__btn--perigo" data-gaveta="excluir" data-id="${esc(b.id)}" aria-label="Apagar" tabindex="-1"><i data-lucide="trash-2"></i></button>
@@ -1935,7 +1996,6 @@ const blocoEditavel = (b, i, total, conversa = null, selecionando = false, marca
                       reescrita?" e "ainda devo resposta a alguém?" — e um
                       bloco pode ter sido reescrito e continuar pendente. */''}
                 ${b.escondido ? `<span class="rt-selo rt-selo--escondido" title="O cliente não vê esta linha"><i data-lucide="eye-off"></i>escondida</span>` : ''}
-                ${t.interno ? `<span class="rt-selo rt-selo--escondido" title="Anotação: só a equipe vê"><i data-lucide="lock"></i>só a equipe</span>` : ''}
                 ${conversa?.editado ? `<span class="rt-selo rt-selo--edit"><i data-lucide="pencil-line"></i>editado</span>` : ''}
                 ${estado ? `<span class="rt-selo rt-selo--${esc(estadoMeta(estado).tom)}">
                     <i data-lucide="${esc(estadoMeta(estado).icone)}"></i>${esc(estadoMeta(estado).curto)}
@@ -1961,6 +2021,16 @@ const blocoEditavel = (b, i, total, conversa = null, selecionando = false, marca
             ${soTitulo ? '' : `
                 <textarea class="rt-bloco__texto" data-campo-bloco="texto" rows="2"
                           placeholder="${esc(t.placeholder)}">${esc(b.texto || '')}</textarea>`}
+
+            ${/* A ANOTAÇÃO pendurada na fala: recado da equipe sobre ESTA
+                  linha. O banco nunca a manda ao cliente
+                  (db/migracao-nota-bloco.sql). */''}
+            ${(b.nota || anotar) ? `
+                <div class="rt-anot">
+                    <span class="rt-anot__rotulo"><i data-lucide="sticky-note"></i>Anotação<small>· só a equipe vê</small></span>
+                    <textarea class="rt-anot__texto" data-campo-bloco="nota" rows="1"
+                              placeholder="Recado da equipe sobre esta fala…">${esc(b.nota || '')}</textarea>
+                </div>` : ''}
 
             ${conversa ? fioHTML(b, conversa) : ''}
         </div>
@@ -2577,9 +2647,9 @@ const ESTILOS = `
 /* A linha: o bloco por cima, a gaveta do celular por baixo. */
 .rt-linha { position: relative; overflow: hidden; border-radius: var(--radius-md); }
 .rt-linha > .rt-bloco { position: relative; z-index: 1; transition: transform .22s ease, border-color var(--dur-fast), opacity .15s; }
-.rt-linha.is-aberta > .rt-bloco { transform: translateX(-168px); }
+.rt-linha.is-aberta > .rt-bloco { transform: translateX(-224px); }
 .rt-gaveta {
-    position: absolute; inset: 0 0 0 auto; width: 168px;
+    position: absolute; inset: 0 0 0 auto; width: 224px;
     display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding-right: 4px;
     visibility: hidden;
 }
@@ -2598,13 +2668,32 @@ const ESTILOS = `
 .rt-bloco--escondido:focus-within, .rt-linha.is-aberta > .rt-bloco--escondido { opacity: .9; }
 .rt-selo--escondido { background: var(--surface-3); color: var(--text-secondary); }
 
-/* Anotação: papel de recado, para ninguém confundir com fala. */
-.rt-bloco--anotacao {
-    border-style: dashed; border-color: color-mix(in oklch, #F5B83D 45%, transparent);
-    background: color-mix(in oklch, #F5B83D 9%, var(--surface-2));
+/* Anotação: papel de recado, pendurado na fala ou no conteúdo — nunca
+   confundido com texto do roteiro. */
+.rt-anot {
+    display: flex; flex-direction: column; gap: 4px;
+    padding: var(--space-2) var(--space-3); border-radius: var(--radius-md);
+    border: 1px dashed color-mix(in oklch, #F5B83D 50%, transparent);
+    background: color-mix(in oklch, #F5B83D 10%, var(--surface-2));
 }
-.rt-bloco--anotacao .rt-bloco__tipo { color: #E0A42E; }
-.rt-bloco--anotacao .rt-bloco__texto { font-size: var(--text-sm); line-height: var(--leading-body); }
+.rt-anot__rotulo {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: var(--text-xs); font-weight: 600; color: #E0A42E;
+}
+.rt-anot__rotulo small { font-weight: 400; color: var(--text-tertiary); }
+.rt-anot__rotulo svg { width: 13px; height: 13px; }
+.rt-anot__texto {
+    width: 100%; resize: none; border: 0; outline: 0; padding: 0; background: transparent;
+    font: inherit; font-size: var(--text-sm); line-height: var(--leading-body); color: var(--text-primary);
+}
+.rt-anot-add {
+    display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
+    padding: 4px 2px; border: 0; background: none; cursor: pointer;
+    font: inherit; font-size: var(--text-sm); color: var(--text-tertiary);
+}
+.rt-anot-add:hover { color: #E0A42E; }
+.rt-anot-add svg { width: 14px; height: 14px; }
+.rt-gaveta__btn--anot { color: #E0A42E; }
 
 .rt-bloco {
     display: flex; flex-direction: column; gap: var(--space-2);

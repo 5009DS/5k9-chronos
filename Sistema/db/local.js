@@ -179,7 +179,8 @@ export const local = {
         return {
             cliente,
             conteudos,
-            blocos:   ler('blocos').filter(b => ids.has(b.conteudo_id) && !b.escondido && b.tipo !== 'anotacao'),
+            blocos:   ler('blocos').filter(b => ids.has(b.conteudo_id) && !b.escondido && b.tipo !== 'anotacao')
+                                .map(({ nota, ...b }) => b),
             retornos: ler('retornos').filter(r => ids.has(r.conteudo_id)),
             // O diretório vigente viaja junto, como no remoto: a tela do
             // cliente é feita de explicação estratégica e precisa mostrar a

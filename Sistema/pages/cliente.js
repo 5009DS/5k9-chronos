@@ -72,9 +72,12 @@ export const renderCliente = async (container, token, conteudoId) => {
 };
 
 /* Cinto de segurança: o banco já não manda a linha escondida nem a anotação
-   interna (db/migracao-roteiro-interno.sql). Se um dia uma versão antiga da
-   função voltar ao ar, elas continuam fora da tela. */
-const prepararVisao = (visao) => ({ ...visao, blocos: (visao.blocos || []).filter(visivelAoCliente) });
+   da equipe (db/migracao-roteiro-interno.sql, db/migracao-nota-bloco.sql).
+   Se um dia uma versão antiga da função voltar ao ar, elas continuam fora. */
+const prepararVisao = (visao) => ({
+    ...visao,
+    blocos: (visao.blocos || []).filter(visivelAoCliente).map(({ nota, ...b }) => b),
+});
 
 const desenharRota = (container, token, visao, conteudoId) => {
     // O diretório vigente vem junto com o cronograma, numa ida só ao banco.

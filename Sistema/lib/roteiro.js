@@ -88,28 +88,17 @@ export const TIPOS = [
         descricao: 'Instrução de gravação: enquadramento, corte, trilha. Não é falado.',
         placeholder: 'Close na mão, corte seco aqui…',
     },
-    {
-        /* A ANOTAÇÃO é da equipe e só dela: lembrete, contexto, ideia solta no
-           meio do roteiro. O banco nunca a manda para a tela do cliente
-           (db/migracao-roteiro-interno.sql), e ela não conta no tempo de fala
-           nem entra no texto copiado ou no teleprompter. */
-        id: 'anotacao',
-        nome: 'Anotação',
-        icone: 'sticky-note',
-        falado: false,
-        interno: true,
-        descricao: 'Só a equipe vê. Lembrete, contexto, ideia — nunca chega ao cliente.',
-        placeholder: 'Anotação interna…',
-    },
 ];
 
 export const tipo = (id) => TIPOS.find(t => t.id === id) || TIPOS[1];
 
-/* O que o cliente enxerga do roteiro: tudo, menos a linha escondida e a
-   anotação interna. A MESMA regra do banco (vz_visualizacao), repetida aqui
-   para o texto copiado, o teleprompter e o tempo de fala dizerem o que o
-   cliente vai ler — e como cinto de segurança na tela dele. */
-export const visivelAoCliente = (b) => !b?.escondido && !tipo(b?.tipo).interno;
+/* O que o cliente enxerga do roteiro: tudo, menos a linha escondida. A
+   MESMA regra do banco (vz_visualizacao), repetida aqui para o texto copiado,
+   o teleprompter e o tempo de fala dizerem o que o cliente vai ler — e como
+   cinto de segurança na tela dele. A anotação da equipe (b.nota) é pendurada
+   na fala, não é linha: o banco a recorta (db/migracao-nota-bloco.sql).
+   'anotacao' foi um tipo de bloco por um dia; os que sobraram ficam fora. */
+export const visivelAoCliente = (b) => !b?.escondido && b?.tipo !== 'anotacao';
 export const paraCliente = (blocos) => (blocos || []).filter(visivelAoCliente);
 
 /** Blocos de um roteiro, na ordem. Ordem empatada cai para a de criação. */
